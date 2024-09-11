@@ -9,7 +9,7 @@ Feel free to ping committers for the review!
 ## Contribution Checklist
   - Make sure that the pull request corresponds to a [GITHUB issue](https://github.com/apache/seatunnel/issues).
   - Name the pull request in the form "[Feature] [component] Title of the pull request", where *Feature* can be replaced by `Hotfix`, `Bug`, etc.
-  - Minor fixes should be named following this pattern: `[hotfix] [docs] Fix typo in README.md doc`.
+  - Minor fixes should be named following this pattern: `[hotfix] [docs] Fix typo in README-Seatunnel.md doc`.
 -->
 
 ### Purpose of this pull request
