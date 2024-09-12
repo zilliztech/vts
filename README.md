@@ -19,7 +19,7 @@ Built on top of Apache Seatunnel, Vector-Transport-Service offers:
 4. High performance, low latency, and scalability
 5. Real-time monitoring and visual management
 
-![migration.png](docs/zilliz/migration.png)
+![migration.png](docs/zilliz/vts.png)
 
 Additionally, Vector-Transport-Service introduces vector-specific capabilities such as multiple data source support, schema matching, and basic data validation. 
 
