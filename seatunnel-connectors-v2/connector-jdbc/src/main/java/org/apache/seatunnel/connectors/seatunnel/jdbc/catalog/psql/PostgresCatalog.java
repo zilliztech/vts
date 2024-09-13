@@ -64,6 +64,10 @@ public class PostgresCatalog extends AbstractJdbcCatalog {
                     + "        WHEN t.typname IN ('time', 'timetz', 'timestamp', 'timestamptz') THEN a.atttypmod\n"
                     + "        ELSE NULL\n"
                     + "    END AS column_scale,\n"
+                    + "\t\tCASE\n"
+                    + "        WHEN t.typname = 'vector' THEN a.atttypmod\n"
+                    + "        ELSE NULL\n"
+                    + "    END AS vector_dimension,\n"
                     + "\t\td.description AS column_comment,\n"
                     + "\t\tpg_get_expr(ad.adbin, ad.adrelid) AS default_value,\n"
                     + "\t\tCASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable\n"
@@ -127,6 +131,7 @@ public class PostgresCatalog extends AbstractJdbcCatalog {
         String fullTypeName = resultSet.getString("full_type_name");
         long columnLength = resultSet.getLong("column_length");
         int columnScale = resultSet.getInt("column_scale");
+        int vectorDimension = resultSet.getInt("vector_dimension");
         String columnComment = resultSet.getString("column_comment");
         Object defaultValue = resultSet.getObject("default_value");
         boolean isNullable = resultSet.getString("is_nullable").equals("YES");
@@ -139,6 +144,10 @@ public class PostgresCatalog extends AbstractJdbcCatalog {
         }
         if (defaultValue != null && defaultValue.toString().contains("regclass")) {
             defaultValue = null;
+        }
+
+        if (typeName.equals(PostgresTypeConverter.PG_VECTOR)) {
+            columnScale = vectorDimension;
         }
 
         BasicTypeDefine typeDefine =
