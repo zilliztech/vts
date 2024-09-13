@@ -21,12 +21,7 @@ import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.api.table.converter.TypeConverter;
-import org.apache.seatunnel.api.table.type.ArrayType;
-import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.DecimalType;
-import org.apache.seatunnel.api.table.type.LocalTimeType;
-import org.apache.seatunnel.api.table.type.PrimitiveByteArrayType;
-import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
+import org.apache.seatunnel.api.table.type.*;
 import org.apache.seatunnel.common.exception.CommonError;
 import org.apache.seatunnel.connectors.seatunnel.common.source.TypeDefineUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.DatabaseIdentifier;
@@ -101,6 +96,9 @@ public class PostgresTypeConverter implements TypeConverter<BasicTypeDefine> {
     public static final String PG_TIMESTAMP = "timestamp";
     // timestamp with time zone <=> timestamptz
     public static final String PG_TIMESTAMP_TZ = "timestamptz";
+
+    // pg embedding vectors
+    public static final String PG_VECTOR = "vector";
 
     public static final int MAX_PRECISION = 1000;
     public static final int DEFAULT_PRECISION = 38;
@@ -259,6 +257,10 @@ public class PostgresTypeConverter implements TypeConverter<BasicTypeDefine> {
                 } else {
                     builder.scale(typeDefine.getScale());
                 }
+                break;
+            case PG_VECTOR:
+                builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
+                builder.scale(typeDefine.getScale());
                 break;
             default:
                 throw CommonError.convertToSeaTunnelTypeError(
