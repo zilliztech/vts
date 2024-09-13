@@ -27,6 +27,16 @@
     <artifactId>seatunnel-engine-examples</artifactId>
     <name>SeaTunnel : Examples : Engine</name>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.24.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
 
         <!--   seatunnel core dependencies   -->
@@ -42,13 +52,24 @@
             <version>${project.version}</version>
         </dependency>
 
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>seatunnel-hadoop3-3.1.4-uber</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+
+        <!--   seatunnel connectors   -->
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-hadoop3-3.1.4-uber</artifactId>
+            <artifactId>connector-milvus</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!--   seatunnel connectors   -->
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-elasticsearch</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>connector-fake</artifactId>

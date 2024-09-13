@@ -30,6 +30,9 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
 import org.apache.commons.lang3.StringUtils;
 
 import com.google.auto.service.AutoService;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.Utils;
+
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.TOKEN;
 
 @AutoService(Factory.class)
 public class MilvusSinkFactory implements TableSinkFactory {

@@ -20,6 +20,8 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 
+import java.util.Map;
+
 public class MilvusSourceConfig {
 
     public static final Option<String> URL =
@@ -37,7 +39,7 @@ public class MilvusSourceConfig {
     public static final Option<String> DATABASE =
             Options.key("database")
                     .stringType()
-                    .defaultValue("default")
+                    .noDefaultValue()
                     .withDescription("database");
 
     public static final Option<String> COLLECTION =
@@ -45,4 +47,19 @@ public class MilvusSourceConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Milvus collection to read");
+    public static final Option<Map<String, String>> COLLECTION_RENAME =
+            Options.key("collection_rename")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("rename collections");
+    public static final Option<Integer> BATCH_SIZE =
+            Options.key("batch_size")
+                    .intType()
+                    .defaultValue(1000)
+                    .withDescription("writer batch size");
+    public static final Option<Integer> RATE_LIMIT =
+            Options.key("rate_limit")
+                    .intType()
+                    .defaultValue(1000000)
+                    .withDescription("writer rate limit");
 }
