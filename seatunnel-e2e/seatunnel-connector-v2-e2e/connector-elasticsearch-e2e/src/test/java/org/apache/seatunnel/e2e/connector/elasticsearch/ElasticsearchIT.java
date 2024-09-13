@@ -117,8 +117,10 @@ public class ElasticsearchIT extends TestSuiteBase implements TestResource {
         esRestClient =
                 EsRestClient.createInstance(
                         Lists.newArrayList("https://" + container.getHttpHostAddress()),
+                        null,
                         Optional.of("elastic"),
                         Optional.of("elasticsearch"),
+                        null,
                         false,
                         false,
                         Optional.empty(),
