@@ -33,16 +33,13 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Milvus collection to read");
-    public static final Option<Map<String, String>> COLLECTION_RENAME =
-            Options.key("collection_rename")
-                    .mapType()
-                    .noDefaultValue()
-                    .withDescription("rename collections");
+
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
                     .intType()
                     .defaultValue(1000)
                     .withDescription("writer batch size");
+
     public static final Option<Integer> RATE_LIMIT =
             Options.key("rate_limit")
                     .intType()

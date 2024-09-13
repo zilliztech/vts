@@ -47,8 +47,6 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.COLLECTION_RENAME;
-
 @Slf4j
 public class MilvusConvertUtils {
 
@@ -95,10 +93,6 @@ public class MilvusConvertUtils {
         for (String collection : collectionList) {
             CatalogTable catalogTable = getCatalogTable(client, database, collection);
             TablePath tablePath = TablePath.of(database, null, collection);
-            if(config.get(COLLECTION_RENAME) != null && config.get(COLLECTION_RENAME).containsKey(collection)){
-                String renameCollection = config.get(COLLECTION_RENAME).get(collection);
-                tablePath = TablePath.of(database, null, renameCollection);
-            }
             map.put(tablePath, catalogTable);
 
         }
@@ -163,10 +157,6 @@ public class MilvusConvertUtils {
         // build tableId
         String CATALOG_NAME = "Milvus";
         TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, null, collection);
-        if(this.config.get(COLLECTION_RENAME) != null && config.get(COLLECTION_RENAME).containsKey(collection)){
-            String renameCollection = config.get(COLLECTION_RENAME).get(collection);
-            tableId = TableIdentifier.of(CATALOG_NAME, database, null, renameCollection);
-        }
         // build options info
         Map<String, String> options = new HashMap<>();
         options.put(MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(schema.getEnableDynamicField()));
