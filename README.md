@@ -31,3 +31,6 @@ Future roadmaps include incremental sync, combined one-time migration and change
 
 To learn more details about VTS used in action, read our blog: 
 - [**Introducing Migration Services: Efficiently Move Unstructured Data Across Platforms.**](https://zilliz.com/blog/zilliz-introduces-migration-services)
+
+## Get Started
+To get started with VTS, follow the [quick start guide](QuickStart.md)
