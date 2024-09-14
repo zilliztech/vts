@@ -91,6 +91,20 @@ String configurePath = args.length > 0 ? args[0] : "/examples/****.conf";
 
 go to milvus console, check the data in the collection
 
+
+### Tutorial
+In addition to the quick start guide, vts has much more powerful features like
+- lots of transformer to support TabelPathMapper, FieldMapper, Embedding etc.
+- cluster mode ready for production use with restful api to manage the job
+- docker deploy, etc.
+
+For detailed information, please refer to [Tutorial.md](./Tutorial.md)
+
 ## Support
 If you require any assistance or have questions regarding VTS, please feel free to reach out to our support team: Email: support@zilliz.com
-   
+
+## About Apache Seatunnel
+SeaTunnel is a next-generation, high-performance, distributed data integration tool, capable of synchronizing vast amounts of data daily. It's trusted by numerous companies for its efficiency and stability.
+It's released under [Apache 2 License](https://github.com/apache/seatunnel/blob/dev/LICENSE).
+
+SeaTunnel is a top-level project of the Apache Software Foundation (ASF). For more information, visit the [Apache Seatunnel website](https://seatunnel.apache.org/).

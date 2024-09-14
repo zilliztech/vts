@@ -4,6 +4,9 @@ This guide will help you get started with how to use vts to transport vector dat
 - postgres vector
 - elastic search
 
+### Standalone mode
+- standalone mode is used for demo only, it's not recommended for production use.
+
 **1. Build the vts project**
 ```shell
 ./mvnw install -Dmaven.test.skip
@@ -53,4 +56,23 @@ String configurePath = args.length > 0 ? args[0] : "/examples/****.conf";
 **4. Check the data in milvus**
 
 go to milvus console, check the data in the collection
-   
+
+### Cluster mode
+**1. Build the vts project**
+```shell
+./mvnw install -Dmaven.test.skip
+```
+**2. Run Examples**
+
+Run this example to start the server
+```shell
+./seatunnel-example/seatunnel-examples/src/main/java/com/zilliz/seatunnel/examples/engine/SeatunnelEngineServerExample.java
+```
+**3. Submit Job through Restful API**
+
+check the example in
+```shell
+./seatunnel-example/seatunnel-examples/src/main/resources/examples/curl.sh
+```
+### Deployment
+...
