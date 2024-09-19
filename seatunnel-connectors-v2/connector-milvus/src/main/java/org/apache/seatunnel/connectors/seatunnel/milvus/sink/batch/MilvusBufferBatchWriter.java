@@ -155,7 +155,6 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         this.milvusDataCache.computeIfAbsent(partitionName, k -> new ArrayList<>());
         milvusDataCache.get(partitionName).add(data);
         writeCache.incrementAndGet();
-        writeCount.incrementAndGet();
     }
 
     @Override
@@ -165,17 +164,16 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
 
     @Override
     public void flush() throws Exception {
-        log.info("Starting to put {} records to Milvus.", this.batchSize);
+        log.info("Starting to put {} records to Milvus.", this.writeCache.get());
         // Flush the batch writer
         // Get the number of records completed
-        long recordsWritten = getRecordsWritten();
-        log.info("Successfully put {} records to Milvus. Total records written: {}", this.batchSize, recordsWritten);
         if (this.milvusDataCache.isEmpty()) {
             return;
         }
         writeData2Collection();
         this.milvusDataCache = new HashMap<>();
         this.writeCache.set(0L);
+        log.info("Successfully put {} records to Milvus. Total records written: {}", this.writeCache.get(), this.writeCount.get());
     }
 
     @Override
@@ -192,11 +190,6 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         milvusClient.alterCollection(alterCollectionReq);
         this.milvusClient.close(10);
 
-    }
-
-    @Override
-    public long getRecordsWritten() {
-        return this.writeCount.get();
     }
 
     private JsonObject buildMilvusData(SeaTunnelRow element) {
@@ -219,7 +212,8 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                         MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
             }
             Gson gson = new Gson();
-            data.add(fieldName, gson.toJsonTree(MilvusConvertUtils.convertBySeaTunnelType(fieldType, value)));
+            Object object = MilvusConvertUtils.convertBySeaTunnelType(fieldType, value);
+            data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
     }
@@ -243,6 +237,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
             log.error("error data: " + milvusDataCache);
             throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL);
         }
+        writeCount.addAndGet(this.writeCache.get());
     }
 
     private void upsertWrite(String partitionName, List<JsonObject> data) throws InterruptedException {
@@ -259,21 +254,24 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         } catch (Exception e) {
             if (e.getMessage().contains("rate limit exceeded") || e.getMessage().contains("received message larger than max")) {
                 if (data.size() > 10) {
-                    log.warn("upsert data failed, retry in smaller chunks");
+                    log.warn("upsert data failed, retry in smaller chunks: {} ", data.size()/2);
+                    this.batchSize = this.batchSize / 2;
+                    log.info("sleep 1 minute to avoid rate limit");
                     //sleep 1 minute to avoid rate limit
                     Thread.sleep(60000);
+                    log.info("sleep 1 minute success");
                     // Split the data and retry in smaller chunks
                     List<JsonObject> firstHalf = data.subList(0, data.size() / 2);
                     List<JsonObject> secondHalf = data.subList(data.size() / 2, data.size());
-                    this.batchSize = this.batchSize / 2;
                     upsertWrite(partitionName, firstHalf);
                     upsertWrite(partitionName, secondHalf);
                 } else {
                     // If the data size is 10, throw the exception to avoid infinite recursion
-                    throw e;
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL, e.getMessage(), e);
                 }
             }
         }
+        log.info("upsert data success");
     }
 
     private void insertWrite(String partitionName, List<JsonObject> data) {
@@ -290,10 +288,11 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         } catch (Exception e) {
             if (e.getMessage().contains("rate limit exceeded") || e.getMessage().contains("received message larger than max")) {
                 if (data.size() > 10) {
-                    log.warn("insert data failed, retry in smaller chunks");
+                    log.warn("insert data failed, retry in smaller chunks: {} ", data.size()/2);
                     // Split the data and retry in smaller chunks
                     List<JsonObject> firstHalf = data.subList(0, data.size() / 2);
                     List<JsonObject> secondHalf = data.subList(data.size() / 2, data.size());
+                    this.batchSize = this.batchSize / 2;
                     insertWrite(partitionName, firstHalf);
                     insertWrite(partitionName, secondHalf);
                 } else {

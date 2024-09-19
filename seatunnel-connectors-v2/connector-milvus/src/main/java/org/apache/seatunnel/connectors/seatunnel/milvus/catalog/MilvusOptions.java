@@ -23,4 +23,5 @@
       public static final String SHARDS_NUM = "shardsNum";
       public static final String PARTITION_KEY_FIELD = "partitionKeyField";
       public static final String PARTITION_NAMES = "partitionNames";
+      public static final String DYNAMIC_FIELD = "isDynamicField";
   }

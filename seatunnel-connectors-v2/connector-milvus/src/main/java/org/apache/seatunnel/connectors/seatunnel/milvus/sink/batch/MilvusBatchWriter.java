@@ -11,6 +11,4 @@ public interface MilvusBatchWriter {
     void flush() throws Exception;
 
     void close() throws Exception;
-
-    long getRecordsWritten();
 }
