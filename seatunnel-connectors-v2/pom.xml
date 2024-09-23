@@ -40,6 +40,7 @@
         <module>connector-elasticsearch</module>
         <module>connector-pinecone</module>
         <module>connector-qdrant</module>
+        <module>connector-tencent-vectordb</module>
 <!--        <module>connector-cdc</module>-->
 <!--        <module>connector-clickhouse</module>-->
 <!--        <module>connector-http</module>-->

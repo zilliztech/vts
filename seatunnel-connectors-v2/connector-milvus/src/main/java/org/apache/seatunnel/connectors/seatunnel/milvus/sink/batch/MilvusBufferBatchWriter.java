@@ -171,9 +171,9 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
             return;
         }
         writeData2Collection();
+        log.info("Successfully put {} records to Milvus. Total records written: {}", this.writeCache.get(), this.writeCount.get());
         this.milvusDataCache = new HashMap<>();
         this.writeCache.set(0L);
-        log.info("Successfully put {} records to Milvus. Total records written: {}", this.writeCache.get(), this.writeCount.get());
     }
 
     @Override
