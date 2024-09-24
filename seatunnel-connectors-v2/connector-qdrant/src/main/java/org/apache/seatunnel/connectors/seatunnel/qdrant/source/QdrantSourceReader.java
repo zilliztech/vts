@@ -157,8 +157,13 @@ public class QdrantSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> 
                 case DOUBLE:
                     fields[fieldIndex] = value.getDoubleValue();
                     break;
-                case BINARY_VECTOR:
                 case FLOAT_VECTOR:
+                    List<Float> floats = vector.getDataList();
+                    Float[] floats1 = new Float[floats.size()];
+                    floats.toArray(floats1);
+                    fields[fieldIndex] = floats1;
+                    break;
+                case BINARY_VECTOR:
                 case FLOAT16_VECTOR:
                 case BFLOAT16_VECTOR:
                     List<Float> list = vector.getDataList();
