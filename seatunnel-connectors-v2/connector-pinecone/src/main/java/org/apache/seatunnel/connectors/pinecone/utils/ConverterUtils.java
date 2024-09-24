@@ -20,7 +20,6 @@ public class ConverterUtils {
         Float[] arrays = floats.toArray(new Float[0]);
         fields[1] = arrays;
         Struct meta = vector.getMetadata();
-        Gson gson = new Gson();
         JsonObject data = new JsonObject();
         for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {
             data.add(entry.getKey(), convertValueToJsonElement(entry.getValue()));

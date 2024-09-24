@@ -7,7 +7,6 @@ import io.milvus.grpc.FieldSchema;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.R;
 import io.milvus.param.collection.DescribeCollectionParam;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,10 +18,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.*;
-
-public class Utils {
-    private static final Logger log = LoggerFactory.getLogger(Utils.class);
+public class MilvusConnectorUtils {
+    private static final Logger log = LoggerFactory.getLogger(MilvusConnectorUtils.class);
     private static final SecretKey SECRET_KEY = generateSecretKey();
 
     public static String encryptToken(String token) {

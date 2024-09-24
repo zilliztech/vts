@@ -23,7 +23,6 @@ import io.milvus.param.partition.CreatePartitionParam;
 import io.milvus.param.partition.ShowPartitionsParam;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.configuration.util.ConfigUtil;
 import org.apache.seatunnel.api.table.catalog.Catalog;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -69,7 +68,6 @@ import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.collection.ShowCollectionsParam;
 import io.milvus.param.index.CreateIndexParam;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.List;
