@@ -24,11 +24,10 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
-import org.apache.seatunnel.common.utils.TimeUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.Utils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConnectorUtils;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -71,7 +70,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
             log.info("begin to init Milvus client");
             String dbName = catalogTable.getTablePath().getDatabaseName();
             String collectionName = catalogTable.getTablePath().getTableName();
-            this.hasPartitionKey = Utils.hasPartitionKey(config.get(URL), config.get(TOKEN), dbName, collectionName);
+            this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(config.get(URL), config.get(TOKEN), dbName, collectionName);
 
             ConnectConfig connectConfig = ConnectConfig.builder()
                     .uri(config.get(URL))

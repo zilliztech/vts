@@ -47,12 +47,13 @@ public class QdrantSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .required(QdrantConfig.COLLECTION_NAME, TableSchemaOptions.SCHEMA)
+                .required(QdrantConfig.COLLECTION_NAME)
                 .optional(
                         QdrantConfig.HOST,
                         QdrantConfig.PORT,
                         QdrantConfig.API_KEY,
-                        QdrantConfig.USE_TLS)
+                        QdrantConfig.USE_TLS,
+                        TableSchemaOptions.SCHEMA)
                 .build();
     }
 
