@@ -33,17 +33,20 @@
         <module>connector-common</module>
         <module>connector-console</module>
         <module>connector-fake</module>
+        <module>connector-file</module>
         <module>connector-milvus</module>
         <module>connector-jdbc</module>
-        <module>connector-kafka</module>
+<!--        <module>connector-kafka</module>-->
         <module>connector-elasticsearch</module>
+        <module>connector-pinecone</module>
+        <module>connector-qdrant</module>
+        <module>connector-tencent-vectordb</module>
 <!--        <module>connector-cdc</module>-->
 <!--        <module>connector-clickhouse</module>-->
 <!--        <module>connector-http</module>-->
 <!--        <module>connector-pulsar</module>-->
 <!--        <module>connector-socket</module>-->
 <!--        <module>connector-hive</module>-->
-        <module>connector-file</module>
 <!--        <module>connector-hudi</module>-->
 <!--        <module>connector-assert</module>-->
 <!--        <module>connector-kudu</module>-->
@@ -79,7 +82,6 @@
 <!--        <module>connector-easysearch</module>-->
 <!--        <module>connector-web3j</module>-->
 <!--        <module>connector-activemq</module>-->
-<!--        <module>connector-qdrant</module>-->
 <!--        <module>connector-sls</module>-->
 <!--        <module>connector-typesense</module>-->
     </modules>

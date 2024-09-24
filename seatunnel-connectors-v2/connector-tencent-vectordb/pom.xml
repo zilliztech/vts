@@ -26,38 +26,22 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>connector-qdrant</artifactId>
-    <name>SeaTunnel : Connectors V2 : Qdrant</name>
+    <artifactId>connector-tencent-vectordb</artifactId>
+    <name>SeaTunnel : Connectors V2 : Pinecone</name>
 
-    <properties>
-        <connector.name>connector.qdrant</connector.name>
-    </properties>
     <dependencies>
-
         <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-common</artifactId>
-            <version>${project.version}</version>
+            <groupId>com.tencent.tcvectordb</groupId>
+            <artifactId>vectordatabase-sdk-java</artifactId>
+            <version>1.3.5</version>
         </dependency>
 
         <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-protobuf</artifactId>
-            <version>1.59.1</version>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
         </dependency>
-
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-guava</artifactId>
-            <version>${project.version}</version>
-            <classifier>optional</classifier>
-        </dependency>
-
-        <dependency>
-            <groupId>io.qdrant</groupId>
-            <artifactId>client</artifactId>
-            <version>1.11.0</version>
-        </dependency>
-
     </dependencies>
+
+
 </project>

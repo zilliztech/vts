@@ -26,38 +26,21 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>connector-qdrant</artifactId>
-    <name>SeaTunnel : Connectors V2 : Qdrant</name>
+    <artifactId>connector-pinecone</artifactId>
+    <name>SeaTunnel : Connectors V2 : Pinecone</name>
 
-    <properties>
-        <connector.name>connector.qdrant</connector.name>
-    </properties>
     <dependencies>
-
         <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-common</artifactId>
-            <version>${project.version}</version>
+            <groupId>io.pinecone</groupId>
+            <artifactId>pinecone-client</artifactId>
+            <version>2.1.0</version>
         </dependency>
-
         <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-protobuf</artifactId>
-            <version>1.59.1</version>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
         </dependency>
-
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-guava</artifactId>
-            <version>${project.version}</version>
-            <classifier>optional</classifier>
-        </dependency>
-
-        <dependency>
-            <groupId>io.qdrant</groupId>
-            <artifactId>client</artifactId>
-            <version>1.11.0</version>
-        </dependency>
-
     </dependencies>
+
+
 </project>
