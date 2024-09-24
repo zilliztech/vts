@@ -133,6 +133,16 @@ public class PostgresJdbcRowConverter extends AbstractJdbcRowConverter {
                                 "Unexpected value: " + seaTunnelDataType.getTypeClass());
                     }
                     break;
+                case FLOAT_VECTOR:
+                    String vectorString = JdbcFieldTypeUtils.getString(rs, resultSetIndex);
+                    String[] vectorArrayString =
+                            vectorString.replace("[", "").replace("]", "").split(",");
+                    Float[] vectorArray = new Float[vectorArrayString.length];
+                    for (int index = 0; index < vectorArrayString.length; index++) {
+                        vectorArray[index] = Float.parseFloat(vectorArrayString[index]);
+                    }
+                    fields[fieldIndex] = vectorArray;
+                    break;
                 case MAP:
                 case ROW:
                 default:

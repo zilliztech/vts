@@ -27,6 +27,16 @@
     <artifactId>seatunnel-engine-examples</artifactId>
     <name>SeaTunnel : Examples : Engine</name>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.25.1</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
 
         <!--   seatunnel core dependencies   -->
@@ -42,13 +52,53 @@
             <version>${project.version}</version>
         </dependency>
 
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>seatunnel-hadoop3-3.1.4-uber</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+
+        <!--   seatunnel connectors   -->
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-hadoop3-3.1.4-uber</artifactId>
+            <artifactId>connector-milvus</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!--   seatunnel connectors   -->
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-tencent-vectordb</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-qdrant</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-pinecone</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-elasticsearch</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-jdbc</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.3</version>
+            <!-- 请检查最新的版本号 -->
+        </dependency>
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>connector-fake</artifactId>
@@ -58,12 +108,6 @@
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>connector-console</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-assert</artifactId>
             <version>${project.version}</version>
         </dependency>
 

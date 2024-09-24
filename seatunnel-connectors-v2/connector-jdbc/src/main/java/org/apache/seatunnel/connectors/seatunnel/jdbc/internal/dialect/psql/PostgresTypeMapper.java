@@ -19,10 +19,15 @@ package org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.psql;
 
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
+import org.apache.seatunnel.common.utils.ReflectionUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialectTypeMapper;
+import org.postgresql.core.Field;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.Optional;
+
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.psql.PostgresTypeConverter.PG_VECTOR;
 
 public class PostgresTypeMapper implements JdbcDialectTypeMapper {
 
@@ -38,7 +43,18 @@ public class PostgresTypeMapper implements JdbcDialectTypeMapper {
         int isNullable = metadata.isNullable(colIndex);
         int precision = metadata.getPrecision(colIndex);
         int scale = metadata.getScale(colIndex);
-
+        if (nativeType.equals(PG_VECTOR)) {
+            Optional<Object> optionalValue = ReflectionUtils.getField(metadata, "fields");
+            if (optionalValue.isPresent()) {
+                Field[] fields = (Field[]) optionalValue.get();
+                for (Field field : fields) {
+                    if (columnName.equals(field.getColumnLabel())) {
+                        scale = field.getMod(); // when in vector, use scale to display dimension
+                        break;
+                    }
+                }
+            }
+        }
         BasicTypeDefine typeDefine =
                 BasicTypeDefine.builder()
                         .name(columnName)

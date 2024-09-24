@@ -56,6 +56,7 @@ import static org.apache.seatunnel.api.table.type.BasicType.LONG_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.SHORT_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.VOID_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 
 public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer {
 
@@ -222,7 +223,9 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                 return Base64.getDecoder().decode(fieldValue);
             } else if (VOID_TYPE.equals(fieldType) || fieldType == null) {
                 return null;
-            } else {
+            } else if (VECTOR_FLOAT_TYPE.equals(fieldType)) {
+                return JsonUtils.toList(fieldValue, Float.class).toArray();
+            }  else {
                 throw new ElasticsearchConnectorException(
                         CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
                         "Unexpected value: " + fieldType);

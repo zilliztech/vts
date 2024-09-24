@@ -22,9 +22,9 @@ import org.apache.seatunnel.common.exception.CommonError;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import static org.apache.seatunnel.transform.exception.TransformCommonErrorCode.INPUT_FIELDS_NOT_FOUND;
-import static org.apache.seatunnel.transform.exception.TransformCommonErrorCode.INPUT_FIELD_NOT_FOUND;
+import static org.apache.seatunnel.transform.exception.TransformCommonErrorCode.*;
 
 /** The common error of SeaTunnel transform. Please refer {@link CommonError} */
 public class TransformCommonError {
@@ -42,5 +42,29 @@ public class TransformCommonError {
         params.put("fields", String.join(",", fields));
         params.put("transform", transform);
         return new TransformException(INPUT_FIELDS_NOT_FOUND, params);
+    }
+
+    public static TransformException cannotFindInputTableNameError(
+            String transform, Set<String> tableNames) {
+        Map<String, String> params = new HashMap<>();
+        params.put("tables", String.join(",", tableNames));
+        params.put("transform", transform);
+        return new TransformException(INPUT_TABLE_NOT_FOUND, params);
+    }
+
+    public static TransformException cannotFindInputDatabaseNameError(
+            String transform, Set<String> databases) {
+        Map<String, String> params = new HashMap<>();
+        params.put("databases", String.join(",", databases));
+        params.put("transform", transform);
+        return new TransformException(INPUT_DATABASE_NOT_FOUND, params);
+    }
+
+    public static TransformException cannotFindInputSchemaNameError(
+            String transform, Set<String> schemas) {
+        Map<String, String> params = new HashMap<>();
+        params.put("schemas", String.join(",", schemas));
+        params.put("transform", transform);
+        return new TransformException(INPUT_SCHEMA_NOT_FOUND, params);
     }
 }

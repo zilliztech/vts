@@ -42,6 +42,6 @@ public class QdrantParameters implements Serializable {
     }
 
     public QdrantClient buildQdrantClient() {
-        return new QdrantClient(QdrantGrpcClient.newBuilder(host, port, useTls).build());
+        return new QdrantClient(QdrantGrpcClient.newBuilder(host, port, useTls).withApiKey(this.apiKey).build());
     }
 }

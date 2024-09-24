@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
 
 import org.apache.seatunnel.api.configuration.Option;
@@ -84,6 +85,11 @@ public class SourceConfig implements Serializable {
                             Collections.singletonMap("match_all", new HashMap<String, String>()))
                     .withDescription(
                             "Elasticsearch query language. You can control the range of data read");
+    public static final Option<Map> PK =
+            Options.key("pk")
+                    .objectType(Map.class)
+                    .defaultValue(ImmutableMap.of("name", "_id", "type", "string", "length", 512))
+                    .withDescription("The PK of es index, will as pk field of sink table.");
 
     private String index;
     private List<String> source;
