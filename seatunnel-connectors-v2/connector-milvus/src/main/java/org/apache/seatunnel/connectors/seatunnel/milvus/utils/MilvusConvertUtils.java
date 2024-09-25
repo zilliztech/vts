@@ -17,118 +17,89 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonParser;
+import com.google.protobuf.ProtocolStringList;
+import io.milvus.client.MilvusServiceClient;
+import io.milvus.common.utils.JacksonUtils;
+import io.milvus.grpc.*;
+import io.milvus.param.ConnectParam;
+import io.milvus.param.R;
+import io.milvus.param.collection.DescribeCollectionParam;
+import io.milvus.param.collection.ShowCollectionsParam;
+import io.milvus.param.index.DescribeIndexParam;
+import io.milvus.param.partition.ShowPartitionsParam;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.util.Lists;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.api.table.catalog.ConstraintKey;
-import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
-import org.apache.seatunnel.api.table.catalog.PrimaryKey;
-import org.apache.seatunnel.api.table.catalog.TableIdentifier;
-import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.catalog.VectorIndex;
+import org.apache.seatunnel.api.table.catalog.*;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
-import org.apache.seatunnel.api.table.type.ArrayType;
-import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.table.type.SqlType;
-import org.apache.seatunnel.api.table.type.VectorType;
-import org.apache.seatunnel.common.utils.BufferUtils;
+import org.apache.seatunnel.api.table.type.*;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.hadoop.util.Lists;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonParser;
-import com.google.protobuf.ProtocolStringList;
-import io.milvus.client.MilvusServiceClient;
-import io.milvus.common.utils.JacksonUtils;
-import io.milvus.grpc.CollectionSchema;
-import io.milvus.grpc.DataType;
-import io.milvus.grpc.DescribeCollectionResponse;
-import io.milvus.grpc.DescribeIndexResponse;
-import io.milvus.grpc.FieldSchema;
-import io.milvus.grpc.IndexDescription;
-import io.milvus.grpc.KeyValuePair;
-import io.milvus.grpc.ShowCollectionsResponse;
-import io.milvus.grpc.ShowType;
-import io.milvus.param.ConnectParam;
-import io.milvus.param.R;
-import io.milvus.param.collection.DescribeCollectionParam;
-import io.milvus.param.collection.ShowCollectionsParam;
-import io.milvus.param.index.DescribeIndexParam;
-
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class MilvusConvertUtils {
 
-    private static final String CATALOG_NAME = "Milvus";
-
     private static final Gson gson = new Gson();
+    private final ReadonlyConfig config;
 
-    public static Map<TablePath, CatalogTable> getSourceTables(ReadonlyConfig config) {
-        MilvusServiceClient client = null;
-        try {
-            client =
-                    new MilvusServiceClient(
-                            ConnectParam.newBuilder()
-                                    .withUri(config.get(MilvusSourceConfig.URL))
-                                    .withToken(config.get(MilvusSourceConfig.TOKEN))
-                                    .build());
-
-            String database = config.get(MilvusSourceConfig.DATABASE);
-            List<String> collectionList = new ArrayList<>();
-            if (StringUtils.isNotEmpty(config.get(MilvusSourceConfig.COLLECTION))) {
-                collectionList.add(config.get(MilvusSourceConfig.COLLECTION));
-            } else {
-                R<ShowCollectionsResponse> response =
-                        client.showCollections(
-                                ShowCollectionsParam.newBuilder()
-                                        .withDatabaseName(database)
-                                        .withShowType(ShowType.All)
-                                        .build());
-                if (response.getStatus() != R.Status.Success.getCode()) {
-                    throw new MilvusConnectorException(
-                            MilvusConnectionErrorCode.SHOW_COLLECTIONS_ERROR);
-                }
-
-                ProtocolStringList collections = response.getData().getCollectionNamesList();
-                if (CollectionUtils.isEmpty(collections)) {
-                    throw new MilvusConnectorException(
-                            MilvusConnectionErrorCode.DATABASE_NO_COLLECTIONS, database);
-                }
-                collectionList.addAll(collections);
-            }
-
-            Map<TablePath, CatalogTable> map = new HashMap<>();
-            for (String collection : collectionList) {
-                CatalogTable catalogTable = getCatalogTable(client, database, collection);
-                map.put(TablePath.of(database, collection), catalogTable);
-            }
-            return map;
-        } catch (Exception e) {
-            throw new CatalogException(e.getMessage(), e);
-        } finally {
-            if (client != null) {
-                client.close();
-            }
-        }
+    public MilvusConvertUtils(ReadonlyConfig config) {
+        this.config = config;
     }
 
-    public static CatalogTable getCatalogTable(
+    public Map<TablePath, CatalogTable> getSourceTables() {
+        MilvusServiceClient client =
+                new MilvusServiceClient(
+                        ConnectParam.newBuilder()
+                                .withUri(config.get(MilvusSourceConfig.URL))
+                                .withToken(config.get(MilvusSourceConfig.TOKEN))
+                                .build());
+
+        String database = config.get(MilvusSourceConfig.DATABASE);
+        List<String> collectionList = new ArrayList<>();
+        if (StringUtils.isNotEmpty(config.get(MilvusSourceConfig.COLLECTION))) {
+            collectionList.add(config.get(MilvusSourceConfig.COLLECTION));
+        } else {
+            R<ShowCollectionsResponse> response =
+                    client.showCollections(
+                            ShowCollectionsParam.newBuilder()
+                                    .withDatabaseName(database)
+                                    .withShowType(ShowType.All)
+                                    .build());
+            if (response.getStatus() != R.Status.Success.getCode()) {
+                throw new MilvusConnectorException(
+                        MilvusConnectionErrorCode.SHOW_COLLECTIONS_ERROR);
+            }
+
+            ProtocolStringList collections = response.getData().getCollectionNamesList();
+            if (CollectionUtils.isEmpty(collections)) {
+                throw new MilvusConnectorException(
+                        MilvusConnectionErrorCode.DATABASE_NO_COLLECTIONS, database);
+            }
+            collectionList.addAll(collections);
+        }
+
+        Map<TablePath, CatalogTable> map = new HashMap<>();
+        for (String collection : collectionList) {
+            CatalogTable catalogTable = getCatalogTable(client, database, collection);
+            TablePath tablePath = TablePath.of(database, null, collection);
+            map.put(tablePath, catalogTable);
+
+        }
+        return map;
+    }
+
+    public CatalogTable getCatalogTable(
             MilvusServiceClient client, String database, String collection) {
         R<DescribeCollectionResponse> response =
                 client.describeCollection(
@@ -140,13 +111,19 @@ public class MilvusConvertUtils {
         if (response.getStatus() != R.Status.Success.getCode()) {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.DESC_COLLECTION_ERROR);
         }
-
+        log.info("describe collection database: {}, collection: {}, response: {}", database, collection, response);
         // collection column
-        DescribeCollectionResponse data = response.getData();
-        CollectionSchema schema = data.getSchema();
+        DescribeCollectionResponse collectionResponse = response.getData();
+        CollectionSchema schema = collectionResponse.getSchema();
         List<Column> columns = new ArrayList<>();
+        boolean existPartitionKeyField = false;
+        String partitionKeyField = null;
         for (FieldSchema fieldSchema : schema.getFieldsList()) {
             columns.add(MilvusConvertUtils.convertColumn(fieldSchema));
+            if (fieldSchema.getIsPartitionKey()) {
+                existPartitionKeyField = true;
+                partitionKeyField = fieldSchema.getName();
+            }
         }
 
         // primary key
@@ -178,15 +155,45 @@ public class MilvusConvertUtils {
                         .build();
 
         // build tableId
-        TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, collection);
-
+        String CATALOG_NAME = "Milvus";
+        TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, null, collection);
         // build options info
         Map<String, String> options = new HashMap<>();
-        options.put(
-                MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(schema.getEnableDynamicField()));
+        options.put(MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(schema.getEnableDynamicField()));
+        options.put(MilvusOptions.SHARDS_NUM, String.valueOf(collectionResponse.getShardsNum()));
+        if (existPartitionKeyField) {
+            options.put(MilvusOptions.PARTITION_KEY_FIELD, partitionKeyField);
+        } else {
+            fillPartitionNames(options, client, database, collection);
+        }
 
         return CatalogTable.of(
                 tableId, tableSchema, options, new ArrayList<>(), schema.getDescription());
+    }
+
+    private static void fillPartitionNames(Map<String, String> options,  MilvusServiceClient client, String database, String collection){
+        // not exist partition key, will read partition
+        R<ShowPartitionsResponse> partitionsResponseR = client.showPartitions(ShowPartitionsParam.newBuilder()
+                .withDatabaseName(database)
+                .withCollectionName(collection)
+                .build());
+        if (partitionsResponseR.getStatus() != R.Status.Success.getCode()) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.SHOW_PARTITION_ERROR, partitionsResponseR.getMessage());
+        }
+
+        ProtocolStringList partitionNamesList = partitionsResponseR.getData().getPartitionNamesList();
+        List<String> list = new ArrayList<>();
+        for (String partition : partitionNamesList) {
+            if (partition.equals("_default")){
+                continue;
+            }
+            list.add(partition);
+        }
+        if (CollectionUtils.isEmpty(partitionNamesList)) {
+            return;
+        }
+
+        options.put(MilvusOptions.PARTITION_NAMES, String.join(",", list));
     }
 
     private static List<ConstraintKey.ConstraintKeyColumn> buildVectorIndexes(
@@ -265,8 +272,10 @@ public class MilvusConvertUtils {
                 }
                 break;
             case String:
-            case JSON:
                 builder.dataType(BasicType.STRING_TYPE);
+                break;
+            case JSON:
+                builder.dataType(BasicType.JSON_TYPE);
                 break;
             case Array:
                 builder.dataType(ArrayType.STRING_ARRAY_TYPE);
@@ -322,6 +331,8 @@ public class MilvusConvertUtils {
         switch (sqlType) {
             case INT:
                 return Integer.parseInt(value.toString());
+            case TINYINT:
+                return Byte.parseByte(value.toString());
             case BIGINT:
                 return Long.parseLong(value.toString());
             case SMALLINT:
@@ -329,15 +340,19 @@ public class MilvusConvertUtils {
             case STRING:
             case DATE:
                 return value.toString();
+            case JSON:
+                return value;
             case FLOAT_VECTOR:
-                ByteBuffer floatVectorBuffer = (ByteBuffer) value;
-                Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
-                return Arrays.stream(floats).collect(Collectors.toList());
+                List<Float> vector = new ArrayList<>();
+                for (Object o : (Object[]) value) {
+                    vector.add(Float.parseFloat(o.toString()));
+                }
+                return vector;
             case BINARY_VECTOR:
             case BFLOAT16_VECTOR:
             case FLOAT16_VECTOR:
-                ByteBuffer vector = (ByteBuffer) value;
-                return gson.toJsonTree(vector.array());
+                ByteBuffer binaryVector = (ByteBuffer) value;
+                return gson.toJsonTree(binaryVector.array());
             case SPARSE_FLOAT_VECTOR:
                 return JsonParser.parseString(JacksonUtils.toJsonString(value)).getAsJsonObject();
             case FLOAT:
@@ -352,6 +367,12 @@ public class MilvusConvertUtils {
                     case STRING:
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
+                    case SMALLINT:
+                        Short[] shortArray = (Short[]) value;
+                        return Arrays.asList(shortArray);
+                    case TINYINT:
+                        Byte[] byteArray = (Byte[]) value;
+                        return Arrays.asList(byteArray);
                     case INT:
                         Integer[] intArray = (Integer[]) value;
                         return Arrays.asList(intArray);
@@ -394,6 +415,8 @@ public class MilvusConvertUtils {
                 return DataType.Double;
             case STRING:
                 return DataType.VarChar;
+            case JSON:
+                return DataType.JSON;
             case ARRAY:
                 return DataType.Array;
             case FLOAT_VECTOR:

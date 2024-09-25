@@ -76,11 +76,6 @@ public class ConverterUtils {
                     fields[fieldIndex] = value.getDoubleValue();
                     break;
                 case FLOAT_VECTOR:
-                    List<Float> floats = vector.getDataList();
-                    Float[] floats1 = new Float[floats.size()];
-                    floats.toArray(floats1);
-                    fields[fieldIndex] = floats1;
-                    break;
                 case BINARY_VECTOR:
                 case FLOAT16_VECTOR:
                 case BFLOAT16_VECTOR:

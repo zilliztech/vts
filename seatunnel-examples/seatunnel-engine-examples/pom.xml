@@ -65,11 +65,11 @@
             <version>${project.version}</version>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>org.apache.seatunnel</groupId>-->
-<!--            <artifactId>connector-tencent-vectordb</artifactId>-->
-<!--            <version>${project.version}</version>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-tencent-vectordb</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
@@ -77,11 +77,11 @@
             <version>${project.version}</version>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>org.apache.seatunnel</groupId>-->
-<!--            <artifactId>connector-pinecone</artifactId>-->
-<!--            <version>${project.version}</version>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-pinecone</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
 <!--        <dependency>-->
 <!--            <groupId>org.apache.seatunnel</groupId>-->
