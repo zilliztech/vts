@@ -41,6 +41,7 @@
         <module>connector-pinecone</module>
         <module>connector-qdrant</module>
         <module>connector-tencent-vectordb</module>
+        <module>connector-astradb</module>
 <!--        <module>connector-cdc</module>-->
 <!--        <module>connector-clickhouse</module>-->
 <!--        <module>connector-http</module>-->
@@ -57,7 +58,7 @@
 <!--        <module>connector-redis</module>-->
 <!--        <module>connector-datahub</module>-->
 <!--        <module>connector-sentry</module>-->
-<!--        <module>connector-mongodb</module>-->
+        <module>connector-mongodb</module>
 <!--        <module>connector-iceberg</module>-->
 <!--        <module>connector-influxdb</module>-->
 <!--        <module>connector-amazondynamodb</module>-->
