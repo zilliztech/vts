@@ -235,8 +235,10 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     }
                 } catch (Exception e) {
                     if(e.getMessage().contains("received message larger than max")){
+                        // if this error, we need to reduce batch size and try again, so throw exception here
                         throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                     }
+                    // for other exception, like rateLimit, we can try iterator again after 30s, no need to update batch size directly
                     maxFailRetry--;
                     if (maxFailRetry == 0) {
                         log.error("Iterate next data from milvus failed, batchSize = {}, throw exception", batchSize, e);

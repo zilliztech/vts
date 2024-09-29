@@ -8,6 +8,7 @@ import com.google.protobuf.Value;
 import io.pinecone.proto.Vector;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.common.utils.BufferUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,7 @@ public class ConverterUtils {
         fields[0] = vector.getId();
         List<Float> floats = vector.getValuesList();
         Float[] arrays = floats.toArray(new Float[0]);
-        fields[1] = arrays;
+        fields[1] = BufferUtils.toByteBuffer(arrays);
         Struct meta = vector.getMetadata();
         JsonObject data = new JsonObject();
         for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {
