@@ -36,10 +36,13 @@ To learn more details about VTS used in action, read our blog:
 To get started with VTS, follow the [QuickStart Guide](#quickstart-guide).
 
 ### QuickStart Guide
-This guide will help you get started with how to use vts to transport vector data into milvus, currently, we support the following 3 source connectors:
+This guide will help you get started with how to use vts to transport vector data into milvus, currently, we support the following source connectors:
 - milvus
 - postgres vector
 - elastic search
+- pinecone
+- qdrant
+- tencent vectordb
 
 **1. Build the vts project**
 ```shell
