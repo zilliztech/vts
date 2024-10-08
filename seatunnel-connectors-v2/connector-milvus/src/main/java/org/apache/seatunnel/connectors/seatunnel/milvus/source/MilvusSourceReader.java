@@ -216,7 +216,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                         MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED,
                         response.getException());
             }
-            int maxFailRetry = 5;
+            int maxFailRetry = 3;
             QueryIterator iterator = response.getData();
             while (maxFailRetry > 0) {
                 try {
@@ -234,22 +234,24 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                         }
                     }
                 } catch (Exception e) {
-                    if(e.getMessage().contains("received message larger than max")){
+                    if(e.getMessage().contains("rate limit exceeded")){
+                        // for rateLimit, we can try iterator again after 30s, no need to update batch size directly
+                        maxFailRetry--;
+                        if (maxFailRetry == 0) {
+                            log.error("Iterate next data from milvus failed, batchSize = {}, throw exception", batchSize, e);
+                            throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                        }
+                        log.error("Iterate next data from milvus failed, batchSize = {}, will retry after 30 s, maxRetry: {}", batchSize, maxFailRetry, e);
+                        Thread.sleep(30000);
+                    }else {
                         // if this error, we need to reduce batch size and try again, so throw exception here
                         throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                     }
-                    // for other exception, like rateLimit, we can try iterator again after 30s, no need to update batch size directly
-                    maxFailRetry--;
-                    if (maxFailRetry == 0) {
-                        log.error("Iterate next data from milvus failed, batchSize = {}, throw exception", batchSize, e);
-                        throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
-                    }
-                    log.error("Iterate next data from milvus failed, batchSize = {}, will retry after 30 s, maxRetry: {}", batchSize, maxFailRetry, e);
-                    Thread.sleep(30000);
+
                 }
             }
         }catch (Exception e) {
-            if(batchSize > 10) {
+            if(e.getMessage().contains("rate limit exceeded") && batchSize > 10) {
                 log.error("Query Iterate data from milvus failed, retry from beginning with smaller batch size: {} after 30 s", batchSize / 2, e);
                 Thread.sleep(30000);
                 queryIteratorData(tablePath, partitionName, tableSchema, output, batchSize / 2);
