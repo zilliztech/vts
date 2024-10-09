@@ -245,7 +245,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                         .collectionName(this.collectionName)
                         .data(data)
                         .build();
-        if(partitionName != null) {
+        if(StringUtils.isNotEmpty(partitionName)) {
             upsertReq.setPartitionName(partitionName);
         }
         try {
@@ -279,7 +279,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                         .collectionName(this.collectionName)
                         .data(data)
                         .build();
-        if(partitionName != null) {
+        if(StringUtils.isNotEmpty(partitionName)) {
             insertReq.setPartitionName(partitionName);
         }
         try {

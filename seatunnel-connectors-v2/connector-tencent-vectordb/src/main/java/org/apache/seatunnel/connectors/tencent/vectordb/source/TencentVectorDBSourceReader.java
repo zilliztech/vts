@@ -94,7 +94,7 @@ public class TencentVectorDBSourceReader implements SourceReader<SeaTunnelRow, T
                     while (true) {
                         QueryParam queryParam = QueryParam.newBuilder()
                                 .withRetrieveVector(true)
-                                        .withLimit(config.get(BATCH_SIZE))
+                                        .withLimit((long)config.get(BATCH_SIZE))
                                                 .withOffset(offSet.get())
                                                         .build();
                         List<Document> documents = collection.query(queryParam);
@@ -103,7 +103,7 @@ public class TencentVectorDBSourceReader implements SourceReader<SeaTunnelRow, T
                         }
                         offSet.addAndGet(documents.size());
                         for (Document document : documents) {
-                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(document);
+                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(tableSchema, document);
                             row.setTableId(tablePath.getFullName());
                             output.collect(row);
                         }

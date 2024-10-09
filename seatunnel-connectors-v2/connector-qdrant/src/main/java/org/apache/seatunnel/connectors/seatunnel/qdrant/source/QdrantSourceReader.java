@@ -19,33 +19,23 @@ package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.type.RowKind;
-import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.common.exception.CommonErrorCode;
-import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSplitReader;
 import org.apache.seatunnel.connectors.seatunnel.common.source.SingleSplitReaderContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantParameters;
-import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
 
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.WithVectorsSelectorFactory;
-import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.utils.ConverterUtils;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
+
 
 public class QdrantSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
     private final QdrantParameters qdrantParameters;

@@ -23,6 +23,7 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
+import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.converter.AbstractJdbcRowConverter;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.DatabaseIdentifier;
@@ -141,7 +142,7 @@ public class PostgresJdbcRowConverter extends AbstractJdbcRowConverter {
                     for (int index = 0; index < vectorArrayString.length; index++) {
                         vectorArray[index] = Float.parseFloat(vectorArrayString[index]);
                     }
-                    fields[fieldIndex] = vectorArray;
+                    fields[fieldIndex] = BufferUtils.toByteBuffer(vectorArray);
                     break;
                 case MAP:
                 case ROW:

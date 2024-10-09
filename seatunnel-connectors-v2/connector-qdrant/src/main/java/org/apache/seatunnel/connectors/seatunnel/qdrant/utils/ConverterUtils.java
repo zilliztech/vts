@@ -24,78 +24,6 @@ import java.util.Objects;
 import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 
 public class ConverterUtils {
-    public static SeaTunnelRow convertToSeaTunnelRow(TableSchema tableSchema, Points.RetrievedPoint point) {
-        SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
-        PrimaryKey primaryKey = tableSchema.getPrimaryKey();
-        Map<String, JsonWithInt.Value> payloadMap = point.getPayloadMap();
-        Points.Vectors vectors = point.getVectors();
-        Map<String, Points.Vector> vectorsMap = new HashMap<>();
-        String DEFAULT_VECTOR_KEY = "vector";
-
-        if (vectors.hasVector()) {
-            vectorsMap.put(DEFAULT_VECTOR_KEY, vectors.getVector());
-        } else if (vectors.hasVectors()) {
-            vectorsMap = vectors.getVectors().getVectorsMap();
-        }
-        Object[] fields = new Object[typeInfo.getTotalFields()];
-        String[] fieldNames = typeInfo.getFieldNames();
-        for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
-            SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
-            String fieldName = fieldNames[fieldIndex];
-
-            if (isPrimaryKeyField(primaryKey, fieldName)) {
-                Points.PointId id = point.getId();
-                if (id.hasNum()) {
-                    fields[fieldIndex] = id.getNum();
-                } else if (id.hasUuid()) {
-                    fields[fieldIndex] = id.getUuid();
-                }
-                continue;
-            }
-            JsonWithInt.Value value = payloadMap.get(fieldName);
-            Points.Vector vector = vectorsMap.get(fieldName);
-            switch (seaTunnelDataType.getSqlType()) {
-                case NULL:
-                    fields[fieldIndex] = null;
-                    break;
-                case STRING:
-                    fields[fieldIndex] = value.getStringValue();
-                    break;
-                case BOOLEAN:
-                    fields[fieldIndex] = value.getBoolValue();
-                    break;
-                case TINYINT:
-                case SMALLINT:
-                case INT:
-                case BIGINT:
-                    fields[fieldIndex] = value.getIntegerValue();
-                    break;
-                case FLOAT:
-                case DECIMAL:
-                case DOUBLE:
-                    fields[fieldIndex] = value.getDoubleValue();
-                    break;
-                case FLOAT_VECTOR:
-                case BINARY_VECTOR:
-                case FLOAT16_VECTOR:
-                case BFLOAT16_VECTOR:
-                    List<Float> list = vector.getDataList();
-                    Float[] vectorArray = new Float[list.size()];
-                    list.toArray(vectorArray);
-                    fields[fieldIndex] = BufferUtils.toByteBuffer(vectorArray);
-                    break;
-                default:
-                    throw new QdrantConnectorException(
-                            CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                            "Unexpected value: " + seaTunnelDataType.getSqlType().name());
-            }
-        }
-
-        SeaTunnelRow seaTunnelRow = new SeaTunnelRow(fields);
-        //seaTunnelRow.setTableId(tablePath.getFullName());
-        seaTunnelRow.setRowKind(RowKind.INSERT);
-        return seaTunnelRow;
-    }
 
     public static SeaTunnelRow convertToSeaTunnelRowWithMeta(TableSchema tableSchema, Points.RetrievedPoint point) {
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
@@ -137,11 +65,6 @@ public class ConverterUtils {
             Points.Vector vector = vectorsMap.get(fieldName);
             switch (seaTunnelDataType.getSqlType()) {
                 case FLOAT_VECTOR:
-                    List<Float> floats = vector.getDataList();
-                    Float[] floats1 = new Float[floats.size()];
-                    floats.toArray(floats1);
-                    fields[fieldIndex] = floats1;
-                    break;
                 case BINARY_VECTOR:
                 case FLOAT16_VECTOR:
                 case BFLOAT16_VECTOR:

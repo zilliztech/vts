@@ -17,4 +17,10 @@ public class PineconeSourceConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Pinecone index name");
+
+    public static final Option<Integer> BATCH_SIZE =
+            Options.key("batch_size")
+                    .intType()
+                    .defaultValue(100)
+                    .withDescription("writer batch size");
 }

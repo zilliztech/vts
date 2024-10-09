@@ -15,7 +15,6 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectionErrorCode;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectorException;
 import org.apache.seatunnel.connectors.pinecone.utils.ConverterUtils;
-import org.apache.seatunnel.connectors.pinecone.utils.PineconeUtils;
 
 import java.io.IOException;
 import java.util.Deque;
@@ -26,13 +25,14 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.BATCH_SIZE;
 
 @Slf4j
 public class PineconeSourceReader implements SourceReader<SeaTunnelRow, PineconeSourceSplit> {
     private final Deque<PineconeSourceSplit> pendingSplits = new ConcurrentLinkedDeque<>();
     private final ReadonlyConfig config;
     private final Context context;
-    private Map<TablePath, CatalogTable> sourceTables;
+    private final Map<TablePath, CatalogTable> sourceTables;
     private Pinecone pinecone;
     private String paginationToken;
 
@@ -73,7 +73,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                 try {
                     log.info("Begin to read data from split: " + split);
                     TablePath tablePath = split.getTablePath();
-                    String namespace = split.getPartitionName();
+                    String namespace = split.getNamespace();
                     TableSchema tableSchema = sourceTables.get(tablePath).getTableSchema();
                     log.info("begin to read data from pinecone, table schema: " + tableSchema);
                     if (null == tableSchema) {
@@ -82,16 +82,11 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                     }
                     Index index = pinecone.getIndexConnection(tablePath.getTableName());
                     ListResponse listResponse;
-                    while (!(Objects.equals(paginationToken, "")) && !namespace.isEmpty()) {
+                    while (!(Objects.equals(paginationToken, ""))) {
                         if(paginationToken == null){
-                            listResponse = index.list(namespace, 100);
+                            listResponse = index.list(namespace, config.get(BATCH_SIZE));
                         }else {
-                            listResponse = index.list(namespace, 100, paginationToken);
-                        }
-                        Pagination pagination = listResponse.getPagination();
-                        paginationToken = pagination.getNext();
-                        if(paginationToken.isEmpty()){
-                            break;
+                            listResponse = index.list(namespace, config.get(BATCH_SIZE), paginationToken);
                         }
                         List<ListItem> vectorsList = listResponse.getVectorsList();
                         List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
@@ -99,11 +94,13 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
                         for (Map.Entry<String, Vector> entry : vectorMap.entrySet()) {
                             Vector vector = entry.getValue();
-                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(vector);
+                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(tableSchema, vector);
                             row.setPartitionName(namespace);
                             row.setTableId(tablePath.getFullName());
                             output.collect(row);
                         }
+                        Pagination pagination = listResponse.getPagination();
+                        paginationToken = pagination.getNext();
                     }
                 } catch (Exception e) {
                     log.error("Read data from split: " + split + " failed", e);

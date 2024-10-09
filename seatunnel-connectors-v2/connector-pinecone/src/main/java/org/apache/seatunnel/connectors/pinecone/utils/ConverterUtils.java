@@ -6,26 +6,56 @@ import com.google.gson.JsonObject;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.pinecone.proto.Vector;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.common.utils.BufferUtils;
 
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 
 public class ConverterUtils {
-    public static SeaTunnelRow convertToSeatunnelRow(Vector vector) {
-        Object[] fields = new Object[3];
-        fields[0] = vector.getId();
-        List<Float> floats = vector.getValuesList();
-        Float[] arrays = floats.toArray(new Float[0]);
-        fields[1] = BufferUtils.toByteBuffer(arrays);
-        Struct meta = vector.getMetadata();
-        JsonObject data = new JsonObject();
-        for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {
-            data.add(entry.getKey(), convertValueToJsonElement(entry.getValue()));
+    public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Vector vector) {
+        SeaTunnelRowType rowType = tableSchema.toPhysicalRowDataType();
+        SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
+        Object[] fields = new Object[typeInfo.getTotalFields()];
+        List<String> fieldNames = Arrays.stream(typeInfo.getFieldNames()).collect(Collectors.toList());
+
+        for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
+            if (fieldNames.get(fieldIndex).equals("id")) {
+                fields[fieldIndex] = vector.getId();
+            } else if (fieldNames.get(fieldIndex).equals("meta")) {
+                Struct meta = vector.getMetadata();
+                JsonObject data = new JsonObject();
+                for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {
+                    data.add(entry.getKey(), convertValueToJsonElement(entry.getValue()));
+                }
+                fields[fieldIndex] = data;
+            } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
+                List<Float> floats = vector.getValuesList();
+                // Convert List<Float> to Float[]
+                Float[] floatArray = floats.toArray(new Float[0]);
+                fields[fieldIndex] = BufferUtils.toByteBuffer(floatArray);
+            } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_SPARSE_FLOAT_TYPE)) {
+                // Convert SparseVector to a ByteBuffer
+                Map<Long, Float> spraseMap = vector.getSparseValues().getIndicesList().stream().collect(Collectors.toMap(
+                        index -> (long) vector.getSparseValues().getIndices(index),
+                        index -> vector.getSparseValues().getValues(index)
+                ));
+
+                fields[fieldIndex] = spraseMap;
+
+            }
         }
-        fields[2] = data;
+
         SeaTunnelRow seaTunnelRow = new SeaTunnelRow(fields);
         seaTunnelRow.setRowKind(RowKind.INSERT);
         return seaTunnelRow;

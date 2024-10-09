@@ -35,9 +35,9 @@ public class TencentVectorDBSourceConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Tencent Vector DB collection name");
-    public static final Option<Long> BATCH_SIZE =
+    public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
-                    .longType()
-                    .defaultValue(100L)
+                    .intType()
+                    .defaultValue(100)
                     .withDescription("Tencent Vector DB reader batch size");
 }

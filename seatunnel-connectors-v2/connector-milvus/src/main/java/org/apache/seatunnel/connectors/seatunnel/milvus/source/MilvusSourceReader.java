@@ -41,6 +41,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.*;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
+import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
@@ -405,7 +406,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                         for (int i = 0; i < list.size(); i++) {
                             arrays[i] = Float.parseFloat(list.get(i).toString());
                         }
-                        fields[fieldIndex] = arrays;
+                        fields[fieldIndex] = BufferUtils.toByteBuffer(arrays);
                         break;
                     } else {
                         throw new MilvusConnectorException(
