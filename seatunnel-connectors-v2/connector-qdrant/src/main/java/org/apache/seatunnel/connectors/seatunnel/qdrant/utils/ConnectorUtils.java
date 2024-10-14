@@ -47,6 +47,7 @@ public class ConnectorUtils {
 
         Collections.VectorsConfig vectorsConfig = collectionInfo.getConfig().getParams().getVectorsConfig();
         if(vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
+            // single vector
             long dimension = vectorsConfig.getParams().getSize();
             PhysicalColumn vectorColumn = PhysicalColumn.builder()
                     .name("vector")
@@ -55,6 +56,7 @@ public class ConnectorUtils {
                     .build();
             columns.add(vectorColumn);
         } else if (!vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
+            // multiple vectors
             for (Map.Entry<String, Collections.VectorParams> entry : vectorsConfig.getParamsMap().getMapMap().entrySet()) {
                 Collections.VectorParams params = entry.getValue();
                 long dimension = params.getSize();
@@ -68,6 +70,7 @@ public class ConnectorUtils {
         }
         Map<String, Object> options = new HashMap<>();
         options.put("isDynamicField", true);
+        // dynamic column
         PhysicalColumn dynamicColumn = PhysicalColumn.builder()
                 .name("meta")
                 .dataType(JSON_TYPE)

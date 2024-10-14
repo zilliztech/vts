@@ -25,7 +25,15 @@
         <artifactId>seatunnel-connectors-v2</artifactId>
         <version>${revision}</version>
     </parent>
-
+    <repositories>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/nianliuu/pinecone-java-client</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
     <artifactId>connector-pinecone</artifactId>
     <name>SeaTunnel : Connectors V2 : Pinecone</name>
 
@@ -33,7 +41,7 @@
         <dependency>
             <groupId>io.pinecone</groupId>
             <artifactId>pinecone-client</artifactId>
-            <version>2.1.0</version>
+            <version>2.1.0-fix</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>

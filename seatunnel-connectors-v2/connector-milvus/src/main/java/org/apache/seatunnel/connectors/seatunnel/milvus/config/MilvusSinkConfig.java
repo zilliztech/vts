@@ -83,7 +83,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
                     .intType()
-                    .defaultValue(10000)
+                    .defaultValue(2000)
                     .withDescription("writer batch size");
     public static final Option<Integer> RATE_LIMIT =
             Options.key("rate_limit")

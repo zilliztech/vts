@@ -10,7 +10,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 public class PineconeSourceSplit implements SourceSplit {
     private TablePath tablePath;
     private String splitId;
-    private String partitionName;
+    private String namespace;
     /**
      * Get the split id of this source split.
      *

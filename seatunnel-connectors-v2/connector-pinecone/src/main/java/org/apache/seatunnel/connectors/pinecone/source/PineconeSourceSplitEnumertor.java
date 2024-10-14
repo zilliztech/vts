@@ -7,12 +7,9 @@ import io.pinecone.proto.NamespaceSummary;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SourceReader;
-import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.openapitools.control.client.model.CollectionModel;
-import org.openapitools.control.client.model.IndexModel;
 
 import java.io.IOException;
 import java.util.*;
@@ -107,7 +104,7 @@ public class PineconeSourceSplitEnumertor implements SourceSplitEnumerator<Pinec
             PineconeSourceSplit pineconeSourceSplit = PineconeSourceSplit.builder()
                     .tablePath(catalogTable.getTablePath())
                     .splitId(catalogTable.getTablePath().getTableName() + "-" + namespace)
-                    .partitionName(namespace)
+                    .namespace(namespace)
                     .build();
             splits.add(pineconeSourceSplit);
         }

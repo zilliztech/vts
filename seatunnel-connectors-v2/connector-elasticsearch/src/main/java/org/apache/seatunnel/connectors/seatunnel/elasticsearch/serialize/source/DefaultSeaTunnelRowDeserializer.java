@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source;
 
+import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
@@ -224,7 +225,10 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
             } else if (VOID_TYPE.equals(fieldType) || fieldType == null) {
                 return null;
             } else if (VECTOR_FLOAT_TYPE.equals(fieldType)) {
-                return JsonUtils.toList(fieldValue, Float.class).toArray();
+                List<Float> list = JsonUtils.toList(fieldValue, Float.class);
+                Float[] vectorArray = new Float[list.size()];
+                list.toArray(vectorArray);
+                return BufferUtils.toByteBuffer(vectorArray);
             }  else {
                 throw new ElasticsearchConnectorException(
                         CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
