@@ -1,11 +1,5 @@
 package org.apache.seatunnel.connectors.pinecone.utils;
 
-import com.google.common.collect.Lists;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.protobuf.Struct;
-import com.google.protobuf.Value;
 import io.pinecone.clients.Index;
 import io.pinecone.clients.Pinecone;
 import io.pinecone.proto.FetchResponse;
@@ -14,8 +8,7 @@ import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.Vector;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.*;
-import org.apache.seatunnel.api.table.type.RowKind;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.shade.com.google.common.collect.Lists;
 import org.openapitools.control.client.model.IndexModel;
 
 import java.util.ArrayList;

@@ -31,7 +31,7 @@ public class AstraDBSource implements SeaTunnelSource<SeaTunnelRow, AstraDBSourc
      */
     @Override
     public Boundedness getBoundedness() {
-        return null;
+        return Boundedness.BOUNDED;
     }
 
     /**

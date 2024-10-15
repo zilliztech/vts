@@ -65,17 +65,17 @@
             <version>${project.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-tencent-vectordb</artifactId>
-            <version>${project.version}</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-tencent-vectordb</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
 
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-qdrant</artifactId>
-            <version>${project.version}</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.seatunnel</groupId>-->
+<!--            <artifactId>connector-qdrant</artifactId>-->
+<!--            <version>${project.version}</version>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>org.apache.seatunnel</groupId>

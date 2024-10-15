@@ -31,7 +31,7 @@ public class TencentVectorDBSource implements SeaTunnelSource<SeaTunnelRow, Tenc
      */
     @Override
     public Boundedness getBoundedness() {
-        return null;
+        return Boundedness.BOUNDED;
     }
 
     /**
