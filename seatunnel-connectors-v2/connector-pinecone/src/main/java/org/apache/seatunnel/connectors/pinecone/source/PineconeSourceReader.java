@@ -88,6 +88,9 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         }
                         List<ListItem> vectorsList = listResponse.getVectorsList();
                         List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
+                        if(ids.isEmpty()){
+                            break;
+                        }
                         FetchResponse fetchResponse = index.fetch(ids, namespace);
                         Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
                         for (Map.Entry<String, Vector> entry : vectorMap.entrySet()) {

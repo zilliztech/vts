@@ -73,6 +73,14 @@ public class ConverterUtils {
                     list.toArray(vectorArray);
                     fields[fieldIndex] = BufferUtils.toByteBuffer(vectorArray);
                     break;
+                case SPARSE_FLOAT_VECTOR:
+                    Map<Long, Float> sparseMap = new HashMap<>();
+                    Points.SparseIndices sparseIndices = vector.getIndices();
+                    for (int i = 0; i < sparseIndices.getDataCount(); i++) {
+                        sparseMap.put((long) sparseIndices.getData(i), vector.getData(i));
+                    }
+                    fields[fieldIndex] = sparseMap;
+                    break;
                 default:
                     throw new QdrantConnectorException(
                             CommonErrorCode.UNSUPPORTED_DATA_TYPE,
