@@ -70,7 +70,6 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
             log.info("begin to init Milvus client");
             String dbName = catalogTable.getTablePath().getDatabaseName();
             String collectionName = catalogTable.getTablePath().getTableName();
-            this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(config.get(URL), config.get(TOKEN), dbName, collectionName);
 
             ConnectConfig connectConfig = ConnectConfig.builder()
                     .uri(config.get(URL))
@@ -80,6 +79,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
             if(StringUtils.isNotEmpty(dbName)) {
                 milvusClient.useDatabase(dbName);
             }
+            this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(milvusClient, collectionName);
             // set rate limit
             if(config.get(RATE_LIMIT) > 0) {
                 log.info("set rate limit for collection: " + collectionName);
