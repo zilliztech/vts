@@ -48,6 +48,8 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
+
 @Slf4j
 public class MilvusConvertUtils {
 
@@ -110,7 +112,7 @@ public class MilvusConvertUtils {
                                 .build());
 
         if (response.getStatus() != R.Status.Success.getCode()) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.DESC_COLLECTION_ERROR);
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.DESC_COLLECTION_ERROR, response.getMessage());
         }
         log.info("describe collection database: {}, collection: {}, response: {}", database, collection, response);
         // collection column
@@ -125,6 +127,17 @@ public class MilvusConvertUtils {
                 existPartitionKeyField = true;
                 partitionKeyField = fieldSchema.getName();
             }
+        }
+        if(collectionResponse.getSchema().getEnableDynamicField()){
+            Map<String, Object> options = new HashMap<>();
+
+            options.put("isDynamicField", true);
+            PhysicalColumn dynamicColumn = PhysicalColumn.builder()
+                    .name("meta")
+                    .dataType(JSON_TYPE)
+                    .options(options)
+                    .build();
+            columns.add(dynamicColumn);
         }
 
         // primary key

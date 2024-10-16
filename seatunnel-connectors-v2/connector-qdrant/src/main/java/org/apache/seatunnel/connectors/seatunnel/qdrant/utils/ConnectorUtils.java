@@ -4,10 +4,16 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
+import io.qdrant.client.WithVectorsSelectorFactory;
 import io.qdrant.client.grpc.Collections;
+import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.*;
+import org.apache.seatunnel.common.exception.CommonErrorCode;
+import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
+import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectionErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,8 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import static org.apache.seatunnel.api.table.type.BasicType.*;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import static org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig.*;
 
 public class ConnectorUtils {
@@ -32,60 +40,91 @@ public class ConnectorUtils {
         Collections.CollectionInfo collectionInfo = null;
         try {
             collectionInfo = client.getCollectionInfoAsync(collectionName).get();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        TablePath tablePath = TablePath.of("default", config.get(COLLECTION_NAME));
+            TablePath tablePath = TablePath.of("default", config.get(COLLECTION_NAME));
+            List<Column> columns = new ArrayList<>();
+            int SCROLL_SIZE = 1;
+            Points.ScrollPoints request =
+                    Points.ScrollPoints.newBuilder()
+                            .setCollectionName(config.get(COLLECTION_NAME))
+                            .setLimit(SCROLL_SIZE)
+                            .setWithPayload(enable(false))
+                            .setWithVectors(WithVectorsSelectorFactory.enable(true))
+                            .build();
 
-        List<Column> columns = new ArrayList<>();
 
-        PhysicalColumn idColumn = PhysicalColumn.builder()
-                .name("id")
-                .dataType(LONG_TYPE)
-                .build();
-        columns.add(idColumn);
-
-        Collections.VectorsConfig vectorsConfig = collectionInfo.getConfig().getParams().getVectorsConfig();
-        if(vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
-            // single vector
-            long dimension = vectorsConfig.getParams().getSize();
-            PhysicalColumn vectorColumn = PhysicalColumn.builder()
-                    .name("vector")
-                    .dataType(VECTOR_FLOAT_TYPE)
-                    .scale(Math.toIntExact(dimension))
-                    .build();
-            columns.add(vectorColumn);
-        } else if (!vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
-            // multiple vectors
-            for (Map.Entry<String, Collections.VectorParams> entry : vectorsConfig.getParamsMap().getMapMap().entrySet()) {
-                Collections.VectorParams params = entry.getValue();
-                long dimension = params.getSize();
+            Points.ScrollResponse response = client.scrollAsync(request).get();
+            List<Points.RetrievedPoint> points = response.getResultList();
+            if(points.isEmpty()){
+                throw new QdrantConnectorException(QdrantConnectionErrorCode.EMPTY_COLLECTION, "No data in collection");
+            }
+            Points.PointId id = points.get(0).getId();
+            if (id.hasNum()) {
+                PhysicalColumn idColumn = PhysicalColumn.builder()
+                        .name("id")
+                        .dataType(LONG_TYPE)
+                        .build();
+                columns.add(idColumn);
+            } else if (id.hasUuid()) {
+                PhysicalColumn idColumn = PhysicalColumn.builder()
+                        .name("id")
+                        .dataType(STRING_TYPE)
+                        .build();
+                columns.add(idColumn);
+            }
+            Collections.VectorsConfig vectorsConfig = collectionInfo.getConfig().getParams().getVectorsConfig();
+            if(vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
+                // single vector
+                long dimension = vectorsConfig.getParams().getSize();
                 PhysicalColumn vectorColumn = PhysicalColumn.builder()
-                        .name(entry.getKey())
+                        .name("vector")
                         .dataType(VECTOR_FLOAT_TYPE)
                         .scale(Math.toIntExact(dimension))
                         .build();
                 columns.add(vectorColumn);
+            } else if (!vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
+                // multiple vectors
+                for (Map.Entry<String, Collections.VectorParams> entry : vectorsConfig.getParamsMap().getMapMap().entrySet()) {
+                    Collections.VectorParams params = entry.getValue();
+                    long dimension = params.getSize();
+                    PhysicalColumn vectorColumn = PhysicalColumn.builder()
+                            .name(entry.getKey())
+                            .dataType(VECTOR_FLOAT_TYPE)
+                            .scale(Math.toIntExact(dimension))
+                            .build();
+                    columns.add(vectorColumn);
+                }
             }
+            Collections.SparseVectorConfig sparseVectorConfig = collectionInfo.getConfig().getParams().getSparseVectorsConfig();
+            if (!sparseVectorConfig.getMapMap().isEmpty()) {
+                sparseVectorConfig.getMapMap().forEach((key, value) -> {
+                    PhysicalColumn sparseVectorColumn = PhysicalColumn.builder()
+                            .name(key)
+                            .dataType(VECTOR_SPARSE_FLOAT_TYPE)
+                            .build();
+                    columns.add(sparseVectorColumn);
+                });
+            }
+            Map<String, Object> options = new HashMap<>();
+            options.put("isDynamicField", true);
+            // dynamic column
+            PhysicalColumn dynamicColumn = PhysicalColumn.builder()
+                    .name("meta")
+                    .dataType(JSON_TYPE)
+                    .options(options)
+                    .build();
+
+            columns.add(dynamicColumn);
+
+            TableSchema tableSchema = TableSchema.builder()
+                    .primaryKey(PrimaryKey.of("id", Lists.newArrayList("id")))
+                    .columns(columns)
+                    .build();
+
+            CatalogTable catalogTable = CatalogTable.of(TableIdentifier.of("qdrant", tablePath),
+                    tableSchema, new HashMap<>(), new ArrayList<>(), "");
+            return catalogTable;
+        }catch (ExecutionException | InterruptedException e) {
+            throw new QdrantConnectorException(QdrantConnectionErrorCode.FAILED_CONNECT_QDRANT, e.getMessage());
         }
-        Map<String, Object> options = new HashMap<>();
-        options.put("isDynamicField", true);
-        // dynamic column
-        PhysicalColumn dynamicColumn = PhysicalColumn.builder()
-                .name("meta")
-                .dataType(JSON_TYPE)
-                .options(options)
-                .build();
-
-        columns.add(dynamicColumn);
-
-        TableSchema tableSchema = TableSchema.builder()
-                .primaryKey(PrimaryKey.of("id", Lists.newArrayList("id")))
-                .columns(columns)
-                .build();
-        Map<TablePath, CatalogTable> sourceTables = new HashMap<>();
-        CatalogTable catalogTable = CatalogTable.of(TableIdentifier.of("qdrant", tablePath),
-                tableSchema, new HashMap<>(), new ArrayList<>(), "");
-        return catalogTable;
     }
 }

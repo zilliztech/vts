@@ -15,6 +15,7 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -24,7 +25,6 @@ import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT
 
 public class ConverterUtils {
     public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Vector vector) {
-        SeaTunnelRowType rowType = tableSchema.toPhysicalRowDataType();
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         Object[] fields = new Object[typeInfo.getTotalFields()];
         List<String> fieldNames = Arrays.stream(typeInfo.getFieldNames()).collect(Collectors.toList());
@@ -46,12 +46,15 @@ public class ConverterUtils {
                 fields[fieldIndex] = BufferUtils.toByteBuffer(floatArray);
             } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_SPARSE_FLOAT_TYPE)) {
                 // Convert SparseVector to a ByteBuffer
-                Map<Long, Float> spraseMap = vector.getSparseValues().getIndicesList().stream().collect(Collectors.toMap(
-                        index -> (long) vector.getSparseValues().getIndices(index),
-                        index -> vector.getSparseValues().getValues(index)
-                ));
+                Map<Long, Float> sparseMap = new HashMap<>();
+                int count = vector.getSparseValues().getIndicesCount();
+                for (int i = 0; i < count; i++) {
+                    long index = vector.getSparseValues().getIndices(i);
+                    float value = vector.getSparseValues().getValues(i);
+                    sparseMap.put(index, value);
+                }
 
-                fields[fieldIndex] = spraseMap;
+                fields[fieldIndex] = sparseMap;
 
             }
         }

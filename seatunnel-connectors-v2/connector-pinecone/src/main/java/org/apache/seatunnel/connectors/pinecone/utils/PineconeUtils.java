@@ -1,11 +1,5 @@
 package org.apache.seatunnel.connectors.pinecone.utils;
 
-import com.google.common.collect.Lists;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.protobuf.Struct;
-import com.google.protobuf.Value;
 import io.pinecone.clients.Index;
 import io.pinecone.clients.Pinecone;
 import io.pinecone.proto.FetchResponse;
@@ -14,8 +8,7 @@ import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.Vector;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.*;
-import org.apache.seatunnel.api.table.type.RowKind;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.shade.com.google.common.collect.Lists;
 import org.openapitools.control.client.model.IndexModel;
 
 import java.util.ArrayList;
@@ -50,6 +43,10 @@ public class PineconeUtils {
         ListResponse listResponse = index.list();
         List<ListItem> vectorsList = listResponse.getVectorsList();
         List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            // no data in the index
+            return sourceTables;
+        }
         FetchResponse fetchResponse = index.fetch(ids);
         Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
         Vector vector = vectorMap.entrySet().stream().iterator().next().getValue();
@@ -80,7 +77,8 @@ public class PineconeUtils {
                     .scale(indexMetadata.getDimension())
                     .build();
             columns.add(vectorColumn);
-        } else if (!vector.getSparseValues().getValuesList().isEmpty()) {
+        }
+        if (!vector.getSparseValues().getIndicesList().isEmpty()) {
             PhysicalColumn sparseVectorColumn = PhysicalColumn.builder()
                     .name("sparse_vector")
                     .dataType(VECTOR_SPARSE_FLOAT_TYPE)

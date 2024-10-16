@@ -31,7 +31,7 @@ public class PineconeSource implements SeaTunnelSource<SeaTunnelRow, PineconeSou
      */
     @Override
     public Boundedness getBoundedness() {
-        return null;
+        return Boundedness.BOUNDED;
     }
 
     /**

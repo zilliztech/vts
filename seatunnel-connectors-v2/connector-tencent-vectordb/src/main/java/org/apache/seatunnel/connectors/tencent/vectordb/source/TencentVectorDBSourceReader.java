@@ -23,6 +23,7 @@ import org.apache.seatunnel.connectors.tencent.vectordb.exception.TencentVectorD
 import org.apache.seatunnel.connectors.tencent.vectordb.utils.ConverterUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -140,7 +141,7 @@ public class TencentVectorDBSourceReader implements SourceReader<SeaTunnelRow, T
      */
     @Override
     public List<TencentVectorDBSourceSplit> snapshotState(long checkpointId) throws Exception {
-        return null;
+        return new ArrayList<>(pendingSplits);
     }
 
     /**

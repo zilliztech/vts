@@ -3,6 +3,7 @@ package org.apache.seatunnel.connectors.pinecone.source;
 import io.pinecone.clients.Index;
 import io.pinecone.clients.Pinecone;
 import io.pinecone.proto.*;
+import io.pinecone.proto.Vector;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
@@ -17,10 +18,7 @@ import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectorExcep
 import org.apache.seatunnel.connectors.pinecone.utils.ConverterUtils;
 
 import java.io.IOException;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
 
@@ -90,6 +88,9 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         }
                         List<ListItem> vectorsList = listResponse.getVectorsList();
                         List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
+                        if(ids.isEmpty()){
+                            break;
+                        }
                         FetchResponse fetchResponse = index.fetch(ids, namespace);
                         Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
                         for (Map.Entry<String, Vector> entry : vectorMap.entrySet()) {
@@ -134,7 +135,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
      */
     @Override
     public List<PineconeSourceSplit> snapshotState(long checkpointId) throws Exception {
-        return null;
+        return new ArrayList<>(pendingSplits);
     }
 
     /**
