@@ -40,15 +40,13 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.*;
-import org.apache.seatunnel.common.exception.CommonErrorCode;
-import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
 import org.codehaus.plexus.util.StringUtils;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -61,7 +59,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
     private final Deque<MilvusSourceSplit> pendingSplits = new ConcurrentLinkedDeque<>();
     private final ReadonlyConfig config;
     private final Context context;
-    private Map<TablePath, CatalogTable> sourceTables;
+    private final Map<TablePath, CatalogTable> sourceTables;
 
     private MilvusServiceClient client;
 
@@ -125,7 +123,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
             if (null != split) {
                 try {
                     log.info("Begin to read data from split: " + split);
-                    handleEveryRowInternal(split, output);
+                    pollNextData(split, output);
                 } catch (Exception e) {
                     log.error("Read data from split: " + split + " failed", e);
                     throw new MilvusConnectorException(
@@ -147,7 +145,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
         Thread.sleep(1000L);
     }
 
-    private void handleEveryRowInternal(MilvusSourceSplit split, Collector<SeaTunnelRow> output) throws InterruptedException {
+    private void pollNextData(MilvusSourceSplit split, Collector<SeaTunnelRow> output) throws InterruptedException {
         TablePath tablePath = split.getTablePath();
         String partitionName = split.getPartitionName();
         TableSchema tableSchema = sourceTables.get(tablePath).getTableSchema();
@@ -200,6 +198,8 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
     private void queryIteratorData(TablePath tablePath, String partitionName, TableSchema tableSchema,
                                    Collector<SeaTunnelRow> output, long batchSize) throws InterruptedException {
         try {
+            MilvusSourceConverter sourceConverter = new MilvusSourceConverter(tableSchema);
+
             QueryIteratorParam.Builder param =
                     QueryIteratorParam.newBuilder()
                             .withDatabaseName(tablePath.getDatabaseName())
@@ -227,7 +227,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     } else {
                         for (QueryResultsWrapper.RowRecord record : next) {
                             SeaTunnelRow seaTunnelRow =
-                                    convertToSeaTunnelRow(record, tableSchema, tablePath);
+                                    sourceConverter.convertToSeaTunnelRow(record, tableSchema, tablePath);
                             if (StringUtils.isNotEmpty(partitionName)) {
                                 seaTunnelRow.setPartitionName(partitionName);
                             }
@@ -260,190 +260,6 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
             }
         }
-    }
-
-    public SeaTunnelRow convertToSeaTunnelRow(
-            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, TablePath tablePath) {
-        SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
-        Object[] fields = new Object[typeInfo.getTotalFields()];
-        Map<String, Object> fieldValuesMap = record.getFieldValues();
-        String[] fieldNames = typeInfo.getFieldNames();
-        for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
-            SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
-            Object filedValues = fieldValuesMap.get(fieldNames[fieldIndex]);
-            switch (seaTunnelDataType.getSqlType()) {
-                case STRING:
-                    fields[fieldIndex] = filedValues.toString();
-                    break;
-                case JSON:
-                    fields[fieldIndex] = filedValues;
-                    break;
-                case BOOLEAN:
-                    if (filedValues instanceof Boolean) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Boolean.valueOf(filedValues.toString());
-                    }
-                    break;
-                case TINYINT:
-                    if (filedValues instanceof Byte) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Byte.parseByte(filedValues.toString());
-                    }
-                    break;
-                case SMALLINT:
-                    if (filedValues instanceof Short) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Short.parseShort(filedValues.toString());
-                    }
-                case INT:
-                    if (filedValues instanceof Integer) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Integer.valueOf(filedValues.toString());
-                    }
-                    break;
-                case BIGINT:
-                    if (filedValues instanceof Long) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Long.parseLong(filedValues.toString());
-                    }
-                    break;
-                case FLOAT:
-                    if (filedValues instanceof Float) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Float.parseFloat(filedValues.toString());
-                    }
-                    break;
-                case DOUBLE:
-                    if (filedValues instanceof Double) {
-                        fields[fieldIndex] = filedValues;
-                    } else {
-                        fields[fieldIndex] = Double.parseDouble(filedValues.toString());
-                    }
-                    break;
-                case ARRAY:
-                    if (filedValues instanceof List) {
-                        List<?> list = (List<?>) filedValues;
-                        ArrayType<?, ?> arrayType = (ArrayType<?, ?>) seaTunnelDataType;
-                        SqlType elementType = arrayType.getElementType().getSqlType();
-                        switch (elementType) {
-                            case STRING:
-                                String[] arrays = new String[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    arrays[i] = list.get(i).toString();
-                                }
-                                fields[fieldIndex] = arrays;
-                                break;
-                            case BOOLEAN:
-                                Boolean[] booleanArrays = new Boolean[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    booleanArrays[i] = Boolean.valueOf(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = booleanArrays;
-                                break;
-                            case TINYINT:
-                                Byte[] byteArrays = new Byte[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    byteArrays[i] = Byte.parseByte(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = byteArrays;
-                                break;
-                            case SMALLINT:
-                                Short[] shortArrays = new Short[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    shortArrays[i] = Short.parseShort(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = shortArrays;
-                                break;
-                            case INT:
-                                Integer[] intArrays = new Integer[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    intArrays[i] = Integer.valueOf(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = intArrays;
-                                break;
-                            case BIGINT:
-                                Long[] longArrays = new Long[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    longArrays[i] = Long.parseLong(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = longArrays;
-                                break;
-                            case FLOAT:
-                                Float[] floatArrays = new Float[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    floatArrays[i] = Float.parseFloat(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = floatArrays;
-                                break;
-                            case DOUBLE:
-                                Double[] doubleArrays = new Double[list.size()];
-                                for (int i = 0; i < list.size(); i++) {
-                                    doubleArrays[i] = Double.parseDouble(list.get(i).toString());
-                                }
-                                fields[fieldIndex] = doubleArrays;
-                                break;
-                            default:
-                                throw new MilvusConnectorException(
-                                        CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                        "Unexpected array value: " + filedValues);
-                        }
-                    } else {
-                        throw new MilvusConnectorException(
-                                CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                "Unexpected array value: " + filedValues);
-                    }
-                    break;
-                case FLOAT_VECTOR:
-                    if (filedValues instanceof List) {
-                        List list = (List) filedValues;
-                        Float[] arrays = new Float[list.size()];
-                        for (int i = 0; i < list.size(); i++) {
-                            arrays[i] = Float.parseFloat(list.get(i).toString());
-                        }
-                        fields[fieldIndex] = BufferUtils.toByteBuffer(arrays);
-                        break;
-                    } else {
-                        throw new MilvusConnectorException(
-                                CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                "Unexpected vector value: " + filedValues);
-                    }
-                case BINARY_VECTOR:
-                case FLOAT16_VECTOR:
-                case BFLOAT16_VECTOR:
-                    if (filedValues instanceof ByteBuffer) {
-                        fields[fieldIndex] = filedValues;
-                        break;
-                    } else {
-                        throw new MilvusConnectorException(
-                                CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                "Unexpected vector value: " + filedValues);
-                    }
-                case SPARSE_FLOAT_VECTOR:
-                    if (filedValues instanceof Map) {
-                        fields[fieldIndex] = filedValues;
-                        break;
-                    } else {
-                        throw new MilvusConnectorException(
-                                CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                "Unexpected vector value: " + filedValues);
-                    }
-                default:
-                    throw new MilvusConnectorException(
-                            CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                            "Unexpected value: " + seaTunnelDataType.getSqlType().name());
-            }
-        }
-
-        SeaTunnelRow seaTunnelRow = new SeaTunnelRow(fields);
-        seaTunnelRow.setTableId(tablePath.getFullName());
-        seaTunnelRow.setRowKind(RowKind.INSERT);
-        return seaTunnelRow;
     }
 
     @Override

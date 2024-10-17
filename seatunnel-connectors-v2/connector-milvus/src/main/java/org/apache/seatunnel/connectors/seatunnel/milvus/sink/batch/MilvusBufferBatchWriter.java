@@ -24,7 +24,6 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConnectorUtils;
@@ -35,6 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.*;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink.MilvusSinkConverter;
 
 @Slf4j
 public class MilvusBufferBatchWriter implements MilvusBatchWriter {
@@ -47,6 +47,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
     private Boolean hasPartitionKey;
 
     private MilvusClientV2 milvusClient;
+    private MilvusSinkConverter milvusSinkConverter;
     private int batchSize;
     private volatile Map<String, List<JsonObject>> milvusDataCache;
     private final AtomicLong writeCache = new AtomicLong();
@@ -60,6 +61,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         this.batchSize = config.get(BATCH_SIZE);
         this.collectionName = catalogTable.getTablePath().getTableName();
         this.milvusDataCache = new HashMap<>();
+        this.milvusSinkConverter = new MilvusSinkConverter();
         initMilvusClient(config);
     }
     /*
@@ -194,8 +196,9 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
     private JsonObject buildMilvusData(SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
-
+        String dynamicField = MilvusConnectorUtils.getDynamicField(catalogTable);
         JsonObject data = new JsonObject();
+        Gson gson = new Gson();
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
             String fieldName = seaTunnelRowType.getFieldNames()[i];
 
@@ -210,8 +213,14 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
             }
-            Gson gson = new Gson();
-            Object object = MilvusConvertUtils.convertBySeaTunnelType(fieldType, value);
+            if(dynamicField != null && dynamicField.equals(fieldName) && config.get(ENABLE_DYNAMIC_FIELD)) {
+                JsonObject dynamicData = (JsonObject) value;
+                dynamicData.entrySet().forEach(entry -> {
+                    data.add(entry.getKey(), entry.getValue());
+                });
+                continue;
+            }
+            Object object = milvusSinkConverter.convertBySeaTunnelType(fieldType, value);
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
@@ -266,8 +275,12 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                     upsertWrite(partitionName, secondHalf);
                 } else {
                     // If the data size is 10, throw the exception to avoid infinite recursion
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL, e.getMessage(), e);
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL, "upsert data failed," +
+                            " size down to 10, break", e);
                 }
+            }else {
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL,
+                        "upsert data failed with unknown exception", e);
             }
         }
         log.info("upsert data success");
@@ -287,7 +300,7 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
         } catch (Exception e) {
             if (e.getMessage().contains("rate limit exceeded") || e.getMessage().contains("received message larger than max")) {
                 if (data.size() > 10) {
-                    log.warn("insert data failed, retry in smaller chunks: {} ", data.size()/2);
+                    log.warn("insert data failed, retry in smaller chunks: {} ", data.size() / 2);
                     // Split the data and retry in smaller chunks
                     List<JsonObject> firstHalf = data.subList(0, data.size() / 2);
                     List<JsonObject> secondHalf = data.subList(data.size() / 2, data.size());
@@ -295,10 +308,13 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                     insertWrite(partitionName, firstHalf);
                     insertWrite(partitionName, secondHalf);
                 } else {
-                    // If the data size is 1, throw the exception to avoid infinite recursion
-                    throw e;
+                    // If the data size is 10, throw the exception to avoid infinite recursion
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL, "insert data failed", e);
                 }
+            } else {
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_DATA_FAIL, "insert data failed with unknown exception", e);
             }
+
         }
     }
 }

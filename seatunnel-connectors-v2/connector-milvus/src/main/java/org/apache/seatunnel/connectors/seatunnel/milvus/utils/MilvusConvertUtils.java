@@ -17,12 +17,18 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonParser;
 import com.google.protobuf.ProtocolStringList;
 import io.milvus.client.MilvusServiceClient;
-import io.milvus.common.utils.JacksonUtils;
-import io.milvus.grpc.*;
+import io.milvus.grpc.CollectionSchema;
+import io.milvus.grpc.DataType;
+import io.milvus.grpc.DescribeCollectionResponse;
+import io.milvus.grpc.DescribeIndexResponse;
+import io.milvus.grpc.FieldSchema;
+import io.milvus.grpc.IndexDescription;
+import io.milvus.grpc.KeyValuePair;
+import io.milvus.grpc.ShowCollectionsResponse;
+import io.milvus.grpc.ShowPartitionsResponse;
+import io.milvus.grpc.ShowType;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.R;
 import io.milvus.param.collection.DescribeCollectionParam;
@@ -34,26 +40,35 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.util.Lists;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.*;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.ConstraintKey;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
-import org.apache.seatunnel.api.table.type.*;
-import org.apache.seatunnel.common.utils.BufferUtils;
-import org.apache.seatunnel.common.utils.JsonUtils;
+import org.apache.seatunnel.api.table.type.ArrayType;
+import org.apache.seatunnel.api.table.type.BasicType;
+import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
+import org.apache.seatunnel.api.table.type.MapType;
+import org.apache.seatunnel.api.table.type.SqlType;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
-import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
 
 @Slf4j
 public class MilvusConvertUtils {
-
-    private static final Gson gson = new Gson();
     private final ReadonlyConfig config;
 
     public MilvusConvertUtils(ReadonlyConfig config) {
@@ -289,7 +304,7 @@ public class MilvusConvertUtils {
                 builder.dataType(BasicType.STRING_TYPE);
                 break;
             case JSON:
-                builder.dataType(BasicType.JSON_TYPE);
+                builder.dataType(JSON_TYPE);
                 break;
             case Array:
                 builder.dataType(ArrayType.STRING_ARRAY_TYPE);
@@ -338,75 +353,6 @@ public class MilvusConvertUtils {
         }
 
         return builder.build();
-    }
-
-    public static Object convertBySeaTunnelType(SeaTunnelDataType<?> fieldType, Object value) {
-        SqlType sqlType = fieldType.getSqlType();
-        switch (sqlType) {
-            case INT:
-                return Integer.parseInt(value.toString());
-            case TINYINT:
-                return Byte.parseByte(value.toString());
-            case BIGINT:
-                return Long.parseLong(value.toString());
-            case SMALLINT:
-                return Short.parseShort(value.toString());
-            case STRING:
-            case DATE:
-                return value.toString();
-            case JSON:
-                return value;
-            case FLOAT_VECTOR:
-                ByteBuffer floatVectorBuffer = (ByteBuffer) value;
-                Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
-                return Arrays.stream(floats).collect(Collectors.toList());
-            case BINARY_VECTOR:
-            case BFLOAT16_VECTOR:
-            case FLOAT16_VECTOR:
-                ByteBuffer binaryVector = (ByteBuffer) value;
-                return gson.toJsonTree(binaryVector.array());
-            case SPARSE_FLOAT_VECTOR:
-                return JsonParser.parseString(JacksonUtils.toJsonString(value)).getAsJsonObject();
-            case FLOAT:
-                return Float.parseFloat(value.toString());
-            case BOOLEAN:
-                return Boolean.parseBoolean(value.toString());
-            case DOUBLE:
-                return Double.parseDouble(value.toString());
-            case ARRAY:
-                ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
-                switch (arrayType.getElementType().getSqlType()) {
-                    case STRING:
-                        String[] stringArray = (String[]) value;
-                        return Arrays.asList(stringArray);
-                    case SMALLINT:
-                        Short[] shortArray = (Short[]) value;
-                        return Arrays.asList(shortArray);
-                    case TINYINT:
-                        Byte[] byteArray = (Byte[]) value;
-                        return Arrays.asList(byteArray);
-                    case INT:
-                        Integer[] intArray = (Integer[]) value;
-                        return Arrays.asList(intArray);
-                    case BIGINT:
-                        Long[] longArray = (Long[]) value;
-                        return Arrays.asList(longArray);
-                    case FLOAT:
-                        Float[] floatArray = (Float[]) value;
-                        return Arrays.asList(floatArray);
-                    case DOUBLE:
-                        Double[] doubleArray = (Double[]) value;
-                        return Arrays.asList(doubleArray);
-                }
-            case ROW:
-                SeaTunnelRow row = (SeaTunnelRow) value;
-                return JsonUtils.toJsonString(row.getFields());
-            case MAP:
-                return JacksonUtils.toJsonString(value);
-            default:
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
-        }
     }
 
     public static DataType convertSqlTypeToDataType(SqlType sqlType) {

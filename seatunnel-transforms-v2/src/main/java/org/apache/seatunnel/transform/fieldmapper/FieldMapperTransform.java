@@ -114,7 +114,10 @@ public class FieldMapperTransform extends AbstractCatalogSupportTransform {
                                     oldColumn.getScale(),
                                     oldColumn.isNullable(),
                                     oldColumn.getDefaultValue(),
-                                    oldColumn.getComment());
+                                    oldColumn.getComment(),
+                                    oldColumn.getSourceType(),
+                                    oldColumn.getOptions());
+
                     outputColumns.add(outputColumn);
                     outputFieldNames.add(outputColumn.getName());
                     needReaderColIndex.add(fieldIndex);

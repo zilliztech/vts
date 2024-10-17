@@ -1,17 +1,15 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
 
-import io.milvus.client.MilvusClient;
-import io.milvus.client.MilvusServiceClient;
-import io.milvus.grpc.DescribeCollectionResponse;
-import io.milvus.grpc.FieldSchema;
-import io.milvus.param.ConnectParam;
-import io.milvus.param.R;
-import io.milvus.param.collection.DescribeCollectionParam;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+
+import java.util.List;
 
 @Slf4j
 public class MilvusConnectorUtils {
@@ -24,5 +22,18 @@ public class MilvusConnectorUtils {
                         .build());
         return describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()
                 .anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
+    }
+
+    public static String getDynamicField(CatalogTable catalogTable) {
+        List<Column> columns =  catalogTable.getTableSchema().getColumns();
+        Column dynamicField = null;
+        for (Column column : columns) {
+            if(column.getOptions() != null && column.getOptions().containsKey(MilvusOptions.IS_DYNAMIC_FIELD)
+                    && (Boolean) column.getOptions().get(MilvusOptions.IS_DYNAMIC_FIELD)){
+                // skip dynamic field
+                dynamicField = column;
+            }
+        }
+        return dynamicField == null ? null : dynamicField.getName();
     }
 }

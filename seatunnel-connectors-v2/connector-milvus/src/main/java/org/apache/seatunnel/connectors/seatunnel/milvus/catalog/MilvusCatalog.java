@@ -252,8 +252,8 @@ public class MilvusCatalog implements Catalog {
             TableSchema tableSchema = catalogTable.getTableSchema();
             List<FieldType> fieldTypes = new ArrayList<>();
             for (Column column : tableSchema.getColumns()) {
-                if(column.getOptions() != null && column.getOptions().containsKey(MilvusOptions.DYNAMIC_FIELD)
-                        && (Boolean) column.getOptions().get(MilvusOptions.DYNAMIC_FIELD)){
+                if(column.getOptions() != null && column.getOptions().containsKey(MilvusOptions.IS_DYNAMIC_FIELD)
+                        && (Boolean) column.getOptions().get(MilvusOptions.IS_DYNAMIC_FIELD)){
                     // skip dynamic field
                     continue;
                 }
