@@ -2,28 +2,35 @@ package org.apache.seatunnel.connectors.pinecone.source;
 
 import io.pinecone.clients.Index;
 import io.pinecone.clients.Pinecone;
-import io.pinecone.proto.*;
+import io.pinecone.proto.FetchResponse;
+import io.pinecone.proto.ListItem;
+import io.pinecone.proto.ListResponse;
+import io.pinecone.proto.Pagination;
 import io.pinecone.proto.Vector;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.source.SourceReader;
+import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.BATCH_SIZE;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectionErrorCode;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectorException;
 import org.apache.seatunnel.connectors.pinecone.utils.ConverterUtils;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
-import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.BATCH_SIZE;
 
 @Slf4j
 public class PineconeSourceReader implements SourceReader<SeaTunnelRow, PineconeSourceSplit> {

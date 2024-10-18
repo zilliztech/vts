@@ -10,12 +10,17 @@ import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 
 @Slf4j
 public class PineconeSourceSplitEnumertor implements SourceSplitEnumerator<PineconeSourceSplit, PineconeSourceState> {

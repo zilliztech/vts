@@ -18,14 +18,13 @@
 package org.apache.seatunnel.api.table.type;
 
 import java.util.Objects;
-import com.google.gson.JsonObject;
 
 public class BasicType<T> implements SeaTunnelDataType<T> {
     private static final long serialVersionUID = 2L;
 
     public static final BasicType<String> STRING_TYPE =
             new BasicType<>(String.class, SqlType.STRING);
-    public static final BasicType<JsonObject> JSON_TYPE = new BasicType<>(JsonObject.class, SqlType.JSON);
+    public static final BasicType<String> JSON_TYPE = new BasicType<>(String.class, SqlType.JSON);
     public static final BasicType<Boolean> BOOLEAN_TYPE =
             new BasicType<>(Boolean.class, SqlType.BOOLEAN);
     public static final BasicType<Byte> BYTE_TYPE = new BasicType<>(Byte.class, SqlType.TINYINT);

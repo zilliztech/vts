@@ -34,7 +34,7 @@ public class ConverterUtils {
                 for (DocField entry : meta) {
                     data.add(entry.getName(), convertValueToJsonElement(entry.getValue()));
                 }
-                fields[fieldIndex] = data;
+                fields[fieldIndex] = data.toString();
             }else if(typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
                 // Convert each Double to Float
                 Float[] arrays = vector.getVector().stream().map(Double::floatValue).toArray(Float[]::new);

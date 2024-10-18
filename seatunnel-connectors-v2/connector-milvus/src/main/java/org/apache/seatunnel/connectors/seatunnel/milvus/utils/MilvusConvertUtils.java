@@ -53,7 +53,7 @@ import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;
 import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
-import org.apache.seatunnel.api.table.type.MapType;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
@@ -149,7 +149,7 @@ public class MilvusConvertUtils {
             options.put("isDynamicField", true);
             PhysicalColumn dynamicColumn = PhysicalColumn.builder()
                     .name("meta")
-                    .dataType(JSON_TYPE)
+                    .dataType(STRING_TYPE)
                     .options(options)
                     .build();
             columns.add(dynamicColumn);

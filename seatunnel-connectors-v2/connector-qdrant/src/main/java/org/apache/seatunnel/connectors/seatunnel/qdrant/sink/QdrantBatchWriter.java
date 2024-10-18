@@ -17,8 +17,16 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.sink;
 
+import static io.qdrant.client.PointIdFactory.id;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.ValueFactory;
+import io.qdrant.client.VectorFactory;
+import io.qdrant.client.grpc.JsonWithInt;
+import io.qdrant.client.grpc.Points;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
@@ -28,14 +36,6 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantParameters;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
 
-import org.apache.commons.collections4.CollectionUtils;
-
-import io.qdrant.client.QdrantClient;
-import io.qdrant.client.ValueFactory;
-import io.qdrant.client.VectorFactory;
-import io.qdrant.client.grpc.JsonWithInt;
-import io.qdrant.client.grpc.Points;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,9 +43,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
-import static io.qdrant.client.PointIdFactory.id;
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 
 public class QdrantBatchWriter {
 

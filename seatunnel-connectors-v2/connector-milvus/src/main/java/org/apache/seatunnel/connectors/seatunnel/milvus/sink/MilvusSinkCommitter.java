@@ -17,11 +17,10 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusCommitInfo;
-
-import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;

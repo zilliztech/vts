@@ -34,8 +34,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.*;
-
 /**
  * MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus.
  */

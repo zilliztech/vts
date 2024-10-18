@@ -1,6 +1,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.milvus.common.utils.JacksonUtils;
 import org.apache.seatunnel.api.table.type.ArrayType;
@@ -34,7 +35,7 @@ public class MilvusSinkConverter {
             case DATE:
                 return value.toString();
             case JSON:
-                return value;
+                return gson.fromJson(value.toString(), JsonObject.class);
             case FLOAT_VECTOR:
                 ByteBuffer floatVectorBuffer = (ByteBuffer) value;
                 Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);

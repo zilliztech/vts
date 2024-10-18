@@ -46,17 +46,15 @@ public class MilvusSourceConverter {
 
         for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
             if(fieldNames[fieldIndex].equals(MilvusOptions.DYNAMIC_FIELD_NAME)){
-                seatunnelField[fieldIndex] = dynamicField;
+                seatunnelField[fieldIndex] = dynamicField.toString();
                 continue;
             }
             SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
             Object filedValues = fieldValuesMap.get(fieldNames[fieldIndex]);
             switch (seaTunnelDataType.getSqlType()) {
                 case STRING:
-                    seatunnelField[fieldIndex] = filedValues.toString();
-                    break;
                 case JSON:
-                    seatunnelField[fieldIndex] = filedValues;
+                    seatunnelField[fieldIndex] = filedValues.toString();
                     break;
                 case BOOLEAN:
                     if (filedValues instanceof Boolean) {

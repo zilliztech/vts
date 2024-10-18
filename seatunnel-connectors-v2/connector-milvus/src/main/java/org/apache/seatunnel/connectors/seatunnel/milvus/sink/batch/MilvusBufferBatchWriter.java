@@ -20,21 +20,31 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.BATCH_SIZE;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.CREATE_INDEX;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_AUTO_ID;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_UPSERT;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.LOAD_COLLECTION;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.RATE_LIMIT;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.TOKEN;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.URL;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConnectorUtils;
-
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-
-
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.*;
 import org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink.MilvusSinkConverter;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class MilvusBufferBatchWriter implements MilvusBatchWriter {
@@ -213,8 +223,9 @@ public class MilvusBufferBatchWriter implements MilvusBatchWriter {
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
             }
+            // if the field is dynamic field, then parse the dynamic field
             if(dynamicField != null && dynamicField.equals(fieldName) && config.get(ENABLE_DYNAMIC_FIELD)) {
-                JsonObject dynamicData = (JsonObject) value;
+                JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
                 dynamicData.entrySet().forEach(entry -> {
                     data.add(entry.getKey(), entry.getValue());
                 });

@@ -17,10 +17,32 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.catalog;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.protobuf.ProtocolStringList;
+import io.milvus.client.MilvusServiceClient;
+import io.milvus.common.clientenum.ConsistencyLevelEnum;
+import io.milvus.grpc.DataType;
+import io.milvus.grpc.ListDatabasesResponse;
+import io.milvus.grpc.ShowCollectionsResponse;
 import io.milvus.grpc.ShowPartitionsResponse;
+import io.milvus.grpc.ShowType;
+import io.milvus.param.ConnectParam;
+import io.milvus.param.IndexType;
+import io.milvus.param.MetricType;
+import io.milvus.param.R;
+import io.milvus.param.RpcStatus;
+import io.milvus.param.collection.CreateCollectionParam;
+import io.milvus.param.collection.CreateDatabaseParam;
+import io.milvus.param.collection.DropCollectionParam;
+import io.milvus.param.collection.DropDatabaseParam;
+import io.milvus.param.collection.FieldType;
+import io.milvus.param.collection.HasCollectionParam;
+import io.milvus.param.collection.ShowCollectionsParam;
+import io.milvus.param.index.CreateIndexParam;
 import io.milvus.param.partition.CreatePartitionParam;
 import io.milvus.param.partition.ShowPartitionsParam;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.Catalog;
@@ -42,41 +64,16 @@ import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.CREATE_INDEX;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-
-import org.apache.commons.collections4.CollectionUtils;
-
-import io.milvus.client.MilvusServiceClient;
-import io.milvus.common.clientenum.ConsistencyLevelEnum;
-import io.milvus.grpc.DataType;
-import io.milvus.grpc.ListDatabasesResponse;
-import io.milvus.grpc.ShowCollectionsResponse;
-import io.milvus.grpc.ShowType;
-import io.milvus.param.ConnectParam;
-import io.milvus.param.IndexType;
-import io.milvus.param.MetricType;
-import io.milvus.param.R;
-import io.milvus.param.RpcStatus;
-import io.milvus.param.collection.CreateCollectionParam;
-import io.milvus.param.collection.CreateDatabaseParam;
-import io.milvus.param.collection.DropCollectionParam;
-import io.milvus.param.collection.DropDatabaseParam;
-import io.milvus.param.collection.FieldType;
-import io.milvus.param.collection.HasCollectionParam;
-import io.milvus.param.collection.ShowCollectionsParam;
-import io.milvus.param.index.CreateIndexParam;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.CREATE_INDEX;
 
 @Slf4j
 public class MilvusCatalog implements Catalog {

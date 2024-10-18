@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.sink;
 
+import com.google.auto.service.AutoService;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.sink.SinkCommonOptions;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -25,8 +26,6 @@ import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
-
-import com.google.auto.service.AutoService;
 
 @AutoService(Factory.class)
 public class QdrantSinkFactory implements TableSinkFactory {

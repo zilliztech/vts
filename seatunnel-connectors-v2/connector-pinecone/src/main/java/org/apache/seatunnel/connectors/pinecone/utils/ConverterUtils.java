@@ -10,18 +10,15 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.api.table.type.VectorType;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import org.apache.seatunnel.common.utils.BufferUtils;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 
 public class ConverterUtils {
     public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Vector vector) {
@@ -38,7 +35,7 @@ public class ConverterUtils {
                 for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {
                     data.add(entry.getKey(), convertValueToJsonElement(entry.getValue()));
                 }
-                fields[fieldIndex] = data;
+                fields[fieldIndex] = data.toString();
             } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
                 List<Float> floats = vector.getValuesList();
                 // Convert List<Float> to Float[]

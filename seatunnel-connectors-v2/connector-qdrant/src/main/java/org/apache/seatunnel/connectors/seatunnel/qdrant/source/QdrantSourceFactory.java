@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 
+import com.google.auto.service.AutoService;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
@@ -26,8 +27,6 @@ import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
-
-import com.google.auto.service.AutoService;
 
 import java.io.Serializable;
 

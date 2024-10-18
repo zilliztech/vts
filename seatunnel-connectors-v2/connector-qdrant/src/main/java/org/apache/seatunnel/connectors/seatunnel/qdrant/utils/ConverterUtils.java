@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -20,8 +21,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 
 public class ConverterUtils {
 
@@ -48,7 +47,7 @@ public class ConverterUtils {
                 for (String entry : payloadMap.keySet()) {
                     data.add(entry, convertValueToJsonElement(payloadMap.get(entry)));
                 }
-                fields[fieldIndex] = data;
+                fields[fieldIndex] = data.toString();
                 continue;
             }
 

@@ -17,6 +17,10 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 
+import io.qdrant.client.QdrantClient;
+import static io.qdrant.client.WithPayloadSelectorFactory.enable;
+import io.qdrant.client.WithVectorsSelectorFactory;
+import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -25,16 +29,10 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSplitReader;
 import org.apache.seatunnel.connectors.seatunnel.common.source.SingleSplitReaderContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantParameters;
-
-import io.qdrant.client.QdrantClient;
-import io.qdrant.client.WithVectorsSelectorFactory;
-import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.utils.ConverterUtils;
 
 import java.util.List;
 import java.util.Objects;
-
-import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 
 
 public class QdrantSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {

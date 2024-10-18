@@ -7,7 +7,19 @@ import io.pinecone.proto.ListItem;
 import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.Vector;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.*;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
 import org.apache.seatunnel.shade.com.google.common.collect.Lists;
 import org.openapitools.control.client.model.IndexModel;
 
@@ -16,13 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
-import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
-import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
-import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
 
 public class PineconeUtils {
     private ReadonlyConfig config;

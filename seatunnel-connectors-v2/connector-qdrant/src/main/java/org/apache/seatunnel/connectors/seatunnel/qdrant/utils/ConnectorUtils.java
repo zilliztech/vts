@@ -1,17 +1,27 @@
 package org.apache.seatunnel.connectors.seatunnel.qdrant.utils;
 
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ListenableFuture;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
+import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import io.qdrant.client.WithVectorsSelectorFactory;
 import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.*;
-import org.apache.seatunnel.common.exception.CommonErrorCode;
-import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
+import static org.apache.seatunnel.api.table.type.BasicType.LONG_TYPE;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
+import static org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig.COLLECTION_NAME;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
 
@@ -20,12 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-
-import static io.qdrant.client.WithPayloadSelectorFactory.enable;
-import static org.apache.seatunnel.api.table.type.BasicType.*;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
-import static org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig.*;
 
 public class ConnectorUtils {
 

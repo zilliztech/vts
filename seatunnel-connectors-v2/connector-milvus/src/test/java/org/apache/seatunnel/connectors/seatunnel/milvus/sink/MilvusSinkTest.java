@@ -1,9 +1,5 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-
-import org.junit.jupiter.api.Test;
-
 import io.milvus.client.MilvusClient;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.common.clientenum.ConsistencyLevelEnum;
@@ -18,12 +14,13 @@ import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.LoadCollectionReq;
 import io.milvus.v2.service.vector.request.QueryReq;
 import io.milvus.v2.service.vector.response.QueryResp;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.mock;
 
 import java.util.Arrays;
 import java.util.Collections;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
 
 class MilvusSinkTest {
     ReadonlyConfig pluginConfig = mock(ReadonlyConfig.class);

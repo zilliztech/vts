@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.connectors.astradb.config.AstraDBSourceConfig.INDEX;
@@ -43,7 +42,7 @@ public class AstraDBUtils {
         options.put("isDynamicField", true);
         PhysicalColumn dynamicColumn = PhysicalColumn.builder()
                 .name("meta")
-                .dataType(JSON_TYPE)
+                .dataType(STRING_TYPE)
                 .options(options)
                 .build();
         columns.add(idColumn);

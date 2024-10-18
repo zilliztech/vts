@@ -17,11 +17,10 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.config;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.Data;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 
 import java.io.Serializable;
 
