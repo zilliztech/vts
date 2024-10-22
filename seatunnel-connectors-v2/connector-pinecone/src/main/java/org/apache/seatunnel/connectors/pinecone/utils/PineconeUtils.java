@@ -19,9 +19,11 @@ package org.apache.seatunnel.connectors.pinecone.utils;
 
 import io.pinecone.clients.Index;
 import io.pinecone.clients.Pinecone;
+import io.pinecone.proto.DescribeIndexStatsResponse;
 import io.pinecone.proto.FetchResponse;
 import io.pinecone.proto.ListItem;
 import io.pinecone.proto.ListResponse;
+import io.pinecone.proto.NamespaceSummary;
 import io.pinecone.proto.Vector;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -37,10 +39,10 @@ import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
-import org.apache.seatunnel.shade.com.google.common.collect.Lists;
 import org.openapitools.control.client.model.IndexModel;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,16 +64,31 @@ public class PineconeUtils {
         TablePath tablePath = TablePath.of("default", indexName);
 
         Index index = pinecone.getIndexConnection(indexName);
-        ListResponse listResponse = index.list();
-        List<ListItem> vectorsList = listResponse.getVectorsList();
-        List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
-        if (ids.isEmpty()) {
+
+        Vector vector = null;
+
+        DescribeIndexStatsResponse describeIndexStatsResponse = index.describeIndexStats();
+        Map<String, NamespaceSummary> namespaceSummaryMap = describeIndexStatsResponse.getNamespacesMap();
+        for(Map.Entry<String, NamespaceSummary> entry : namespaceSummaryMap.entrySet()) {
+            NamespaceSummary namespaceSummary = entry.getValue();
+            if (namespaceSummary.getVectorCount() != 0) {
+                ListResponse listResponse = index.list(entry.getKey(), 10);
+                List<ListItem> vectorsList = listResponse.getVectorsList();
+                List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
+                if (ids.isEmpty()) {
+                    // no data in the index
+                    return sourceTables;
+                }
+                FetchResponse fetchResponse = index.fetch(ids, entry.getKey());
+                Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
+                vector = vectorMap.entrySet().stream().iterator().next().getValue();
+                break;
+            }
+        }
+        if(vector == null) {
             // no data in the index
             return sourceTables;
         }
-        FetchResponse fetchResponse = index.fetch(ids);
-        Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
-        Vector vector = vectorMap.entrySet().stream().iterator().next().getValue();
 
         List<Column> columns = new ArrayList<>();
 
@@ -110,7 +127,7 @@ public class PineconeUtils {
         }
 
         TableSchema tableSchema = TableSchema.builder()
-                .primaryKey(PrimaryKey.of("id", Lists.newArrayList("id")))
+                .primaryKey(PrimaryKey.of("id", Collections.singletonList("id")))
                 .columns(columns)
                 .build();
         Map<TablePath, CatalogTable> sourceTables = new HashMap<>();
