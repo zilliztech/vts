@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
@@ -25,26 +24,28 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.batch.MilvusBatchWriter;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.batch.MilvusBufferBatchWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusSinkState;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus.
- */
+/** MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus. */
 @Slf4j
-public class MilvusSinkWriter implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> {
+public class MilvusSinkWriter
+        implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> {
 
-    private final MilvusBatchWriter batchWriter;
+    private final MilvusBufferBatchWriter batchWriter;
     private ReadonlyConfig config;
 
-
-    public MilvusSinkWriter(Context context, CatalogTable catalogTable, ReadonlyConfig config, List<MilvusSinkState> milvusSinkStates) {
+    public MilvusSinkWriter(
+            Context context,
+            CatalogTable catalogTable,
+            ReadonlyConfig config,
+            List<MilvusSinkState> milvusSinkStates) {
         this.batchWriter = new MilvusBufferBatchWriter(catalogTable, config);
         this.config = config;
         log.info("create Milvus sink writer success");
@@ -53,6 +54,7 @@ public class MilvusSinkWriter implements SinkWriter<SeaTunnelRow, MilvusCommitIn
 
     /**
      * write data to third party data receiver.
+     *
      * @param element the data need be written.
      */
     @Override

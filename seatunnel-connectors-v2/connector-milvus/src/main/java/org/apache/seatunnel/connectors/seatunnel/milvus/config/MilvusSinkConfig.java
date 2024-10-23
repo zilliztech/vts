@@ -20,22 +20,20 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.api.sink.DataSaveMode;
-import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
-import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
-import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
+import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
+import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
+
 public class MilvusSinkConfig extends MilvusCommonConfig {
 
     public static final Option<String> DATABASE =
-            Options.key("database")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription("database");
+            Options.key("database").stringType().noDefaultValue().withDescription("database");
     public static final Option<Map<String, String>> COLLECTION_DESCRIPTION =
             Options.key("collection_description")
                     .mapType()
@@ -82,7 +80,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
                     .intType()
-                    .defaultValue(2000)
+                    .defaultValue(1000)
                     .withDescription("writer batch size");
     public static final Option<Integer> RATE_LIMIT =
             Options.key("rate_limit")

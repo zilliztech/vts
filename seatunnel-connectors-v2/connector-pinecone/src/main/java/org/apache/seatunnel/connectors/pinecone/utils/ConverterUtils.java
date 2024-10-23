@@ -29,6 +29,7 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
 
 import java.util.Arrays;
@@ -46,7 +47,7 @@ public class ConverterUtils {
         for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
             if (fieldNames.get(fieldIndex).equals("id")) {
                 fields[fieldIndex] = vector.getId();
-            } else if (fieldNames.get(fieldIndex).equals("meta")) {
+            } else if (fieldNames.get(fieldIndex).equals(CommonOptions.METADATA.getName())) {
                 Struct meta = vector.getMetadata();
                 JsonObject data = new JsonObject();
                 for (Map.Entry<String, Value> entry : meta.getFieldsMap().entrySet()) {

@@ -17,10 +17,11 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import lombok.Builder;
-import lombok.Data;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.catalog.TablePath;
+
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder

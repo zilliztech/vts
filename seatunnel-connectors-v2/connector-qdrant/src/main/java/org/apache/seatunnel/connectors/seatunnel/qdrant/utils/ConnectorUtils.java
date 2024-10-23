@@ -32,11 +32,11 @@ import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.LONG_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
 import static org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig.COLLECTION_NAME;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectionErrorCode;
@@ -126,11 +126,11 @@ public class ConnectorUtils {
                 });
             }
             Map<String, Object> options = new HashMap<>();
-            options.put("isDynamicField", true);
+            options.put(CommonOptions.METADATA.getName(), true);
             // dynamic column
             PhysicalColumn dynamicColumn = PhysicalColumn.builder()
-                    .name("meta")
-                    .dataType(JSON_TYPE)
+                    .name(CommonOptions.METADATA.getName())
+                    .dataType(STRING_TYPE)
                     .options(options)
                     .build();
 

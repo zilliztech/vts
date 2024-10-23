@@ -33,10 +33,10 @@ import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
 import org.openapitools.control.client.model.IndexModel;
@@ -101,10 +101,10 @@ public class PineconeUtils {
 
         Map<String, Object> options = new HashMap<>();
 
-        options.put("isDynamicField", true);
+        options.put(CommonOptions.METADATA.getName(), true);
         PhysicalColumn dynamicColumn = PhysicalColumn.builder()
-                .name("meta")
-                .dataType(JSON_TYPE)
+                .name(CommonOptions.METADATA.getName())
+                .dataType(STRING_TYPE)
                 .options(options)
                 .build();
         columns.add(dynamicColumn);

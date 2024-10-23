@@ -17,8 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import com.google.auto.service.AutoService;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -28,6 +26,10 @@ import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
+
+import org.apache.commons.lang3.StringUtils;
+
+import com.google.auto.service.AutoService;
 
 @AutoService(Factory.class)
 public class MilvusSinkFactory implements TableSinkFactory {

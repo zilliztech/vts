@@ -19,22 +19,30 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.utils.source;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import io.milvus.grpc.DataType;
+import io.milvus.grpc.FieldSchema;
+import io.milvus.grpc.KeyValuePair;
 import io.milvus.response.QueryResultsWrapper;
 import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.ArrayType;
+import org.apache.seatunnel.api.table.type.BasicType;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.api.table.type.SqlType;
+import org.apache.seatunnel.api.table.type.VectorType;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,25 +52,31 @@ public class MilvusSourceConverter {
     private Gson gson = new Gson();
 
     public MilvusSourceConverter(TableSchema tableSchema) {
-        this.existField = tableSchema.getColumns().stream().
-                filter(column -> column.getOptions() == null || !column.getOptions().containsValue(MilvusOptions.IS_DYNAMIC_FIELD))
-                .map(Column::getName).collect(Collectors.toList());
+        this.existField =
+                tableSchema.getColumns().stream()
+                        .filter(
+                                column ->
+                                        column.getOptions() == null
+                                                || !column.getOptions()
+                                                        .containsValue(CommonOptions.METADATA))
+                        .map(Column::getName)
+                        .collect(Collectors.toList());
     }
 
     public SeaTunnelRow convertToSeaTunnelRow(
             QueryResultsWrapper.RowRecord record, TableSchema tableSchema, TablePath tablePath) {
-        //get field names and types
+        // get field names and types
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         String[] fieldNames = typeInfo.getFieldNames();
 
         Object[] seatunnelField = new Object[typeInfo.getTotalFields()];
-        //get field values from source milvus
+        // get field values from source milvus
         Map<String, Object> fieldValuesMap = record.getFieldValues();
-        //filter dynamic field
+        // filter dynamic field
         JsonObject dynamicField = convertDynamicField(fieldValuesMap);
 
         for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
-            if(fieldNames[fieldIndex].equals(MilvusOptions.DYNAMIC_FIELD_NAME)){
+            if (fieldNames[fieldIndex].equals(CommonOptions.METADATA.getName())) {
                 seatunnelField[fieldIndex] = dynamicField.toString();
                 continue;
             }
@@ -70,7 +84,6 @@ public class MilvusSourceConverter {
             Object filedValues = fieldValuesMap.get(fieldNames[fieldIndex]);
             switch (seaTunnelDataType.getSqlType()) {
                 case STRING:
-                case JSON:
                     seatunnelField[fieldIndex] = filedValues.toString();
                     break;
                 case BOOLEAN:
@@ -241,10 +254,106 @@ public class MilvusSourceConverter {
         return seaTunnelRow;
     }
 
+    public static PhysicalColumn convertColumn(FieldSchema fieldSchema) {
+        DataType dataType = fieldSchema.getDataType();
+        PhysicalColumn.PhysicalColumnBuilder builder = PhysicalColumn.builder();
+        builder.name(fieldSchema.getName());
+        builder.sourceType(dataType.name());
+        builder.comment(fieldSchema.getDescription());
+
+        switch (dataType) {
+            case Bool:
+                builder.dataType(BasicType.BOOLEAN_TYPE);
+                break;
+            case Int8:
+                builder.dataType(BasicType.BYTE_TYPE);
+                break;
+            case Int16:
+                builder.dataType(BasicType.SHORT_TYPE);
+                break;
+            case Int32:
+                builder.dataType(BasicType.INT_TYPE);
+                break;
+            case Int64:
+                builder.dataType(BasicType.LONG_TYPE);
+                break;
+            case Float:
+                builder.dataType(BasicType.FLOAT_TYPE);
+                break;
+            case Double:
+                builder.dataType(BasicType.DOUBLE_TYPE);
+                break;
+            case VarChar:
+                builder.dataType(BasicType.STRING_TYPE);
+                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
+                    if (keyValuePair.getKey().equals("max_length")) {
+                        builder.columnLength(Long.parseLong(keyValuePair.getValue()) * 4);
+                        break;
+                    }
+                }
+                break;
+            case String:
+                builder.dataType(BasicType.STRING_TYPE);
+                break;
+            case JSON:
+                builder.dataType(STRING_TYPE);
+                Map<String, Object> options = new HashMap<>();
+                options.put(CommonOptions.JSON.getName(), true);
+                builder.options(options);
+                break;
+            case Array:
+                builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                break;
+            case FloatVector:
+                builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
+                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
+                    if (keyValuePair.getKey().equals("dim")) {
+                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
+                        break;
+                    }
+                }
+                break;
+            case BinaryVector:
+                builder.dataType(VectorType.VECTOR_BINARY_TYPE);
+                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
+                    if (keyValuePair.getKey().equals("dim")) {
+                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
+                        break;
+                    }
+                }
+                break;
+            case SparseFloatVector:
+                builder.dataType(VectorType.VECTOR_SPARSE_FLOAT_TYPE);
+                break;
+            case Float16Vector:
+                builder.dataType(VectorType.VECTOR_FLOAT16_TYPE);
+                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
+                    if (keyValuePair.getKey().equals("dim")) {
+                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
+                        break;
+                    }
+                }
+                break;
+            case BFloat16Vector:
+                builder.dataType(VectorType.VECTOR_BFLOAT16_TYPE);
+                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
+                    if (keyValuePair.getKey().equals("dim")) {
+                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
+                        break;
+                    }
+                }
+                break;
+            default:
+                throw new UnsupportedOperationException("Unsupported data type: " + dataType);
+        }
+
+        return builder.build();
+    }
+
     private JsonObject convertDynamicField(Map<String, Object> fieldValuesMap) {
         JsonObject dynamicField = new JsonObject();
-        for(Map.Entry<String, Object> entry : fieldValuesMap.entrySet()){
-            if(!existField.contains(entry.getKey())){
+        for (Map.Entry<String, Object> entry : fieldValuesMap.entrySet()) {
+            if (!existField.contains(entry.getKey())) {
                 dynamicField.add(entry.getKey(), gson.toJsonTree(entry.getValue()));
             }
         }

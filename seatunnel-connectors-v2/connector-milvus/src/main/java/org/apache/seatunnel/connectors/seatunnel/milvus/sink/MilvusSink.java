@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.serialization.DefaultSerializer;
 import org.apache.seatunnel.api.serialization.Serializer;
@@ -35,11 +34,11 @@ import org.apache.seatunnel.api.table.factory.CatalogFactory;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusCatalogFactory;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.MilvusSinkCommitter;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.MilvusSinkWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusAggregatedCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusSinkState;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
@@ -105,7 +104,6 @@ public class MilvusSink
 
         SchemaSaveMode schemaSaveMode = config.get(MilvusSinkConfig.SCHEMA_SAVE_MODE);
         DataSaveMode dataSaveMode = config.get(MilvusSinkConfig.DATA_SAVE_MODE);
-
         catalog.open();
         return Optional.of(
                 new DefaultSaveModeHandler(

@@ -20,7 +20,6 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
 import com.google.protobuf.ProtocolStringList;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.CollectionSchema;
-import io.milvus.grpc.DataType;
 import io.milvus.grpc.DescribeCollectionResponse;
 import io.milvus.grpc.DescribeIndexResponse;
 import io.milvus.grpc.FieldSchema;
@@ -49,17 +48,13 @@ import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.catalog.VectorIndex;
-import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
-import org.apache.seatunnel.api.table.type.ArrayType;
-import org.apache.seatunnel.api.table.type.BasicType;
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
-import org.apache.seatunnel.api.table.type.SqlType;
-import org.apache.seatunnel.api.table.type.VectorType;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -112,7 +107,6 @@ public class MilvusConvertUtils {
             CatalogTable catalogTable = getCatalogTable(client, database, collection);
             TablePath tablePath = TablePath.of(database, null, collection);
             map.put(tablePath, catalogTable);
-
         }
         return map;
     }
@@ -127,9 +121,14 @@ public class MilvusConvertUtils {
                                 .build());
 
         if (response.getStatus() != R.Status.Success.getCode()) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.DESC_COLLECTION_ERROR, response.getMessage());
+            throw new MilvusConnectorException(
+                    MilvusConnectionErrorCode.DESC_COLLECTION_ERROR, response.getMessage());
         }
-        log.info("describe collection database: {}, collection: {}, response: {}", database, collection, response);
+        log.info(
+                "describe collection database: {}, collection: {}, response: {}",
+                database,
+                collection,
+                response);
         // collection column
         DescribeCollectionResponse collectionResponse = response.getData();
         CollectionSchema schema = collectionResponse.getSchema();
@@ -137,21 +136,23 @@ public class MilvusConvertUtils {
         boolean existPartitionKeyField = false;
         String partitionKeyField = null;
         for (FieldSchema fieldSchema : schema.getFieldsList()) {
-            columns.add(MilvusConvertUtils.convertColumn(fieldSchema));
+            PhysicalColumn physicalColumn = MilvusSourceConverter.convertColumn(fieldSchema);
+            columns.add(physicalColumn);
             if (fieldSchema.getIsPartitionKey()) {
                 existPartitionKeyField = true;
                 partitionKeyField = fieldSchema.getName();
             }
         }
-        if(collectionResponse.getSchema().getEnableDynamicField()){
+        if (collectionResponse.getSchema().getEnableDynamicField()) {
             Map<String, Object> options = new HashMap<>();
 
-            options.put("isDynamicField", true);
-            PhysicalColumn dynamicColumn = PhysicalColumn.builder()
-                    .name("meta")
-                    .dataType(STRING_TYPE)
-                    .options(options)
-                    .build();
+            options.put(CommonOptions.METADATA.getName(), true);
+            PhysicalColumn dynamicColumn =
+                    PhysicalColumn.builder()
+                            .name(CommonOptions.METADATA.getName())
+                            .dataType(STRING_TYPE)
+                            .options(options)
+                            .build();
             columns.add(dynamicColumn);
         }
 
@@ -188,7 +189,8 @@ public class MilvusConvertUtils {
         TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, null, collection);
         // build options info
         Map<String, String> options = new HashMap<>();
-        options.put(MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(schema.getEnableDynamicField()));
+        options.put(
+                MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(schema.getEnableDynamicField()));
         options.put(MilvusOptions.SHARDS_NUM, String.valueOf(collectionResponse.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusOptions.PARTITION_KEY_FIELD, partitionKeyField);
@@ -200,20 +202,29 @@ public class MilvusConvertUtils {
                 tableId, tableSchema, options, new ArrayList<>(), schema.getDescription());
     }
 
-    private static void fillPartitionNames(Map<String, String> options,  MilvusServiceClient client, String database, String collection){
+    private static void fillPartitionNames(
+            Map<String, String> options,
+            MilvusServiceClient client,
+            String database,
+            String collection) {
         // not exist partition key, will read partition
-        R<ShowPartitionsResponse> partitionsResponseR = client.showPartitions(ShowPartitionsParam.newBuilder()
-                .withDatabaseName(database)
-                .withCollectionName(collection)
-                .build());
+        R<ShowPartitionsResponse> partitionsResponseR =
+                client.showPartitions(
+                        ShowPartitionsParam.newBuilder()
+                                .withDatabaseName(database)
+                                .withCollectionName(collection)
+                                .build());
         if (partitionsResponseR.getStatus() != R.Status.Success.getCode()) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.SHOW_PARTITION_ERROR, partitionsResponseR.getMessage());
+            throw new MilvusConnectorException(
+                    MilvusConnectionErrorCode.SHOW_PARTITION_ERROR,
+                    partitionsResponseR.getMessage());
         }
 
-        ProtocolStringList partitionNamesList = partitionsResponseR.getData().getPartitionNamesList();
+        ProtocolStringList partitionNamesList =
+                partitionsResponseR.getData().getPartitionNamesList();
         List<String> list = new ArrayList<>();
         for (String partition : partitionNamesList) {
-            if (partition.equals("_default")){
+            if (partition.equals("_default")) {
                 continue;
             }
             list.add(partition);
@@ -260,139 +271,5 @@ public class MilvusConvertUtils {
         }
 
         return null;
-    }
-
-    public static PhysicalColumn convertColumn(FieldSchema fieldSchema) {
-        DataType dataType = fieldSchema.getDataType();
-        PhysicalColumn.PhysicalColumnBuilder builder = PhysicalColumn.builder();
-        builder.name(fieldSchema.getName());
-        builder.sourceType(dataType.name());
-        builder.comment(fieldSchema.getDescription());
-
-        switch (dataType) {
-            case Bool:
-                builder.dataType(BasicType.BOOLEAN_TYPE);
-                break;
-            case Int8:
-                builder.dataType(BasicType.BYTE_TYPE);
-                break;
-            case Int16:
-                builder.dataType(BasicType.SHORT_TYPE);
-                break;
-            case Int32:
-                builder.dataType(BasicType.INT_TYPE);
-                break;
-            case Int64:
-                builder.dataType(BasicType.LONG_TYPE);
-                break;
-            case Float:
-                builder.dataType(BasicType.FLOAT_TYPE);
-                break;
-            case Double:
-                builder.dataType(BasicType.DOUBLE_TYPE);
-                break;
-            case VarChar:
-                builder.dataType(BasicType.STRING_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("max_length")) {
-                        builder.columnLength(Long.parseLong(keyValuePair.getValue()) * 4);
-                        break;
-                    }
-                }
-                break;
-            case String:
-                builder.dataType(BasicType.STRING_TYPE);
-                break;
-            case JSON:
-                builder.dataType(JSON_TYPE);
-                break;
-            case Array:
-                builder.dataType(ArrayType.STRING_ARRAY_TYPE);
-                break;
-            case FloatVector:
-                builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
-                break;
-            case BinaryVector:
-                builder.dataType(VectorType.VECTOR_BINARY_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
-                break;
-            case SparseFloatVector:
-                builder.dataType(VectorType.VECTOR_SPARSE_FLOAT_TYPE);
-                break;
-            case Float16Vector:
-                builder.dataType(VectorType.VECTOR_FLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
-                break;
-            case BFloat16Vector:
-                builder.dataType(VectorType.VECTOR_BFLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
-                break;
-            default:
-                throw new UnsupportedOperationException("Unsupported data type: " + dataType);
-        }
-
-        return builder.build();
-    }
-
-    public static DataType convertSqlTypeToDataType(SqlType sqlType) {
-        switch (sqlType) {
-            case BOOLEAN:
-                return DataType.Bool;
-            case TINYINT:
-                return DataType.Int8;
-            case SMALLINT:
-                return DataType.Int16;
-            case INT:
-                return DataType.Int32;
-            case BIGINT:
-                return DataType.Int64;
-            case FLOAT:
-                return DataType.Float;
-            case DOUBLE:
-                return DataType.Double;
-            case STRING:
-                return DataType.VarChar;
-            case JSON:
-                return DataType.JSON;
-            case ARRAY:
-                return DataType.Array;
-            case FLOAT_VECTOR:
-                return DataType.FloatVector;
-            case BINARY_VECTOR:
-                return DataType.BinaryVector;
-            case FLOAT16_VECTOR:
-                return DataType.Float16Vector;
-            case BFLOAT16_VECTOR:
-                return DataType.BFloat16Vector;
-            case SPARSE_FLOAT_VECTOR:
-                return DataType.SparseFloatVector;
-            case DATE:
-                return DataType.VarChar;
-            case ROW:
-                return DataType.VarChar;
-        }
-        throw new CatalogException(
-                String.format("Not support convert to milvus type, sqlType is %s", sqlType));
     }
 }

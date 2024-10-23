@@ -124,8 +124,6 @@ public final class SeaTunnelRow implements Serializable {
         switch (sqlType) {
             case STRING:
                 return ((String) v).length();
-            case JSON:
-                return v.toString().length();
             case BOOLEAN:
             case TINYINT:
                 return 1;
@@ -258,8 +256,6 @@ public final class SeaTunnelRow implements Serializable {
         switch (clazz) {
             case "String":
                 return ((String) v).length();
-            case "JsonObject":
-                return v.toString().length();
             case "Boolean":
             case "Byte":
                 return 1;

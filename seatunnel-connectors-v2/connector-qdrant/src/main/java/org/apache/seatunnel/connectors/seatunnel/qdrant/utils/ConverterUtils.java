@@ -30,6 +30,7 @@ import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
@@ -59,7 +60,7 @@ public class ConverterUtils {
             SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
             String fieldName = fieldNames[fieldIndex];
 
-            if(Objects.equals(fieldName, "meta")){
+            if(Objects.equals(fieldName, CommonOptions.METADATA.getName())){
                 JsonObject data = new JsonObject();
                 for (String entry : payloadMap.keySet()) {
                     data.add(entry, convertValueToJsonElement(payloadMap.get(entry)));

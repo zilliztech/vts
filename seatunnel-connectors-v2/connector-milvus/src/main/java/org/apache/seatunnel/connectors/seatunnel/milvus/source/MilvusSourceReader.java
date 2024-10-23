@@ -17,6 +17,23 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.source.Boundedness;
+import org.apache.seatunnel.api.source.Collector;
+import org.apache.seatunnel.api.source.SourceReader;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
+
+import org.apache.curator.shaded.com.google.common.collect.Lists;
+
+import org.codehaus.plexus.util.StringUtils;
+
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.GetLoadStateResponse;
 import io.milvus.grpc.LoadState;
@@ -31,22 +48,6 @@ import io.milvus.param.dml.QueryIteratorParam;
 import io.milvus.param.dml.QueryParam;
 import io.milvus.response.QueryResultsWrapper;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.curator.shaded.com.google.common.collect.Lists;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.source.Boundedness;
-import org.apache.seatunnel.api.source.Collector;
-import org.apache.seatunnel.api.source.SourceReader;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.BATCH_SIZE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.RATE_LIMIT;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
-import org.codehaus.plexus.util.StringUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +56,9 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
+
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.BATCH_SIZE;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.RATE_LIMIT;
 
 @Slf4j
 public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSourceSplit> {
@@ -103,8 +107,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
             R<RpcStatus> response = client.alterCollection(alterCollectionParam);
             if (response.getStatus() != R.Status.Success.getCode()) {
                 throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED,
-                        response.getException());
+                        MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED, response.getException());
             }
         }
         log.info("Set rate limit success");
@@ -118,7 +121,6 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
         log.info("Close milvus source reader success");
     }
 
-
     @Override
     public void pollNext(Collector<SeaTunnelRow> output) throws Exception {
         synchronized (output.getCheckpointLock()) {
@@ -129,8 +131,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     pollNextData(split, output);
                 } catch (Exception e) {
                     log.error("Read data from split: " + split + " failed", e);
-                    throw new MilvusConnectorException(
-                            MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                 }
             } else {
                 if (!noMoreSplit) {
@@ -148,7 +149,8 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
         Thread.sleep(1000L);
     }
 
-    private void pollNextData(MilvusSourceSplit split, Collector<SeaTunnelRow> output) throws InterruptedException {
+    private void pollNextData(MilvusSourceSplit split, Collector<SeaTunnelRow> output)
+            throws InterruptedException {
         TablePath tablePath = split.getTablePath();
         String partitionName = split.getPartitionName();
         TableSchema tableSchema = sourceTables.get(tablePath).getTableSchema();
@@ -173,13 +175,14 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
         if (!LoadState.LoadStateLoaded.equals(loadStateResponse.getData().getState())) {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.COLLECTION_NOT_LOADED);
         }
-        QueryParam.Builder queryParam = QueryParam.newBuilder()
-                .withDatabaseName(tablePath.getDatabaseName())
-                .withCollectionName(tablePath.getTableName())
-                .withExpr("")
-                .withOutFields(Lists.newArrayList("count(*)"));
+        QueryParam.Builder queryParam =
+                QueryParam.newBuilder()
+                        .withDatabaseName(tablePath.getDatabaseName())
+                        .withCollectionName(tablePath.getTableName())
+                        .withExpr("")
+                        .withOutFields(Lists.newArrayList("count(*)"));
 
-        if(StringUtils.isNotEmpty(partitionName)){
+        if (StringUtils.isNotEmpty(partitionName)) {
             queryParam.withPartitionNames(Collections.singletonList(partitionName));
         }
 
@@ -198,8 +201,13 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
         queryIteratorData(tablePath, partitionName, tableSchema, output, batchSize);
     }
 
-    private void queryIteratorData(TablePath tablePath, String partitionName, TableSchema tableSchema,
-                                   Collector<SeaTunnelRow> output, long batchSize) throws InterruptedException {
+    private void queryIteratorData(
+            TablePath tablePath,
+            String partitionName,
+            TableSchema tableSchema,
+            Collector<SeaTunnelRow> output,
+            long batchSize)
+            throws InterruptedException {
         try {
             MilvusSourceConverter sourceConverter = new MilvusSourceConverter(tableSchema);
 
@@ -217,8 +225,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
             R<QueryIterator> response = client.queryIterator(param.build());
             if (response.getStatus() != R.Status.Success.getCode()) {
                 throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED,
-                        response.getException());
+                        MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED, response.getException());
             }
             int maxFailRetry = 3;
             QueryIterator iterator = response.getData();
@@ -230,7 +237,8 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     } else {
                         for (QueryResultsWrapper.RowRecord record : next) {
                             SeaTunnelRow seaTunnelRow =
-                                    sourceConverter.convertToSeaTunnelRow(record, tableSchema, tablePath);
+                                    sourceConverter.convertToSeaTunnelRow(
+                                            record, tableSchema, tablePath);
                             if (StringUtils.isNotEmpty(partitionName)) {
                                 seaTunnelRow.setPartitionName(partitionName);
                             }
@@ -238,25 +246,38 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                         }
                     }
                 } catch (Exception e) {
-                    if(e.getMessage().contains("rate limit exceeded")){
-                        // for rateLimit, we can try iterator again after 30s, no need to update batch size directly
+                    if (e.getMessage().contains("rate limit exceeded")) {
+                        // for rateLimit, we can try iterator again after 30s, no need to update
+                        // batch size directly
                         maxFailRetry--;
                         if (maxFailRetry == 0) {
-                            log.error("Iterate next data from milvus failed, batchSize = {}, throw exception", batchSize, e);
-                            throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                            log.error(
+                                    "Iterate next data from milvus failed, batchSize = {}, throw exception",
+                                    batchSize,
+                                    e);
+                            throw new MilvusConnectorException(
+                                    MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                         }
-                        log.error("Iterate next data from milvus failed, batchSize = {}, will retry after 30 s, maxRetry: {}", batchSize, maxFailRetry, e);
+                        log.error(
+                                "Iterate next data from milvus failed, batchSize = {}, will retry after 30 s, maxRetry: {}",
+                                batchSize,
+                                maxFailRetry,
+                                e);
                         Thread.sleep(30000);
-                    }else {
-                        // if this error, we need to reduce batch size and try again, so throw exception here
-                        throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                    } else {
+                        // if this error, we need to reduce batch size and try again, so throw
+                        // exception here
+                        throw new MilvusConnectorException(
+                                MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                     }
-
                 }
             }
-        }catch (Exception e) {
-            if(e.getMessage().contains("rate limit exceeded") && batchSize > 10) {
-                log.error("Query Iterate data from milvus failed, retry from beginning with smaller batch size: {} after 30 s", batchSize / 2, e);
+        } catch (Exception e) {
+            if (e.getMessage().contains("rate limit exceeded") && batchSize > 10) {
+                log.error(
+                        "Query Iterate data from milvus failed, retry from beginning with smaller batch size: {} after 30 s",
+                        batchSize / 2,
+                        e);
                 Thread.sleep(30000);
                 queryIteratorData(tablePath, partitionName, tableSchema, output, batchSize / 2);
             } else {

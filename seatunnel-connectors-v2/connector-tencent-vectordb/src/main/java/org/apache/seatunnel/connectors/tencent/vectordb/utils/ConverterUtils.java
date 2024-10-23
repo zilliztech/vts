@@ -22,19 +22,17 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.tencent.tcvectordb.model.DocField;
 import com.tencent.tcvectordb.model.Document;
-import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 
 public class ConverterUtils {
     public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Document vector) {
@@ -45,7 +43,7 @@ public class ConverterUtils {
         for (int fieldIndex = 0; fieldIndex < typeInfo.getTotalFields(); fieldIndex++) {
             if(fieldNames.get(fieldIndex).equals("id")) {
                 fields[fieldIndex] = vector.getId();
-            } else if (fieldNames.get(fieldIndex).equals("meta")) {
+            } else if (fieldNames.get(fieldIndex).equals(CommonOptions.METADATA.getName())) {
                 List<DocField> meta = vector.getDocFields();
                 JsonObject data = new JsonObject();
                 for (DocField entry : meta) {

@@ -26,17 +26,26 @@ import com.tencent.tcvectordb.model.param.collection.IndexField;
 import com.tencent.tcvectordb.model.param.database.ConnectParam;
 import com.tencent.tcvectordb.model.param.enums.ReadConsistencyEnum;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.*;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import org.apache.seatunnel.common.constants.CommonOptions;
+import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.API_KEY;
+import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.COLLECTION;
+import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.DATABASE;
+import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.URL;
+import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.USER_NAME;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.seatunnel.api.table.type.BasicType.JSON_TYPE;
-import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
-import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
-import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.*;
 
 public class ConnectorUtils {
     private ReadonlyConfig config;
@@ -77,10 +86,10 @@ public class ConnectorUtils {
             }
         }
         Map<String, Object> options = new HashMap<>();
-        options.put("isDynamicField", true);
+        options.put(CommonOptions.METADATA.getName(), true);
         PhysicalColumn dynamicColumn = PhysicalColumn.builder()
-                .name("meta")
-                .dataType(JSON_TYPE)
+                .name(CommonOptions.METADATA.getName())
+                .dataType(STRING_TYPE)
                 .options(options)
                 .build();
         columns.add(dynamicColumn);

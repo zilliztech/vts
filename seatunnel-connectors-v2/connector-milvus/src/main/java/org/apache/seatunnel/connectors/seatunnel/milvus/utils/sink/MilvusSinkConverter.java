@@ -17,27 +17,46 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import io.milvus.common.utils.JacksonUtils;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.api.table.type.SqlType;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
+import org.apache.commons.lang3.StringUtils;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.milvus.common.utils.JacksonUtils;
+import io.milvus.grpc.DataType;
+import io.milvus.param.collection.FieldType;
+
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_AUTO_ID;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 
 public class MilvusSinkConverter {
     private static final Gson gson = new Gson();
 
-    public Object convertBySeaTunnelType(SeaTunnelDataType<?> fieldType, Object value) {
+    public Object convertBySeaTunnelType(
+            SeaTunnelDataType<?> fieldType, Boolean isJson, Object value) {
         SqlType sqlType = fieldType.getSqlType();
         switch (sqlType) {
             case INT:
@@ -50,9 +69,10 @@ public class MilvusSinkConverter {
                 return Short.parseShort(value.toString());
             case STRING:
             case DATE:
+                if (isJson) {
+                    return gson.fromJson(value.toString(), JsonObject.class);
+                }
                 return value.toString();
-            case JSON:
-                return gson.fromJson(value.toString(), JsonObject.class);
             case FLOAT_VECTOR:
                 ByteBuffer floatVectorBuffer = (ByteBuffer) value;
                 Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
@@ -104,5 +124,171 @@ public class MilvusSinkConverter {
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
         }
+    }
+
+    public static FieldType convertToFieldType(
+            Column column, PrimaryKey primaryKey, String partitionKeyField, Boolean autoId) {
+        SeaTunnelDataType<?> seaTunnelDataType = column.getDataType();
+        DataType milvusDataType = convertSqlTypeToDataType(seaTunnelDataType.getSqlType());
+        FieldType.Builder build =
+                FieldType.newBuilder().withName(column.getName()).withDataType(milvusDataType);
+        if (StringUtils.isNotEmpty(column.getComment())) {
+            build.withDescription(column.getComment());
+        }
+        switch (seaTunnelDataType.getSqlType()) {
+            case ROW:
+                build.withMaxLength(65535);
+                break;
+            case DATE:
+                build.withMaxLength(20);
+                break;
+            case STRING:
+                if (column.getOptions() != null
+                        && column.getOptions().get(CommonOptions.JSON.getName()) != null
+                        && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
+                    // check if is json
+                    build.withDataType(DataType.JSON);
+                } else if (column.getColumnLength() == null || column.getColumnLength() == 0) {
+                    build.withMaxLength(65535);
+                } else {
+                    build.withMaxLength((int) (column.getColumnLength() / 4));
+                }
+                break;
+            case ARRAY:
+                ArrayType arrayType = (ArrayType) column.getDataType();
+                SeaTunnelDataType elementType = arrayType.getElementType();
+                build.withElementType(convertSqlTypeToDataType(elementType.getSqlType()));
+                build.withMaxCapacity(4095);
+                switch (elementType.getSqlType()) {
+                    case STRING:
+                        if (column.getColumnLength() == null || column.getColumnLength() == 0) {
+                            build.withMaxLength(65535);
+                        } else {
+                            build.withMaxLength((int) (column.getColumnLength() / 4));
+                        }
+                        break;
+                }
+                break;
+            case BINARY_VECTOR:
+            case FLOAT_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+                build.withDimension(column.getScale());
+                break;
+        }
+
+        // check is primaryKey
+        if (null != primaryKey && primaryKey.getColumnNames().contains(column.getName())) {
+            build.withPrimaryKey(true);
+            List<SqlType> integerTypes = new ArrayList<>();
+            integerTypes.add(SqlType.INT);
+            integerTypes.add(SqlType.SMALLINT);
+            integerTypes.add(SqlType.TINYINT);
+            integerTypes.add(SqlType.BIGINT);
+            if (integerTypes.contains(seaTunnelDataType.getSqlType())) {
+                build.withDataType(DataType.Int64);
+            } else {
+                build.withDataType(DataType.VarChar);
+                build.withMaxLength(65535);
+            }
+            if (null != primaryKey.getEnableAutoId()) {
+                build.withAutoID(primaryKey.getEnableAutoId());
+            } else {
+                build.withAutoID(autoId);
+            }
+        }
+
+        // check is partitionKey
+        if (column.getName().equals(partitionKeyField)) {
+            build.withPartitionKey(true);
+        }
+
+        return build.build();
+    }
+
+    public static DataType convertSqlTypeToDataType(SqlType sqlType) {
+        switch (sqlType) {
+            case BOOLEAN:
+                return DataType.Bool;
+            case TINYINT:
+                return DataType.Int8;
+            case SMALLINT:
+                return DataType.Int16;
+            case INT:
+                return DataType.Int32;
+            case BIGINT:
+                return DataType.Int64;
+            case FLOAT:
+                return DataType.Float;
+            case DOUBLE:
+                return DataType.Double;
+            case STRING:
+                return DataType.VarChar;
+            case ARRAY:
+                return DataType.Array;
+            case MAP:
+                return DataType.JSON;
+            case FLOAT_VECTOR:
+                return DataType.FloatVector;
+            case BINARY_VECTOR:
+                return DataType.BinaryVector;
+            case FLOAT16_VECTOR:
+                return DataType.Float16Vector;
+            case BFLOAT16_VECTOR:
+                return DataType.BFloat16Vector;
+            case SPARSE_FLOAT_VECTOR:
+                return DataType.SparseFloatVector;
+            case DATE:
+                return DataType.VarChar;
+            case ROW:
+                return DataType.VarChar;
+        }
+        throw new CatalogException(
+                String.format("Not support convert to milvus type, sqlType is %s", sqlType));
+    }
+
+    public JsonObject buildMilvusData(
+            CatalogTable catalogTable,
+            ReadonlyConfig config,
+            List<String> jsonFields,
+            String dynamicField,
+            SeaTunnelRow element) {
+        SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
+        PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
+        Boolean autoId = config.get(ENABLE_AUTO_ID);
+
+        JsonObject data = new JsonObject();
+        Gson gson = new Gson();
+        for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
+            String fieldName = seaTunnelRowType.getFieldNames()[i];
+            Boolean isJson = jsonFields.contains(fieldName);
+            if (autoId && isPrimaryKeyField(primaryKey, fieldName)) {
+                continue; // if create table open AutoId, then don't need insert data with
+                // primaryKey field.
+            }
+
+            SeaTunnelDataType<?> fieldType = seaTunnelRowType.getFieldType(i);
+            Object value = element.getField(i);
+            if (null == value) {
+                throw new MilvusConnectorException(
+                        MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
+            }
+            // if the field is dynamic field, then parse the dynamic field
+            if (dynamicField != null
+                    && dynamicField.equals(fieldName)
+                    && config.get(ENABLE_DYNAMIC_FIELD)) {
+                JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
+                dynamicData
+                        .entrySet()
+                        .forEach(
+                                entry -> {
+                                    data.add(entry.getKey(), entry.getValue());
+                                });
+                continue;
+            }
+            Object object = convertBySeaTunnelType(fieldType, isJson, value);
+            data.add(fieldName, gson.toJsonTree(object));
+        }
+        return data;
     }
 }
