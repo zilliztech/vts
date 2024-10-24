@@ -116,6 +116,10 @@ public class ConverterUtils {
                 return new JsonPrimitive(value.getBoolValue());
             case INTEGER_VALUE:
                 return new JsonPrimitive(value.getIntegerValue());
+            case DOUBLE_VALUE:
+                return new JsonPrimitive(value.getDoubleValue());
+            case KIND_NOT_SET:
+                return new JsonPrimitive("");  // Handle unset values if required
             case STRING_VALUE:
                 return new JsonPrimitive(value.getStringValue());
             case NULL_VALUE:

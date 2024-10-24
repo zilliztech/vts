@@ -83,6 +83,7 @@ public class ConverterUtils {
         Gson gson = new Gson();
         switch (value.getKindCase()) {
             case NULL_VALUE:
+            case KIND_NOT_SET:
                 return gson.toJsonTree(null);  // Null value
             case NUMBER_VALUE:
                 return gson.toJsonTree(value.getNumberValue());  // Double value
