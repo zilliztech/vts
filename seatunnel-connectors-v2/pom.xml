@@ -36,55 +36,13 @@
         <module>connector-file</module>
         <module>connector-milvus</module>
         <module>connector-jdbc</module>
-<!--        <module>connector-kafka</module>-->
         <module>connector-elasticsearch</module>
         <module>connector-pinecone</module>
         <module>connector-qdrant</module>
         <module>connector-tencent-vectordb</module>
 <!--        <module>connector-astradb</module>-->
-<!--        <module>connector-cdc</module>-->
-<!--        <module>connector-clickhouse</module>-->
-<!--        <module>connector-http</module>-->
-<!--        <module>connector-pulsar</module>-->
-<!--        <module>connector-socket</module>-->
-<!--        <module>connector-hive</module>-->
-<!--        <module>connector-hudi</module>-->
-<!--        <module>connector-assert</module>-->
-<!--        <module>connector-kudu</module>-->
-<!--        <module>connector-email</module>-->
-<!--        <module>connector-dingtalk</module>-->
-<!--        <module>connector-iotdb</module>-->
-<!--        <module>connector-neo4j</module>-->
-<!--        <module>connector-redis</module>-->
-<!--        <module>connector-datahub</module>-->
-<!--        <module>connector-sentry</module>-->
         <module>connector-mongodb</module>
-<!--        <module>connector-iceberg</module>-->
-<!--        <module>connector-influxdb</module>-->
-<!--        <module>connector-amazondynamodb</module>-->
-<!--        <module>connector-tablestore</module>-->
-<!--        <module>connector-cassandra</module>-->
-<!--        <module>connector-s3-redshift</module>-->
-<!--        <module>connector-starrocks</module>-->
-<!--        <module>connector-google-sheets</module>-->
-<!--        <module>connector-google-firestore</module>-->
-<!--        <module>connector-slack</module>-->
-<!--        <module>connector-rabbitmq</module>-->
-<!--        <module>connector-openmldb</module>-->
-<!--        <module>connector-doris</module>-->
-<!--        <module>connector-druid</module>-->
-<!--        <module>connector-maxcompute</module>-->
-<!--        <module>connector-tdengine</module>-->
-<!--        <module>connector-selectdb-cloud</module>-->
-<!--        <module>connector-hbase</module>-->
-<!--        <module>connector-rocketmq</module>-->
-<!--        <module>connector-amazonsqs</module>-->
-<!--        <module>connector-paimon</module>-->
-<!--        <module>connector-easysearch</module>-->
-<!--        <module>connector-web3j</module>-->
-<!--        <module>connector-activemq</module>-->
-<!--        <module>connector-sls</module>-->
-<!--        <module>connector-typesense</module>-->
+        <module>connector-shopify</module>
     </modules>
 
     <dependencyManagement>
