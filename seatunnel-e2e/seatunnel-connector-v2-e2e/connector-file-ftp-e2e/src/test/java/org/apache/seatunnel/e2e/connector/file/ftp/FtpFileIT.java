@@ -94,7 +94,6 @@ public class FtpFileIT extends TestSuiteBase implements TestResource {
         int passiveEndPort = 30004;
         ftpContainer =
                 new GenericContainer<>(FTP_IMAGE)
-                        .withExposedPorts(FTP_PORT)
                         .withNetwork(NETWORK)
                         .withExposedPorts(FTP_PORT)
                         .withExposedPorts(
