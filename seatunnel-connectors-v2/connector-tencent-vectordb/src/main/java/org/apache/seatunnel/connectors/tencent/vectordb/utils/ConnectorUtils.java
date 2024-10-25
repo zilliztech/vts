@@ -35,6 +35,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import org.apache.seatunnel.common.constants.CommonOptions;
 import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.tencent.vectordb.config.TencentVectorDBSourceConfig.COLLECTION;
@@ -82,6 +83,11 @@ public class ConnectorUtils {
                         .name(indexField.getFieldName())
                         .dataType(VECTOR_FLOAT_TYPE)
                         .scale(indexField.getDimension())
+                        .build());
+            } else if (indexField.isSparseVectorField()) {
+                columns.add(PhysicalColumn.builder()
+                        .name(indexField.getFieldName())
+                        .dataType(VECTOR_SPARSE_FLOAT_TYPE)
                         .build());
             }
         }

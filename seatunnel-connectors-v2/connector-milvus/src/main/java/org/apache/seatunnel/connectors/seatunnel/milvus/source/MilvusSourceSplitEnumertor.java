@@ -56,8 +56,9 @@ public class MilvusSourceSplitEnumertor
     private final ConcurrentLinkedQueue<TablePath> pendingTables;
     private final Map<Integer, List<MilvusSourceSplit>> pendingSplits;
     private final Object stateLock = new Object();
+    private MilvusClient client = null;
 
-    private ReadonlyConfig config;
+    private final ReadonlyConfig config;
 
     public MilvusSourceSplitEnumertor(
             Context<MilvusSourceSplit> context,
@@ -77,7 +78,14 @@ public class MilvusSourceSplitEnumertor
     }
 
     @Override
-    public void open() {}
+    public void open() {
+        ConnectParam connectParam =
+                ConnectParam.newBuilder()
+                        .withUri(config.get(MilvusSourceConfig.URL))
+                        .withToken(config.get(MilvusSourceConfig.TOKEN))
+                        .build();
+        this.client = new MilvusServiceClient(connectParam);
+    }
 
     @Override
     public void run() throws Exception {
@@ -104,12 +112,6 @@ public class MilvusSourceSplitEnumertor
 
     private Collection<MilvusSourceSplit> generateSplits(CatalogTable table) {
         log.info("Start splitting table {} into chunks by partition...", table.getTablePath());
-        ConnectParam connectParam =
-                ConnectParam.newBuilder()
-                        .withUri(config.get(MilvusSourceConfig.URL))
-                        .withToken(config.get(MilvusSourceConfig.TOKEN))
-                        .build();
-        MilvusClient client = new MilvusServiceClient(connectParam);
         String database = table.getTablePath().getDatabaseName();
         String collection = table.getTablePath().getTableName();
         R<DescribeCollectionResponse> describeCollectionResponseR =
@@ -189,7 +191,11 @@ public class MilvusSourceSplitEnumertor
     }
 
     @Override
-    public void close() throws IOException {}
+    public void close() throws IOException {
+        if (client != null) {
+            client.close();
+        }
+    }
 
     @Override
     public void addSplitsBack(List<MilvusSourceSplit> splits, int subtaskId) {

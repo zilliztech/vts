@@ -22,16 +22,21 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.tencent.tcvectordb.model.DocField;
 import com.tencent.tcvectordb.model.Document;
+import static com.tencent.tcvectordb.model.param.collection.FieldType.SparseVector;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class ConverterUtils {
@@ -52,8 +57,16 @@ public class ConverterUtils {
                 fields[fieldIndex] = data.toString();
             }else if(typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
                 // Convert each Double to Float
-                Float[] arrays = vector.getVector().stream().map(Double::floatValue).toArray(Float[]::new);
-                fields[fieldIndex] = BufferUtils.toByteBuffer(arrays);
+                List<Double> floats = (List<Double>) vector.getVector();
+                // Convert List<Float> to Float[]
+                Float[] floatArray = floats.stream().map(Double::floatValue).toArray(Float[]::new);
+                fields[fieldIndex] = BufferUtils.toByteBuffer(floatArray);
+            } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_SPARSE_FLOAT_TYPE)) {
+                Map<Long, Float> sparseMap = new HashMap<>();
+                for(Pair<Long, Float> pair : vector.getSparseVector()) {
+                    sparseMap.put(pair.getKey(), pair.getValue());
+                }
+                fields[fieldIndex] = sparseMap;
             }
         }
 

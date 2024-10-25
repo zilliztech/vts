@@ -108,6 +108,7 @@ public class MilvusConvertUtils {
             TablePath tablePath = TablePath.of(database, null, collection);
             map.put(tablePath, catalogTable);
         }
+        client.close();
         return map;
     }
 

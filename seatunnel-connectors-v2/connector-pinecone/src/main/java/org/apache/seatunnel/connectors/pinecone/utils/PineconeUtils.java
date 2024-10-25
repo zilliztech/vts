@@ -46,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class PineconeUtils {
@@ -65,10 +66,10 @@ public class PineconeUtils {
 
         Index index = pinecone.getIndexConnection(indexName);
 
-        Vector vector = null;
-
         DescribeIndexStatsResponse describeIndexStatsResponse = index.describeIndexStats();
         Map<String, NamespaceSummary> namespaceSummaryMap = describeIndexStatsResponse.getNamespacesMap();
+
+        Map<String, Vector> namespaceVectorMap = new HashMap<>();
         for(Map.Entry<String, NamespaceSummary> entry : namespaceSummaryMap.entrySet()) {
             NamespaceSummary namespaceSummary = entry.getValue();
             if (namespaceSummary.getVectorCount() != 0) {
@@ -77,19 +78,22 @@ public class PineconeUtils {
                 List<String> ids = vectorsList.stream().map(ListItem::getId).collect(Collectors.toList());
                 if (ids.isEmpty()) {
                     // no data in the index
-                    return sourceTables;
+                    continue;
                 }
                 FetchResponse fetchResponse = index.fetch(ids, entry.getKey());
                 Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
-                vector = vectorMap.entrySet().stream().iterator().next().getValue();
-                break;
+                Vector vector = vectorMap.entrySet().stream().iterator().next().getValue();
+                if (vector != null) {
+                    String namespace = Objects.equals(entry.getKey(), "") ? "default" : entry.getKey();
+                    namespaceVectorMap.put(namespace, vector);
+                }
             }
         }
-        if(vector == null) {
+        if(namespaceVectorMap.isEmpty()) {
             // no data in the index
             return sourceTables;
         }
-
+        Vector vector = namespaceVectorMap.entrySet().stream().iterator().next().getValue();
         List<Column> columns = new ArrayList<>();
 
         PhysicalColumn idColumn = PhysicalColumn.builder()
@@ -117,12 +121,17 @@ public class PineconeUtils {
                     .build();
             columns.add(vectorColumn);
         }
-        if (!vector.getSparseValues().getIndicesList().isEmpty()) {
+        List<Map.Entry<String, Vector>> vectorHasSparse = namespaceVectorMap.entrySet().stream()
+                .filter(stringVectorEntry -> !stringVectorEntry.getValue().getSparseValues().getIndicesList().isEmpty())
+                .collect(Collectors.toList());
+        if(!vectorHasSparse.isEmpty()){
+            // only add sparse when all namespace has sparse vector
             PhysicalColumn sparseVectorColumn = PhysicalColumn.builder()
                     .name("sparse_vector")
                     .dataType(VECTOR_SPARSE_FLOAT_TYPE)
                     .scale(indexMetadata.getDimension())
                     .build();
+
             columns.add(sparseVectorColumn);
         }
 

@@ -56,7 +56,6 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
     private final Context context;
     private final Map<TablePath, CatalogTable> sourceTables;
     private Pinecone pinecone;
-    private String paginationToken;
 
     private volatile boolean noMoreSplit;
     public PineconeSourceReader(Context readerContext, ReadonlyConfig config, Map<TablePath, CatalogTable> sourceTables) {
@@ -94,6 +93,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
             if (null != split) {
                 try {
                     log.info("Begin to read data from split: " + split);
+                    String paginationToken = null;
                     TablePath tablePath = split.getTablePath();
                     String namespace = split.getNamespace();
                     TableSchema tableSchema = sourceTables.get(tablePath).getTableSchema();
