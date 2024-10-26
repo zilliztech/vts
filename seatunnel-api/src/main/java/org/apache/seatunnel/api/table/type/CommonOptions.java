@@ -15,14 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.common.constants;
+package org.apache.seatunnel.api.table.type;
+
+import org.apache.seatunnel.api.table.catalog.Column;
 
 import lombok.Getter;
 
+/**
+ * Common option keys of SeaTunnel {@link Column#getOptions()} / {@link SeaTunnelRow#getOptions()}.
+ * Used to store some extra information of the column value.
+ */
 @Getter
 public enum CommonOptions {
+    /**
+     * The key of {@link Column#getOptions()} to specify the column value is a json format string.
+     */
     JSON("Json"),
+    /** The key of {@link Column#getOptions()} to specify the column value is a metadata field. */
     METADATA("Metadata"),
+    /**
+     * The key of {@link SeaTunnelRow#getOptions()} to store the partition value of the row value.
+     */
     PARTITION("Partition"),
     ;
 
