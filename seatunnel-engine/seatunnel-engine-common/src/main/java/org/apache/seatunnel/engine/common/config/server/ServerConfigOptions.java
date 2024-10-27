@@ -247,6 +247,20 @@ public class ServerConfigOptions {
                     .defaultValue("")
                     .withDescription("The context path of the http server.");
 
+    public static final Option<Boolean> ENABLE_DYNAMIC_PORT =
+            Options.key("enable-dynamic-port")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to enable the dynamic port of the http server. If true, We will use the unused port");
+
+    public static final Option<Integer> PORT_RANGE =
+            Options.key("port-range")
+                    .intType()
+                    .defaultValue(100)
+                    .withDescription(
+                            "The port range of the http server. If enable-dynamic-port is true, We will use the unused port in the range");
+
     public static final Option<HttpConfig> HTTP =
             Options.key("http")
                     .type(new TypeReference<HttpConfig>() {})
