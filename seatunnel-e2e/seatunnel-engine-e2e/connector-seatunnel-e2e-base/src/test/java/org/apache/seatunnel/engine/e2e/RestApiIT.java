@@ -984,6 +984,31 @@ public class RestApiIT {
                         });
     }
 
+    @Test
+    public void verifyHtmlResponseBasic() {
+        Arrays.asList(node2, node1)
+                .forEach(
+                        instance -> {
+                            ports.forEach(
+                                    (key, value) -> {
+                                        given().get(
+                                                        HOST
+                                                                + value
+                                                                + node1Config
+                                                                        .getEngineConfig()
+                                                                        .getHttpConfig()
+                                                                        .getContextPath())
+                                                .then()
+                                                .statusCode(200)
+                                                .contentType(containsString("text/html"))
+                                                .body(containsString("<html"))
+                                                .body(
+                                                        containsString(
+                                                                "<title>Seatunnel Engine UI</title>"));
+                                    });
+                        });
+    }
+
     @AfterEach
     void afterClass() {
         if (engineClient != null) {
