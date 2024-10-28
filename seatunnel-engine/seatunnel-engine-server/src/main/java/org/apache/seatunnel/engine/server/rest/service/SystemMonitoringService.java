@@ -15,28 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.engine.server.rest.servlet;
+package org.apache.seatunnel.engine.server.rest.service;
 
-import org.apache.seatunnel.engine.server.rest.service.EncryptConfigService;
-
+import com.hazelcast.internal.json.JsonArray;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import java.io.IOException;
-
-public class EncryptConfigServlet extends BaseServlet {
-
-    private final EncryptConfigService encryptConfigService;
-
-    public EncryptConfigServlet(NodeEngineImpl nodeEngine) {
+public class SystemMonitoringService extends BaseService {
+    public SystemMonitoringService(NodeEngineImpl nodeEngine) {
         super(nodeEngine);
-        this.encryptConfigService = new EncryptConfigService(nodeEngine);
     }
 
-    @Override
-    public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        writeJson(resp, encryptConfigService.encryptConfig(requestBody(req)));
+    public JsonArray getSystemMonitoringInformationJsonValues() {
+        return super.getSystemMonitoringInformationJsonValues();
     }
 }
