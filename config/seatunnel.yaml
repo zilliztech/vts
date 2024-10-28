@@ -20,7 +20,7 @@ seatunnel:
     history-job-expire-minutes: 1440
     backup-count: 1
     queue-type: blockingqueue
-    print-execution-info-interval: 60
+    print-execution-info-interval: 86400 # 1 day
     print-job-metrics-info-interval: 60
     slot-service:
       dynamic-slot: true
