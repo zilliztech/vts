@@ -32,7 +32,6 @@ import io.milvus.param.ConnectParam;
 import io.milvus.param.R;
 import io.milvus.param.collection.DescribeCollectionParam;
 import io.milvus.param.collection.ShowCollectionsParam;
-import io.milvus.param.index.DescribeIndexParam;
 import io.milvus.param.partition.ShowPartitionsParam;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -160,29 +159,11 @@ public class MilvusConvertUtils {
         // primary key
         PrimaryKey primaryKey = buildPrimaryKey(schema.getFieldsList());
 
-        // index
-        R<DescribeIndexResponse> describeIndexResponseR =
-                client.describeIndex(
-                        DescribeIndexParam.newBuilder()
-                                .withDatabaseName(database)
-                                .withCollectionName(collection)
-                                .build());
-        if (describeIndexResponseR.getStatus() != R.Status.Success.getCode()) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.DESC_INDEX_ERROR);
-        }
-        DescribeIndexResponse indexResponse = describeIndexResponseR.getData();
-        List<ConstraintKey.ConstraintKeyColumn> vectorIndexes = buildVectorIndexes(indexResponse);
-
         // build tableSchema
         TableSchema tableSchema =
                 TableSchema.builder()
                         .columns(columns)
                         .primaryKey(primaryKey)
-                        .constraintKey(
-                                ConstraintKey.of(
-                                        ConstraintKey.ConstraintType.VECTOR_INDEX_KEY,
-                                        "vector_index",
-                                        vectorIndexes))
                         .build();
 
         // build tableId
@@ -195,8 +176,6 @@ public class MilvusConvertUtils {
         options.put(MilvusOptions.SHARDS_NUM, String.valueOf(collectionResponse.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusOptions.PARTITION_KEY_FIELD, partitionKeyField);
-        } else {
-            fillPartitionNames(options, client, database, collection);
         }
 
         return CatalogTable.of(

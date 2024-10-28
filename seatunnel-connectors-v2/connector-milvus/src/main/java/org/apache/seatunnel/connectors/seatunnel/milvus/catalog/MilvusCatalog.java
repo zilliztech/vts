@@ -198,39 +198,6 @@ public class MilvusCatalog implements Catalog {
         TableSchema tableSchema = catalogTable.getTableSchema();
         checkNotNull(tableSchema, "tableSchema must not be null");
         createTableInternal(tablePath, catalogTable);
-
-        if (CollectionUtils.isNotEmpty(tableSchema.getConstraintKeys())
-                && config.get(CREATE_INDEX)) {
-            for (ConstraintKey constraintKey : tableSchema.getConstraintKeys()) {
-                if (constraintKey
-                        .getConstraintType()
-                        .equals(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY)) {
-                    createIndexInternal(tablePath, constraintKey.getColumnNames());
-                }
-            }
-        }
-    }
-
-    private void createIndexInternal(
-            TablePath tablePath, List<ConstraintKey.ConstraintKeyColumn> vectorIndexes) {
-        for (ConstraintKey.ConstraintKeyColumn column : vectorIndexes) {
-            VectorIndex index = (VectorIndex) column;
-            CreateIndexParam createIndexParam =
-                    CreateIndexParam.newBuilder()
-                            .withDatabaseName(tablePath.getDatabaseName())
-                            .withCollectionName(tablePath.getTableName())
-                            .withFieldName(index.getColumnName())
-                            .withIndexName(index.getIndexName())
-                            .withIndexType(IndexType.valueOf(index.getIndexType().name()))
-                            .withMetricType(MetricType.valueOf(index.getMetricType().name()))
-                            .build();
-
-            R<RpcStatus> response = client.createIndex(createIndexParam);
-            if (!Objects.equals(response.getStatus(), R.success().getStatus())) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.CREATE_INDEX_ERROR, response.getMessage());
-            }
-        }
     }
 
     public void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
@@ -243,7 +210,6 @@ public class MilvusCatalog implements Catalog {
                     existPartitionKeyField ? options.get(MilvusOptions.PARTITION_KEY_FIELD) : null;
             // if options set, will overwrite aut read
             if (StringUtils.isNotEmpty(config.get(MilvusSinkConfig.PARTITION_KEY))) {
-                existPartitionKeyField = true;
                 partitionKeyField = config.get(MilvusSinkConfig.PARTITION_KEY);
             }
 
@@ -299,49 +265,9 @@ public class MilvusCatalog implements Catalog {
                         MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, response.getMessage());
             }
 
-            // not exist partition key field, will read show partitions to create
-            if (!existPartitionKeyField && options.containsKey(MilvusOptions.PARTITION_KEY_FIELD)) {
-                createPartitionInternal(options.get(MilvusOptions.PARTITION_KEY_FIELD), tablePath);
-            }
-
         } catch (Exception e) {
             throw new MilvusConnectorException(
                     MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, e);
-        }
-    }
-
-    private void createPartitionInternal(String partitionNames, TablePath tablePath) {
-        R<ShowPartitionsResponse> showPartitionsResponseR =
-                this.client.showPartitions(
-                        ShowPartitionsParam.newBuilder()
-                                .withDatabaseName(tablePath.getDatabaseName())
-                                .withCollectionName(tablePath.getTableName())
-                                .build());
-        if (!Objects.equals(showPartitionsResponseR.getStatus(), R.success().getStatus())) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.SHOW_PARTITION_ERROR,
-                    showPartitionsResponseR.getMessage());
-        }
-        ProtocolStringList existPartitionNames =
-                showPartitionsResponseR.getData().getPartitionNamesList();
-
-        // start to loop create partition
-        String[] partitionNameArray = partitionNames.split(",");
-        for (String partitionName : partitionNameArray) {
-            if (existPartitionNames.contains(partitionName)) {
-                continue;
-            }
-            R<RpcStatus> response =
-                    this.client.createPartition(
-                            CreatePartitionParam.newBuilder()
-                                    .withDatabaseName(tablePath.getDatabaseName())
-                                    .withCollectionName(tablePath.getTableName())
-                                    .withPartitionName(partitionName)
-                                    .build());
-            if (!R.success().getStatus().equals(response.getStatus())) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.CREATE_PARTITION_ERROR, response.getMessage());
-            }
         }
     }
 
