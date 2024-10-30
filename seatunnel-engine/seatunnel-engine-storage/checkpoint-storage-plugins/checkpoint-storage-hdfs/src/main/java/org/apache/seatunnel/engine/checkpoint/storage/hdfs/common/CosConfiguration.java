@@ -20,29 +20,25 @@
 
 package org.apache.seatunnel.engine.checkpoint.storage.hdfs.common;
 
-public enum FileConfiguration {
-    LOCAL("local", new LocalConfiguration()),
-    HDFS("hdfs", new HdfsConfiguration()),
-    S3("s3", new S3Configuration()),
-    OSS("oss", new OssConfiguration()),
-    COS("cos", new CosConfiguration());
+import org.apache.hadoop.conf.Configuration;
 
-    /** file system type */
-    private final String name;
+import java.util.Map;
 
-    /** file system configuration */
-    private final AbstractConfiguration configuration;
+import static org.apache.hadoop.fs.FileSystem.FS_DEFAULT_NAME_KEY;
 
-    FileConfiguration(String name, AbstractConfiguration configuration) {
-        this.name = name;
-        this.configuration = configuration;
-    }
+public class CosConfiguration extends AbstractConfiguration {
+    public static final String COS_BUCKET_KEY = "cos.bucket";
+    private static final String COS_IMPL_KEY = "fs.cosn.impl";
+    private static final String HDFS_COS_IMPL = "org.apache.hadoop.fs.cosn.CosNFileSystem";
+    private static final String COS_KEY = "fs.cosn.";
 
-    public AbstractConfiguration getConfiguration(String name) {
-        return configuration;
-    }
-
-    public String getName() {
-        return name;
+    @Override
+    public Configuration buildConfiguration(Map<String, String> config) {
+        checkConfiguration(config, COS_BUCKET_KEY);
+        Configuration hadoopConf = new Configuration();
+        hadoopConf.set(FS_DEFAULT_NAME_KEY, config.get(COS_BUCKET_KEY));
+        hadoopConf.set(COS_IMPL_KEY, HDFS_COS_IMPL);
+        setExtraConfiguration(hadoopConf, config, COS_KEY);
+        return hadoopConf;
     }
 }
