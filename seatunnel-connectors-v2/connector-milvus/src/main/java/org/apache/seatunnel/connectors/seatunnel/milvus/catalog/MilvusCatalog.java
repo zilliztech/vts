@@ -70,6 +70,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.CREATE_INDEX;
@@ -257,12 +258,24 @@ public class MilvusCatalog implements Catalog {
             if (StringUtils.isNotEmpty(options.get(MilvusOptions.SHARDS_NUM))) {
                 builder.withShardsNum(Integer.parseInt(options.get(MilvusOptions.SHARDS_NUM)));
             }
-
+            int retry = 5;
             CreateCollectionParam createCollectionParam = builder.build();
             R<RpcStatus> response = this.client.createCollection(createCollectionParam);
             if (!Objects.equals(response.getStatus(), R.success().getStatus())) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, response.getMessage());
+                boolean status = false;
+                while(retry > 0) {
+                    TimeUnit.SECONDS.sleep(1);
+                    response = this.client.createCollection(createCollectionParam);
+                    if(Objects.equals(response.getStatus(), R.success().getStatus())) {
+                        status = true;
+                        break;
+                    }
+                    retry--;
+                }
+                if(!status) {
+                    throw new MilvusConnectorException(
+                            MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, response.getMessage());
+                }
             }
 
         } catch (Exception e) {
