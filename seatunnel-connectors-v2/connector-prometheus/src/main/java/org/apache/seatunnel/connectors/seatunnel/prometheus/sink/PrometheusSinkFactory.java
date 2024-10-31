@@ -39,7 +39,7 @@ public class PrometheusSinkFactory extends HttpSinkFactory {
 
         ReadonlyConfig readonlyConfig = context.getOptions();
         CatalogTable catalogTable = context.getCatalogTable();
-        return () -> new PrometheusSink(readonlyConfig, catalogTable.getSeaTunnelRowType());
+        return () -> new PrometheusSink(readonlyConfig, catalogTable);
     }
 
     @Override

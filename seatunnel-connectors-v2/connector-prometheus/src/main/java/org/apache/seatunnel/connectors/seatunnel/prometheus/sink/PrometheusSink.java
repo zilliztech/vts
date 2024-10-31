@@ -19,8 +19,8 @@ package org.apache.seatunnel.connectors.seatunnel.prometheus.sink;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSink;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSimpleSink;
 import org.apache.seatunnel.connectors.seatunnel.http.config.HttpConfig;
 import org.apache.seatunnel.connectors.seatunnel.http.config.HttpParameter;
@@ -28,15 +28,16 @@ import org.apache.seatunnel.connectors.seatunnel.http.config.HttpParameter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class PrometheusSink extends AbstractSimpleSink<SeaTunnelRow, Void>
         implements SupportMultiTableSink {
 
     protected final HttpParameter httpParameter = new HttpParameter();
-    protected SeaTunnelRowType seaTunnelRowType;
+    protected CatalogTable catalogTable;
     protected ReadonlyConfig pluginConfig;
 
-    public PrometheusSink(ReadonlyConfig pluginConfig, SeaTunnelRowType rowType) {
+    public PrometheusSink(ReadonlyConfig pluginConfig, CatalogTable catalogTable) {
         this.pluginConfig = pluginConfig;
         httpParameter.setUrl(pluginConfig.get(HttpConfig.URL));
         if (pluginConfig.getOptional(HttpConfig.HEADERS).isPresent()) {
@@ -45,7 +46,7 @@ public class PrometheusSink extends AbstractSimpleSink<SeaTunnelRow, Void>
         if (pluginConfig.getOptional(HttpConfig.PARAMS).isPresent()) {
             httpParameter.setHeaders(pluginConfig.get(HttpConfig.PARAMS));
         }
-        this.seaTunnelRowType = rowType;
+        this.catalogTable = catalogTable;
 
         if (Objects.isNull(httpParameter.getHeaders())) {
             Map<String, String> headers = new HashMap<>();
@@ -67,6 +68,12 @@ public class PrometheusSink extends AbstractSimpleSink<SeaTunnelRow, Void>
 
     @Override
     public PrometheusWriter createWriter(SinkWriter.Context context) {
-        return new PrometheusWriter(seaTunnelRowType, httpParameter, pluginConfig);
+        return new PrometheusWriter(
+                catalogTable.getSeaTunnelRowType(), httpParameter, pluginConfig);
+    }
+
+    @Override
+    public Optional<CatalogTable> getWriteCatalogTable() {
+        return Optional.ofNullable(catalogTable);
     }
 }
