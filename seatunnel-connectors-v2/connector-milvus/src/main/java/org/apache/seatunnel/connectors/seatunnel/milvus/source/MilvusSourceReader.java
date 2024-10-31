@@ -273,7 +273,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                 }
             }
         } catch (Exception e) {
-            if (e.getMessage().contains("rate limit exceeded") && batchSize > 10) {
+            if ((e.getMessage().contains("rate limit exceeded") || e.getMessage().contains("received message larger than max")) && batchSize > 1) {
                 log.error(
                         "Query Iterate data from milvus failed, retry from beginning with smaller batch size: {} after 30 s",
                         batchSize / 2,

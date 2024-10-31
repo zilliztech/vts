@@ -280,7 +280,7 @@ public class MilvusBufferBatchWriter {
         } catch (Exception e) {
             if (e.getMessage().contains("rate limit exceeded")
                     || e.getMessage().contains("received message larger than max")) {
-                if (data.size() > 10) {
+                if (data.size() > 2) {
                     log.warn("upsert data failed, retry in smaller chunks: {} ", data.size() / 2);
                     this.batchSize = this.batchSize / 2;
                     log.info("sleep 1 minute to avoid rate limit");
@@ -306,7 +306,6 @@ public class MilvusBufferBatchWriter {
                         e);
             }
         }
-        log.info("upsert data success");
     }
 
     private void insertWrite(String partitionName, List<JsonObject> data) {
