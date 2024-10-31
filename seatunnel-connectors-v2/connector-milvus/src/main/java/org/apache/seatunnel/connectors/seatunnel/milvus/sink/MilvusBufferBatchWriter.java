@@ -216,7 +216,6 @@ public class MilvusBufferBatchWriter {
     }
 
     public void flush() throws Exception {
-        log.info("Starting to put {} records to Milvus.", this.writeCache.get());
         // Flush the batch writer
         // Get the number of records completed
         if (this.milvusDataCache.isEmpty()) {

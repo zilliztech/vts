@@ -255,8 +255,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                                     "Iterate next data from milvus failed, batchSize = {}, throw exception",
                                     batchSize,
                                     e);
-                            throw new MilvusConnectorException(
-                                    MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                            throw e;
                         }
                         log.error(
                                 "Iterate next data from milvus failed, batchSize = {}, will retry after 30 s, maxRetry: {}",
@@ -267,8 +266,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                     } else {
                         // if this error, we need to reduce batch size and try again, so throw
                         // exception here
-                        throw new MilvusConnectorException(
-                                MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                        throw e;
                     }
                 }
             }
@@ -281,7 +279,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
                 Thread.sleep(30000);
                 queryIteratorData(tablePath, partitionName, tableSchema, output, batchSize / 2);
             } else {
-                throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e.getMessage(), e);
             }
         }
     }
