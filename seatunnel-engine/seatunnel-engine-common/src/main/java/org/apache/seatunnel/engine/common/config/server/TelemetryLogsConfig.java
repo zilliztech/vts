@@ -22,9 +22,8 @@ import lombok.Data;
 import java.io.Serializable;
 
 @Data
-public class TelemetryConfig implements Serializable {
+public class TelemetryLogsConfig implements Serializable {
 
-    private TelemetryMetricConfig metric = ServerConfigOptions.TELEMETRY_METRIC.defaultValue();
-
-    private TelemetryLogsConfig logs = ServerConfigOptions.TELEMETRY_LOGS.defaultValue();
+    private boolean enabled =
+            ServerConfigOptions.TELEMETRY_LOGS_SCHEDULED_DELETION_ENABLE.defaultValue();
 }
