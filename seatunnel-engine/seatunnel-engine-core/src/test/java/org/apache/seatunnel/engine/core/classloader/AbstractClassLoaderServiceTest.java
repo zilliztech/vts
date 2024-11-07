@@ -38,7 +38,7 @@ public abstract class AbstractClassLoaderServiceTest {
 
     @BeforeEach
     void setUp() {
-        classLoaderService = new DefaultClassLoaderService(cacheMode());
+        classLoaderService = new DefaultClassLoaderService(cacheMode(), null);
     }
 
     @Test
