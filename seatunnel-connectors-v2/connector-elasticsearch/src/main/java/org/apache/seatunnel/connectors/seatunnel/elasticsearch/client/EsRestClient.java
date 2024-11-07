@@ -20,6 +20,7 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.client;
 import org.apache.http.Header;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.message.BasicHeader;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VECTOR;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ArrayNode;
@@ -665,6 +666,19 @@ public class EsRestClient implements Closeable {
 
                                     // es dense_vector dim
                                     typeDefine.scale(fieldProperty.get("dims").asInt());
+
+                                } else if (type.equalsIgnoreCase(VECTOR)) {
+                                    //adapt for huawei cloud elastic search
+                                    String elementType =
+                                            fieldProperty.get("dim_type") == null
+                                                    ? "float"
+                                                    : fieldProperty.get("dim_type").asText();
+                                    Map<String, Object> options = new HashMap<>();
+                                    options.put("element_type", elementType);
+                                    typeDefine.nativeType(new EsType(type, options));
+
+                                    // es dense_vector dim
+                                    typeDefine.scale(fieldProperty.get("dimension").asInt());
 
                                 } else if (type.equalsIgnoreCase(DATE)
                                         || type.equalsIgnoreCase(DATE_NANOS)) {
