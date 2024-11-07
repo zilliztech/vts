@@ -158,6 +158,8 @@
         <prometheus.simpleclient.version>0.16.0</prometheus.simpleclient.version>
         <enableSourceJarCreation>true</enableSourceJarCreation>
 
+        <hadoop-aws.version>3.1.4</hadoop-aws.version>
+
     </properties>
 
     <dependencyManagement>
