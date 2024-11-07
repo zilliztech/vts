@@ -72,6 +72,7 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.TEXT;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.TOKEN_COUNT;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.UNSIGNED_LONG;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VERSION;
 
 @AutoService(TypeConverter.class)
@@ -105,6 +106,7 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
                                         .toArray(SeaTunnelDataType<?>[]::new)));
                 break;
             case DENSE_VECTOR:
+            case VECTOR:
                 String elementType =
                         typeDefine.getNativeType().getOptions().get("element_type").toString();
                 if (elementType.equals("byte")) {
