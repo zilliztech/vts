@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.oracle;
 
 import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.converter.JdbcRowConverter;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.DatabaseIdentifier;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialect;
@@ -325,5 +326,20 @@ public class OracleDialect implements JdbcDialect {
                 return resultsArray;
             }
         }
+    }
+
+    @Override
+    public String decorateWithComment(
+            String tableName, String basicSql, BasicTypeDefine typeBasicTypeDefine) {
+        String comment = typeBasicTypeDefine.getComment();
+        StringBuilder sql = new StringBuilder(basicSql);
+        if (StringUtils.isNotBlank(comment)) {
+            String commentSql =
+                    String.format(
+                            "COMMENT ON COLUMN %s.%s IS '%s'",
+                            tableName, quoteIdentifier(typeBasicTypeDefine.getName()), comment);
+            sql.append(";\n").append(commentSql);
+        }
+        return sql.toString();
     }
 }

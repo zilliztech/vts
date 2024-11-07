@@ -28,6 +28,7 @@ import org.apache.seatunnel.connectors.cdc.base.config.JdbcSourceConfig;
 import org.apache.seatunnel.connectors.cdc.base.config.SourceConfig;
 import org.apache.seatunnel.connectors.cdc.base.dialect.DataSourceDialect;
 import org.apache.seatunnel.connectors.cdc.base.option.JdbcSourceOptions;
+import org.apache.seatunnel.connectors.cdc.base.option.SourceOptions;
 import org.apache.seatunnel.connectors.cdc.base.option.StartupMode;
 import org.apache.seatunnel.connectors.cdc.base.option.StopMode;
 import org.apache.seatunnel.connectors.cdc.base.source.IncrementalSource;
@@ -100,20 +101,30 @@ public class OracleIncrementalSource<T> extends IncrementalSource<T, JdbcSourceC
             ReadonlyConfig config) {
         // todo:table metadata change reservation
         Map<TableId, Struct> tableIdStructMap = tableChanges();
+        Map<String, String> debeziumProperties = config.get(SourceOptions.DEBEZIUM_PROPERTIES);
         if (DeserializeFormat.COMPATIBLE_DEBEZIUM_JSON.equals(
                 config.get(JdbcSourceOptions.FORMAT))) {
             return (DebeziumDeserializationSchema<T>)
-                    new DebeziumJsonDeserializeSchema(
-                            config.get(JdbcSourceOptions.DEBEZIUM_PROPERTIES));
+                    new DebeziumJsonDeserializeSchema(debeziumProperties);
         }
 
         SeaTunnelDataType<SeaTunnelRow> physicalRowType = dataType;
         String zoneId = config.get(JdbcSourceOptions.SERVER_TIME_ZONE);
+
+        boolean enableDDL =
+                Boolean.parseBoolean(
+                        debeziumProperties.getOrDefault("include.schema.changes", "false"));
+
         return (DebeziumDeserializationSchema<T>)
                 SeaTunnelRowDebeziumDeserializeSchema.builder()
                         .setPhysicalRowType(physicalRowType)
                         .setResultTypeInfo(physicalRowType)
                         .setServerTimeZone(ZoneId.of(zoneId))
+                        .setSchemaChangeResolver(
+                                enableDDL
+                                        ? new OracleSchemaChangeResolver(
+                                                createSourceConfigFactory(config))
+                                        : null)
                         .build();
     }
 

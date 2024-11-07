@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.sink;
 
+import org.apache.seatunnel.api.event.EventType;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -96,14 +97,15 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
                 break;
             case SCHEMA_CHANGE_MODIFY_COLUMN:
                 Column modifyColumn = ((AlterTableModifyColumnEvent) event).getColumn();
-                replaceColumnByIndex(columns, modifyColumn.getName(), modifyColumn);
+                replaceColumnByIndex(
+                        event.getEventType(), columns, modifyColumn.getName(), modifyColumn);
                 break;
             case SCHEMA_CHANGE_CHANGE_COLUMN:
                 AlterTableChangeColumnEvent alterTableChangeColumnEvent =
                         (AlterTableChangeColumnEvent) event;
                 Column changeColumn = alterTableChangeColumnEvent.getColumn();
                 String oldColumnName = alterTableChangeColumnEvent.getOldColumn();
-                replaceColumnByIndex(columns, oldColumnName, changeColumn);
+                replaceColumnByIndex(event.getEventType(), columns, oldColumnName, changeColumn);
                 break;
             default:
                 throw new SeaTunnelException(
@@ -132,10 +134,17 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
     }
 
     protected void replaceColumnByIndex(
-            List<Column> columns, String oldColumnName, Column newColumn) {
+            EventType eventType, List<Column> columns, String oldColumnName, Column newColumn) {
         for (int i = 0; i < columns.size(); i++) {
-            if (columns.get(i).getName().equalsIgnoreCase(oldColumnName)) {
-                columns.set(i, newColumn);
+            Column column = columns.get(i);
+            if (column.getName().equalsIgnoreCase(oldColumnName)) {
+                // rename ...... to ......  which just has column name
+                if (eventType.equals(EventType.SCHEMA_CHANGE_CHANGE_COLUMN)
+                        && newColumn.getDataType() == null) {
+                    columns.set(i, column.rename(newColumn.getName()));
+                } else {
+                    columns.set(i, newColumn);
+                }
             }
         }
     }

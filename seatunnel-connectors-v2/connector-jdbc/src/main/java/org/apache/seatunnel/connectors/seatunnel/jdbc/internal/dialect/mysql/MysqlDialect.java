@@ -228,12 +228,13 @@ public class MysqlDialect implements JdbcDialect {
     }
 
     @Override
-    public String decorateWithComment(String basicSql, BasicTypeDefine typeBasicTypeDefine) {
+    public String decorateWithComment(
+            String tableName, String basicSql, BasicTypeDefine typeBasicTypeDefine) {
         MysqlType nativeType = (MysqlType) typeBasicTypeDefine.getNativeType();
         if (NOT_SUPPORTED_DEFAULT_VALUES.contains(nativeType)) {
             return basicSql;
         }
-        return JdbcDialect.super.decorateWithComment(basicSql, typeBasicTypeDefine);
+        return JdbcDialect.super.decorateWithComment(tableName, basicSql, typeBasicTypeDefine);
     }
 
     @Override

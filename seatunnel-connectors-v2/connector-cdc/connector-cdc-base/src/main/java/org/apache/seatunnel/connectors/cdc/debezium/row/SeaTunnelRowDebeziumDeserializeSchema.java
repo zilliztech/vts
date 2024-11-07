@@ -117,7 +117,15 @@ public final class SeaTunnelRowDebeziumDeserializeSchema
 
     private void deserializeSchemaChangeRecord(
             SourceRecord record, Collector<SeaTunnelRow> collector) {
-        SchemaChangeEvent schemaChangeEvent = schemaChangeResolver.resolve(record, resultTypeInfo);
+        SchemaChangeEvent schemaChangeEvent = null;
+        try {
+            if (schemaChangeResolver != null) {
+                schemaChangeEvent = schemaChangeResolver.resolve(record, resultTypeInfo);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve schemaChangeEvent, just skip.", e);
+            return;
+        }
         if (schemaChangeEvent == null) {
             log.warn("Unsupported resolve schemaChangeEvent {}, just skip.", record);
             return;

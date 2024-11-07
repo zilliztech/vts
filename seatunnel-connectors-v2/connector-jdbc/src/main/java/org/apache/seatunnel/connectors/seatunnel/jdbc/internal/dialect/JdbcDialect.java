@@ -553,7 +553,9 @@ public interface JdbcDialect extends Serializable {
                 buildAlterTableSql(
                         event.getSourceDialectName(),
                         changeColumn.getSourceType(),
-                        AlterType.CHANGE.name(),
+                        changeColumn.getDataType() == null
+                                ? AlterType.RENAME.name()
+                                : AlterType.CHANGE.name(),
                         changeColumn,
                         tableIdentifierWithQuoted,
                         oldColumnName);
@@ -625,6 +627,13 @@ public interface JdbcDialect extends Serializable {
             return String.format(
                     "ALTER TABLE %s drop column %s", tableName, quoteIdentifier(oldColumnName));
         }
+
+        if (alterOperation.equalsIgnoreCase(AlterType.RENAME.name())) {
+            return String.format(
+                    "ALTER TABLE %s RENAME COLUMN %s TO %s",
+                    tableName, oldColumnName, newColumn.getName());
+        }
+
         TypeConverter<?> typeConverter = ConverterLoader.loadTypeConverter(dialectName());
         BasicTypeDefine typeBasicTypeDefine = (BasicTypeDefine) typeConverter.reconvert(newColumn);
 
@@ -638,10 +647,14 @@ public interface JdbcDialect extends Serializable {
                         newColumn,
                         oldColumnName,
                         typeBasicTypeDefine.getColumnType());
-        basicSql = decorateWithNullable(basicSql, typeBasicTypeDefine);
-        basicSql = decorateWithDefaultValue(basicSql, typeBasicTypeDefine);
-        basicSql = decorateWithComment(basicSql, typeBasicTypeDefine);
-        return basicSql + ";";
+        // Only decorate with default value when source dialect is same as sink dialect
+        // Todo Support for cross-database default values for ddl statements
+        if (sourceDialectName.equals(dialectName())) {
+            basicSql = decorateWithDefaultValue(basicSql, typeBasicTypeDefine);
+        }
+        basicSql = decorateWithNullable(basicSql, typeBasicTypeDefine, sourceDialectName);
+        basicSql = decorateWithComment(tableName, basicSql, typeBasicTypeDefine);
+        return dialectName().equals(DatabaseIdentifier.ORACLE) ? basicSql : basicSql + ";";
     }
 
     /**
@@ -707,14 +720,22 @@ public interface JdbcDialect extends Serializable {
      *
      * @param basicSql alter table sql for sink table
      * @param typeBasicTypeDefine type basic type define of new column
+     * @param sourceDialectName source dialect name
      * @return alter table sql with nullable for sink table
      */
-    default String decorateWithNullable(String basicSql, BasicTypeDefine typeBasicTypeDefine) {
+    default String decorateWithNullable(
+            String basicSql, BasicTypeDefine typeBasicTypeDefine, String sourceDialectName) {
         StringBuilder sql = new StringBuilder(basicSql);
-        if (typeBasicTypeDefine.isNullable()) {
+        if (typeBasicTypeDefine.isNullable()
+                && !dialectName().equalsIgnoreCase(DatabaseIdentifier.ORACLE)) {
             sql.append("NULL ");
         } else {
-            sql.append("NOT NULL ");
+            // Todo: Support cross-dabaase default values for ddl statements which can remove this
+            if (!(!dialectName().equalsIgnoreCase(sourceDialectName)
+                    && dialectName().equalsIgnoreCase(DatabaseIdentifier.MYSQL)
+                    && typeBasicTypeDefine.getDataType().equalsIgnoreCase("datetime"))) {
+                sql.append("NOT NULL ");
+            }
         }
         return sql.toString();
     }
@@ -743,11 +764,13 @@ public interface JdbcDialect extends Serializable {
     /**
      * decorate with comment
      *
+     * @param tableName table name with quoted
      * @param basicSql alter table sql for sink table
      * @param typeBasicTypeDefine type basic type define of new column
      * @return alter table sql with comment for sink table
      */
-    default String decorateWithComment(String basicSql, BasicTypeDefine typeBasicTypeDefine) {
+    default String decorateWithComment(
+            String tableName, String basicSql, BasicTypeDefine typeBasicTypeDefine) {
         String comment = typeBasicTypeDefine.getComment();
         StringBuilder sql = new StringBuilder(basicSql);
         if (StringUtils.isNotBlank(comment)) {
@@ -790,6 +813,7 @@ public interface JdbcDialect extends Serializable {
         ADD,
         DROP,
         MODIFY,
-        CHANGE
+        CHANGE,
+        RENAME
     }
 }

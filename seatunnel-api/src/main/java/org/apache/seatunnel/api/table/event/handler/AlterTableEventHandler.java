@@ -154,10 +154,19 @@ public class AlterTableEventHandler implements DataTypeChangeEventHandler {
         String oldColumn = changeColumnEvent.getOldColumn();
         int oldColumnIndex = dataType.indexOf(oldColumn);
 
+        // The operation of rename column which only has the name of old column and the name of new
+        // column,
+        // so we need to fill the data type which is the same as the old column.
+        SeaTunnelDataType<?> fieldType = dataType.getFieldType(oldColumnIndex);
+        Column column = changeColumnEvent.getColumn();
+        if (column.getDataType() == null) {
+            column = column.copy(fieldType);
+        }
+
         return applyModifyColumn(
                 dataType,
                 oldColumnIndex,
-                changeColumnEvent.getColumn(),
+                column,
                 changeColumnEvent.isFirst(),
                 changeColumnEvent.getAfterColumn());
     }
