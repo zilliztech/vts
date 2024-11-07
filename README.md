@@ -44,58 +44,79 @@ This guide will help you get started with how to use vts to transport vector dat
 - qdrant
 - tencent vectordb
 
-**1. Build the vts project**
+#### Step 1: Download and Extract VTS
+
+- Navigate to the VTS releases page: https://github.com/zilliztech/vts/releases
+- Download the latest binary package
+- Extract the package using:
 ```shell
-./mvnw install -Dmaven.test.skip
+tar -xzvf "vector-transport-service-bin-xxx.tar.gz"
 ```
-**2. Setup the configuration file**
-
-go to ./seatunnel-example/seatunnel-examples/src/main/resources/examples, update the conf file
-- milvus_to_milvus.conf
-- pg_to_milvus.conf
-- es_to_milvus.conf
-
-here is an example of milvus_to_milvus.conf
+#### Step 2: Configure the Migration
+Create a configuration file named milvus_to_milvus.conf with the following structure:
 ```yaml
 env {
   parallelism = 1
   job.mode = "BATCH"
 }
 
-source {
+  source {
   Milvus {
-    url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19530"
-    token="***"
-    database="default"
-    collection="medium_articles"
-    batch_size=100
+  url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19530"
+  token="***"
+  database="default"
+  collection="medium_articles"
+  batch_size=100
   }
 }
 
-sink {
+  sink {
   Milvus {
-    url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19542"
-    token="***"
-    database="default"
-    batch_size=10
+  url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19542"
+  token="***"
+  database="default"
+  batch_size=10
   }
 }
 ```
-**3. Run examples**
+Configuration Notes:
 
-The example file is located at
-_./seatunnel-example/seatunnel-examples/src/main/java/com/zilliz/seatunnel/examples/engine/SeatunnelEngineExample.java_
+Replace placeholder values (marked with your-*) with your actual credentials
+Adjust batch_size based on your data volume and system resources
+The parallelism value can be increased for better performance on larger datasets
 
-update the configuration file path in _SeatunnelEngineExample.java_, and run the example.
+#### Step 3: Run the Migration
+Execute the migration using the SeaTunnel shell script:
+
+_Cluster Mode (Recommended)_
+- Start the SeaTunnel cluster:
 ```shell
-String configurePath = args.length > 0 ? args[0] : "/examples/****.conf";
+mkdir -p ./logs
+./bin/seatunnel-cluster.sh -d
 ```
-**4. Check the data in milvus**
+- Submit the migration job:
 
-go to milvus console, check the data in the collection
+```shell
+./bin/seatunnel.sh --config ./milvus_to_milvus.conf
+```
+_Local Mode_
+```shell
+./bin/seatunnel.sh --config ./milvus_to_milvus.conf -m local
+```
 
 
-### Tutorial
+#### Monitoring and Troubleshooting
+
+Check the console output for progress and any error messages
+
+### Next Steps
+
+Verify data integrity in Milvus after migration. If Need help with specific configuration options or running into issues? Feel free to ask for clarification!
+
+### Docker Deployment
+VTS can also be deployed using Docker. To deploy VTS using Docker, follow the instructions in the [Docker Deployment Guide](./docs/zilliz/Docker%20Deployment.md).
+
+## Tutorial
 In addition to the quick start guide, vts has much more powerful features like
 - lots of transformer to support TabelPathMapper, FieldMapper, Embedding etc.
 - cluster mode ready for production use with restful api to manage the job
@@ -113,6 +134,9 @@ Find Detailed documentation for each connector:
  - [Qdrant](docs/zilliz/Qdrant.md)
  - [Postgres Vector](docs/zilliz/Postgres%20Vector.md)
  - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md)
+
+### Development
+see [Development.md](./Development.md) for building from source code and running examples.
 
 ## Support
 If you require any assistance or have questions regarding VTS, please feel free to reach out to our support team: Email: support@zilliz.com

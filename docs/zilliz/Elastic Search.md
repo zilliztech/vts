@@ -66,9 +66,22 @@ The parallelism value can be increased for better performance on larger datasets
 
 ### Step 3: Run the Migration
 Execute the migration using the SeaTunnel shell script:
+#### Cluster Mode (Recommended)
+- Start the SeaTunnel cluster:
+```shell
+mkdir -p ./logs
+./bin/seatunnel-cluster.sh -d
+```
+- Submit the migration job:
+
+```shell
+./bin/seatunnel.sh --config ./es_to_milvus.conf
+```
+#### Local Mode
 ```shell
 ./bin/seatunnel.sh --config ./es_to_milvus.conf -m local
 ```
+
 
 #### Monitoring and Troubleshooting
 
