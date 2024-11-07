@@ -19,7 +19,7 @@ Built on top of Apache Seatunnel, Vector-Transport-Service offers:
 4. High performance, low latency, and scalability
 5. Real-time monitoring and visual management
 
-![migration.png](docs/zilliz/vts.png)
+![migration.png](docs/zilliz/images/vts.png)
 
 Additionally, Vector-Transport-Service introduces vector-specific capabilities such as multiple data source support, schema matching, and basic data validation. 
 
@@ -27,7 +27,7 @@ Additionally, Vector-Transport-Service introduces vector-specific capabilities s
 ## Roadmap
 Future roadmaps include incremental sync, combined one-time migration and change data capture, and more advanced data transformation capabilities.
 
-![roadmap.png](docs/zilliz/roadmap.png)
+![roadmap.png](docs/zilliz/images/roadmap.png)
 
 To learn more details about VTS used in action, read our blog: 
 - [**Introducing Migration Services: Efficiently Move Unstructured Data Across Platforms.**](https://zilliz.com/blog/zilliz-introduces-migration-services)
@@ -102,6 +102,17 @@ In addition to the quick start guide, vts has much more powerful features like
 - docker deploy, etc.
 
 For detailed information, please refer to [Tutorial.md](./Tutorial.md)
+
+### Connectors
+VTS supports a variety of connectors to move data between different systems.
+
+Find Detailed documentation for each connector:
+ - [Milvus](docs/zilliz/Milvus.md)
+ - [Elasitc Search](docs/zilliz/Elastic%20Search.md)
+ - [Pinecone](docs/zilliz/Pinecone.md)
+ - [Qdrant](docs/zilliz/Qdrant.md)
+ - [Postgres Vector](docs/zilliz/Postgres%20Vector.md)
+ - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md)
 
 ## Support
 If you require any assistance or have questions regarding VTS, please feel free to reach out to our support team: Email: support@zilliz.com
