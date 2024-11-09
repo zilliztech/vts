@@ -22,6 +22,10 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.transform.exception.TransformException;
 
+import org.apache.commons.collections4.CollectionUtils;
+
+import com.google.common.collect.Lists;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +70,13 @@ public class SystemFunction {
         return v1;
     }
 
+    public static Object array(List<Object> args) {
+        if (CollectionUtils.isNotEmpty(args)) {
+            return args.toArray();
+        }
+        return Lists.newArrayList();
+    }
+
     public static Object castAs(Object arg, SeaTunnelDataType<?> type) {
         final ArrayList<Object> args = new ArrayList<>(4);
         args.add(arg);
@@ -100,6 +111,7 @@ public class SystemFunction {
             case "BYTE":
                 return Byte.parseByte(v1.toString());
             case "BYTES":
+            case "BINARY":
                 return v1.toString().getBytes(StandardCharsets.UTF_8);
             case "DOUBLE":
                 return Double.parseDouble(v1.toString());

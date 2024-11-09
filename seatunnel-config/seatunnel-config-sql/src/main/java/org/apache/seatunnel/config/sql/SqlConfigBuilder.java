@@ -43,7 +43,6 @@ import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SelectExpressionItem;
 import net.sf.jsqlparser.statement.select.SelectItem;
 
 import java.nio.file.Files;
@@ -360,12 +359,12 @@ public class SqlConfigBuilder {
             String sourceTableName;
             String resultTableName;
             if (plainSelect.getFromItem() == null) {
-                List<SelectItem> selectItems = plainSelect.getSelectItems();
+                List<SelectItem<?>> selectItems = plainSelect.getSelectItems();
                 if (selectItems.size() != 1) {
                     throw new ParserException(
                             "Source table must be specified in SQL: " + insertSql);
                 }
-                SelectExpressionItem selectItem = (SelectExpressionItem) selectItems.get(0);
+                SelectItem<?> selectItem = selectItems.get(0);
                 Column column = (Column) selectItem.getExpression();
                 sourceTableName = column.getColumnName();
                 resultTableName = sourceTableName;

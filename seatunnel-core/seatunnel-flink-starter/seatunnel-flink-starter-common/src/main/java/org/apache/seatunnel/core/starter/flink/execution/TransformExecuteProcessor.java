@@ -25,15 +25,19 @@ import org.apache.seatunnel.api.configuration.util.ConfigValidator;
 import org.apache.seatunnel.api.table.factory.TableTransformFactory;
 import org.apache.seatunnel.api.table.factory.TableTransformFactoryContext;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
 import org.apache.seatunnel.api.transform.SeaTunnelTransform;
 import org.apache.seatunnel.core.starter.exception.TaskExecuteException;
 import org.apache.seatunnel.core.starter.execution.PluginUtil;
 import org.apache.seatunnel.plugin.discovery.seatunnel.SeaTunnelFactoryDiscovery;
 import org.apache.seatunnel.plugin.discovery.seatunnel.SeaTunnelTransformPluginDiscovery;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.operators.StreamMap;
+import org.apache.flink.util.Collector;
 
 import java.net.URL;
 import java.util.ArrayList;
@@ -140,6 +144,11 @@ public class TransformExecuteProcessor
 
     protected DataStream<SeaTunnelRow> flinkTransform(
             SeaTunnelTransform transform, DataStream<SeaTunnelRow> stream) {
+        if (transform instanceof SeaTunnelMultiRowTransform) {
+            return stream.flatMap(
+                    new ArrayFlatMap(transform), TypeInformation.of(SeaTunnelRow.class));
+        }
+
         return stream.transform(
                 String.format("%s-Transform", transform.getPluginName()),
                 TypeInformation.of(SeaTunnelRow.class),
@@ -150,5 +159,25 @@ public class TransformExecuteProcessor
                                         row ->
                                                 ((SeaTunnelTransform<SeaTunnelRow>) transform)
                                                         .map(row))));
+    }
+
+    public static class ArrayFlatMap implements FlatMapFunction<SeaTunnelRow, SeaTunnelRow> {
+
+        private SeaTunnelTransform transform;
+
+        public ArrayFlatMap(SeaTunnelTransform transform) {
+            this.transform = transform;
+        }
+
+        @Override
+        public void flatMap(SeaTunnelRow row, Collector<SeaTunnelRow> collector) {
+            List<SeaTunnelRow> rows =
+                    ((SeaTunnelMultiRowTransform<SeaTunnelRow>) transform).flatMap(row);
+            if (CollectionUtils.isNotEmpty(rows)) {
+                for (SeaTunnelRow rowResult : rows) {
+                    collector.collect(rowResult);
+                }
+            }
+        }
     }
 }

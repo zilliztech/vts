@@ -14,31 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.seatunnel.transform.common;
 
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.transform.SeaTunnelTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.List;
+
 @Slf4j
-public abstract class AbstractCatalogSupportTransform
-        extends AbstractSeaTunnelTransform<SeaTunnelRow, SeaTunnelRow>
-        implements SeaTunnelTransform<SeaTunnelRow> {
-    public AbstractCatalogSupportTransform(@NonNull CatalogTable inputCatalogTable) {
+public abstract class AbstractCatalogMultiRowTransform
+        extends AbstractSeaTunnelTransform<SeaTunnelRow, List<SeaTunnelRow>>
+        implements SeaTunnelMultiRowTransform<SeaTunnelRow> {
+
+    public AbstractCatalogMultiRowTransform(@NonNull CatalogTable inputCatalogTable) {
         super(inputCatalogTable);
     }
 
-    public AbstractCatalogSupportTransform(
+    public AbstractCatalogMultiRowTransform(
             @NonNull CatalogTable inputCatalogTable, ErrorHandleWay rowErrorHandleWay) {
         super(inputCatalogTable, rowErrorHandleWay);
     }
 
     @Override
-    public SeaTunnelRow map(SeaTunnelRow row) {
+    public List<SeaTunnelRow> flatMap(SeaTunnelRow row) {
         return transform(row);
     }
 }

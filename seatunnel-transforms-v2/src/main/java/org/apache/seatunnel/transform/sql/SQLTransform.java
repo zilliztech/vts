@@ -30,7 +30,7 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.transform.common.AbstractCatalogSupportTransform;
+import org.apache.seatunnel.transform.common.AbstractCatalogMultiRowTransform;
 import org.apache.seatunnel.transform.sql.SQLEngineFactory.EngineType;
 
 import lombok.NonNull;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 import static org.apache.seatunnel.transform.sql.SQLEngineFactory.EngineType.ZETA;
 
 @Slf4j
-public class SQLTransform extends AbstractCatalogSupportTransform {
+public class SQLTransform extends AbstractCatalogMultiRowTransform {
     public static final String PLUGIN_NAME = "Sql";
 
     public static final Option<String> KEY_QUERY =
@@ -59,6 +59,8 @@ public class SQLTransform extends AbstractCatalogSupportTransform {
     private final String query;
 
     private final EngineType engineType;
+
+    private SeaTunnelRowType outRowType;
 
     private transient SQLEngine sqlEngine;
 
@@ -103,16 +105,16 @@ public class SQLTransform extends AbstractCatalogSupportTransform {
     }
 
     @Override
-    protected SeaTunnelRow transformRow(SeaTunnelRow inputRow) {
+    protected List<SeaTunnelRow> transformRow(SeaTunnelRow inputRow) {
         tryOpen();
-        return sqlEngine.transformBySQL(inputRow);
+        return sqlEngine.transformBySQL(inputRow, outRowType);
     }
 
     @Override
     protected TableSchema transformTableSchema() {
         tryOpen();
         List<String> inputColumnsMapping = new ArrayList<>();
-        SeaTunnelRowType outRowType = sqlEngine.typeMapping(inputColumnsMapping);
+        outRowType = sqlEngine.typeMapping(inputColumnsMapping);
         List<String> outputColumns = Arrays.asList(outRowType.getFieldNames());
 
         TableSchema.Builder builder = TableSchema.builder();

@@ -19,6 +19,7 @@ package org.apache.seatunnel.engine.server.task.flow;
 
 import org.apache.seatunnel.api.table.type.Record;
 import org.apache.seatunnel.api.transform.Collector;
+import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
 import org.apache.seatunnel.api.transform.SeaTunnelTransform;
 import org.apache.seatunnel.engine.core.dag.actions.TransformChainAction;
 import org.apache.seatunnel.engine.server.checkpoint.ActionStateKey;
@@ -27,9 +28,12 @@ import org.apache.seatunnel.engine.server.checkpoint.CheckpointBarrier;
 import org.apache.seatunnel.engine.server.task.SeaTunnelTask;
 import org.apache.seatunnel.engine.server.task.record.Barrier;
 
+import org.apache.commons.collections4.CollectionUtils;
+
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -89,22 +93,60 @@ public class TransformFlowLifeCycle<T> extends ActionFlowLifeCycle
                 return;
             }
             T inputData = (T) record.getData();
-            T outputData = inputData;
-            for (SeaTunnelTransform<T> t : transform) {
-                outputData = t.map(inputData);
-                log.debug("Transform[{}] input row {} and output row {}", t, inputData, outputData);
-                if (outputData == null) {
-                    log.trace("Transform[{}] filtered data row {}", t, inputData);
-                    break;
-                }
-
-                inputData = outputData;
-            }
-            if (outputData != null) {
+            List<T> outputDataList = transform(inputData);
+            if (!outputDataList.isEmpty()) {
                 // todo log metrics
-                collector.collect(new Record<>(outputData));
+                for (T outputData : outputDataList) {
+                    collector.collect(new Record<>(outputData));
+                }
             }
         }
+    }
+
+    public List<T> transform(T inputData) {
+        if (transform.isEmpty()) {
+            return Collections.singletonList(inputData);
+        }
+
+        List<T> dataList = new ArrayList<>();
+        dataList.add(inputData);
+
+        for (SeaTunnelTransform<T> transformer : transform) {
+            List<T> nextInputDataList = new ArrayList<>();
+            if (transformer instanceof SeaTunnelMultiRowTransform) {
+                SeaTunnelMultiRowTransform<T> transformDecorator =
+                        (SeaTunnelMultiRowTransform<T>) transformer;
+                for (T data : dataList) {
+                    List<T> outputDataArray = transformDecorator.flatMap(data);
+                    log.debug(
+                            "Transform[{}] input row {} and output row {}",
+                            transformer,
+                            data,
+                            outputDataArray);
+                    if (CollectionUtils.isNotEmpty(outputDataArray)) {
+                        nextInputDataList.addAll(outputDataArray);
+                    }
+                }
+            } else {
+                for (T data : dataList) {
+                    T outputData = transformer.map(data);
+                    log.debug(
+                            "Transform[{}] input row {} and output row {}",
+                            transformer,
+                            data,
+                            outputData);
+                    if (outputData == null) {
+                        log.trace("Transform[{}] filtered data row {}", transformer, data);
+                        continue;
+                    }
+                    nextInputDataList.add(outputData);
+                }
+            }
+
+            dataList = nextInputDataList;
+        }
+
+        return dataList;
     }
 
     @Override
