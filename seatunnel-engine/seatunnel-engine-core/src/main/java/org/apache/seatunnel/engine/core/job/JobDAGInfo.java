@@ -39,6 +39,7 @@ public class JobDAGInfo implements Serializable {
     Map<String, Object> envOptions;
     Map<Integer, List<Edge>> pipelineEdges;
     Map<Long, VertexInfo> vertexInfoMap;
+    ExecutionAddress master;
     Set<ExecutionAddress> historyExecutionPlan;
 
     public JsonObject toJsonObject() {

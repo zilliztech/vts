@@ -309,19 +309,26 @@ public class JobHistoryService {
             JobDAGInfo jobDagInfo = event.getOldValue();
             try {
                 Set<ExecutionAddress> historyExecutionPlan = jobDagInfo.getHistoryExecutionPlan();
-
-                historyExecutionPlan.forEach(
-                        address -> {
-                            logger.info("clean job log, jobId: " + jobId + ", address: " + address);
-                            try {
-                                NodeEngineUtil.sendOperationToMemberNode(
-                                        nodeEngine,
-                                        new CleanLogOperation(jobId),
-                                        new Address(address.getHostname(), address.getPort()));
-                            } catch (UnknownHostException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+                Stream.concat(historyExecutionPlan.stream(), Stream.of(jobDagInfo.getMaster()))
+                        .forEach(
+                                address -> {
+                                    logger.info(
+                                            "clean job log, jobId: "
+                                                    + jobId
+                                                    + ", address: "
+                                                    + address);
+                                    try {
+                                        NodeEngineUtil.sendOperationToMemberNode(
+                                                        nodeEngine,
+                                                        new CleanLogOperation(jobId),
+                                                        new Address(
+                                                                address.getHostname(),
+                                                                address.getPort()))
+                                                .join();
+                                    } catch (UnknownHostException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                });
             } catch (Exception e) {
                 logger.warning("clean job log err", e);
             }

@@ -207,7 +207,12 @@ public class JobLogIT extends SeaTunnelContainer {
                             "sh", "-c", "find /tmp/seatunnel/logs -name " + tuple2.f1() + "\n");
             String file1 = execResult.getStdout();
             Assertions.assertEquals(
-                    tuple2.f0(), StringUtils.isBlank(file) && StringUtils.isBlank(file1));
+                    tuple2.f0(),
+                    StringUtils.isBlank(file) && StringUtils.isBlank(file1),
+                    "Server Logs: \n"
+                            + server.getLogs()
+                            + "\n SecondServer Logs: \n"
+                            + secondServer.getLogs());
         }
     }
 

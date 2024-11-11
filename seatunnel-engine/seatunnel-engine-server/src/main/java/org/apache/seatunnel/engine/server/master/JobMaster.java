@@ -589,6 +589,9 @@ public class JobMaster {
                             jobImmutableInformation,
                             engineConfig,
                             isPhysicalDAGIInfo,
+                            new ExecutionAddress(
+                                    this.nodeEngine.getThisAddress().getHost(),
+                                    this.nodeEngine.getThisAddress().getPort()),
                             historyExecutionAddress);
         }
         return jobDAGInfo;

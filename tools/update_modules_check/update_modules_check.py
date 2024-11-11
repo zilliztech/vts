@@ -176,6 +176,10 @@ def get_sub_update_it_modules(modules, total_num, current_num):
         module_list.remove("connector-rocketmq-e2e")
     if "seatunnel-engine-k8s-e2e" in module_list:
         module_list.remove("seatunnel-engine-k8s-e2e")
+    if "connector-seatunnel-e2e-base" in module_list:
+        module_list.remove("connector-seatunnel-e2e-base")
+    if "connector-console-seatunnel-e2e" in module_list:
+        module_list.remove("connector-console-seatunnel-e2e")
     if "connector-doris-e2e" in module_list:
         module_list.remove("connector-doris-e2e")
     if "connector-paimon-e2e" in module_list:

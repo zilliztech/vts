@@ -22,6 +22,6 @@ import java.io.Serializable;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ExecutionAddress implements Serializable {
-    String hostname;
-    int port;
+    private String hostname;
+    private int port;
 }

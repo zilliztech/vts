@@ -31,6 +31,7 @@ import org.apache.seatunnel.engine.common.config.JobConfig;
 import org.apache.seatunnel.engine.common.utils.PassiveCompletableFuture;
 import org.apache.seatunnel.engine.core.classloader.ClassLoaderService;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalDag;
+import org.apache.seatunnel.engine.core.job.ExecutionAddress;
 import org.apache.seatunnel.engine.core.job.JobDAGInfo;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
 import org.apache.seatunnel.engine.core.job.JobInfo;
@@ -166,6 +167,9 @@ public abstract class BaseService {
                         jobImmutableInformation,
                         getSeaTunnelServer(false).getSeaTunnelConfig().getEngineConfig(),
                         true,
+                        new ExecutionAddress(
+                                this.nodeEngine.getMasterAddress().getHost(),
+                                this.nodeEngine.getMasterAddress().getPort()),
                         new HashSet<>());
 
         jobInfoJson

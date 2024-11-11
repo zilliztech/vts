@@ -55,6 +55,7 @@ public class DAGUtils {
             JobImmutableInformation jobImmutableInformation,
             EngineConfig engineConfig,
             boolean isPhysicalDAGIInfo,
+            ExecutionAddress master,
             Set<ExecutionAddress> historyExecutionAddress) {
         List<Pipeline> pipelines =
                 new ExecutionPlanGenerator(logicalDag, jobImmutableInformation, engineConfig)
@@ -93,6 +94,7 @@ public class DAGUtils {
                     logicalDag.getJobConfig().getEnvOptions(),
                     pipelineWithEdges,
                     vertexInfoMap,
+                    master,
                     historyExecutionAddress);
         } else {
             // Generate LogicalPlan DAG
@@ -141,6 +143,7 @@ public class DAGUtils {
                     logicalDag.getJobConfig().getEnvOptions(),
                     pipelineWithEdges,
                     vertexInfoMap,
+                    master,
                     historyExecutionAddress);
         }
     }

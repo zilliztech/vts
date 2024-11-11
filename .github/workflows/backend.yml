@@ -19,10 +19,18 @@ name: Backend
 
 on:
   workflow_call:
+    inputs:
+      TEST_IN_PR:
+        required: false
+        type: string
+        default: 'true'
 
 concurrency:
   group: backend-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+env:
+  TEST_IN_PR: ${{ inputs.TEST_IN_PR }}
 
 jobs:
   license-header:
@@ -137,7 +145,7 @@ jobs:
           echo "engine-e2e=$true_or_false" >> $GITHUB_OUTPUT
           echo "engine-e2e_files=$file_list" >> $GITHUB_OUTPUT
           
-          api_files=`python tools/update_modules_check/check_file_updates.py ua $workspace apache/dev origin/$current_branch "seatunnel-api/**" "seatunnel-common/**" "seatunnel-config/**" "seatunnel-engine/**" "seatunnel-core/**" "seatunnel-e2e/seatunnel-e2e-common/**" "seatunnel-formats/**" "seatunnel-plugin-discovery/**" "seatunnel-transforms-v2/**" "seatunnel-translation/**" "seatunnel-e2e/seatunnel-transforms-v2-e2e/**" "pom.xml" "**/workflows/**" "tools/**" "seatunnel-dist/**"`
+          api_files=`python tools/update_modules_check/check_file_updates.py ua $workspace apache/dev origin/$current_branch "seatunnel-api/**" "seatunnel-common/**" "seatunnel-config/**" "seatunnel-core/**" "seatunnel-e2e/seatunnel-e2e-common/**" "seatunnel-formats/**" "seatunnel-plugin-discovery/**" "seatunnel-transforms-v2/**" "seatunnel-translation/**" "seatunnel-e2e/seatunnel-transforms-v2-e2e/**" "pom.xml" "**/workflows/**" "tools/**" "seatunnel-dist/**"`
           true_or_false=${api_files%%$'\n'*}
           file_list=${api_files#*$'\n'}
           if [[ $repository_owner == 'apache' ]];then
@@ -224,7 +232,7 @@ jobs:
       - name: Make integration test modules
         id: it-modules
         timeout-minutes: 60
-        if: ${{ steps.filter.outputs.api == 'false' && (steps.engine-modules.outputs.modules != '' || steps.cv2-modules.outputs.modules != '' || steps.cv2-e2e-modules.outputs.modules != '' || steps.cv2-flink-e2e-modules.outputs.modules != '' || steps.cv2-spark-e2e-modules.outputs.modules != '' || steps.engine-e2e-modules.outputs.modules != '') }}
+        if: ${{ steps.filter.outputs.api == 'false' && (steps.engine-modules.outputs.modules != '' || steps.cv2-modules.outputs.modules != '' || steps.cv2-e2e-modules.outputs.modules != '' || steps.cv2-flink-e2e-modules.outputs.modules != '' || steps.cv2-spark-e2e-modules.outputs.modules != '') }}
         run: |
           modules='${{ steps.cv2-e2e-modules.outputs.modules }}${{ steps.cv2-flink-e2e-modules.outputs.modules }}${{ steps.cv2-spark-e2e-modules.outputs.modules }}${{ steps.engine-e2e-modules.outputs.modules }}${{ steps.engine-modules.outputs.modules }}${{ steps.cv2-modules.outputs.modules }}'
           modules=${modules: 1}
@@ -270,7 +278,7 @@ jobs:
           max_attempts: 3
           retry_on: error
           command: |
-            ./mvnw -B -q install -DskipTests -D"maven.test.skip"=true -D"maven.javadoc.skip"=true -D"license.skipAddThirdParty"
+            ./mvnw -B install -DskipTests -D"maven.test.skip"=true -D"maven.javadoc.skip"=true -D"license.skipAddThirdParty"
       - name: Check Dependencies Licenses
         run: tools/dependencies/checkLicense.sh
 
@@ -376,7 +384,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-1)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 0`
           if [ ! -z $sub_modules ]; then
@@ -407,7 +414,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-2)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 1`
           if [ ! -z $sub_modules ]; then
@@ -438,7 +444,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-3)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 2`
           if [ ! -z $sub_modules ]; then
@@ -469,7 +474,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-4)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 3`
           if [ ! -z $sub_modules ]; then
@@ -499,7 +503,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-5)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 4`
           if [ ! -z $sub_modules ]; then
@@ -529,7 +532,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-6)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 5`
           if [ ! -z $sub_modules ]; then
@@ -559,7 +561,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-7)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 6`
           if [ ! -z $sub_modules ]; then
@@ -590,7 +591,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run updated modules integration test (part-8)
-        if: needs.changes.outputs.api == 'false' && needs.changes.outputs.it-modules != ''
         run: |
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub_update_it_module ${{needs.changes.outputs.it-modules}} 8 7`
           if [ ! -z $sub_modules ]; then
@@ -603,7 +603,7 @@ jobs:
 
   engine-v2-it:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true' || needs.changes.outputs.engine-e2e == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -621,7 +621,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run seatunnel zeta integration test
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -T 1 -B verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-seatunnel-e2e-base,:connector-console-seatunnel-e2e -am -Pci
         env:
@@ -661,8 +660,11 @@ jobs:
           KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   transform-v2-it-part-1:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -679,7 +681,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run transform-v2 integration test (part-1)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :seatunnel-transforms-v2-e2e-part-1 -am -Pci
         env:
@@ -687,8 +688,11 @@ jobs:
 
   transform-v2-it-part-2:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -705,7 +709,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run transform-v2 integration test (part-2)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :seatunnel-transforms-v2-e2e-part-2 -am -Pci
         env:
@@ -713,8 +716,11 @@ jobs:
 
   all-connectors-it-1:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -731,7 +737,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-1)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -742,8 +747,11 @@ jobs:
 
   all-connectors-it-2:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -760,7 +768,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-2)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -771,8 +778,11 @@ jobs:
 
   all-connectors-it-3:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -789,7 +799,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-3)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -800,8 +809,11 @@ jobs:
 
   all-connectors-it-4:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -818,7 +830,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-4)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -829,8 +840,11 @@ jobs:
 
   all-connectors-it-5:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -847,7 +861,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-5)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -858,8 +871,11 @@ jobs:
 
   all-connectors-it-6:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -876,7 +892,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-6)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -887,8 +902,11 @@ jobs:
 
   all-connectors-it-7:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -905,7 +923,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run connector-v2 integration test (part-7)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw help:evaluate -Dexpression=project.modules -q -DforceStdout -pl :seatunnel-connector-v2-e2e >> /tmp/sub_module.txt
           sub_modules=`python tools/update_modules_check/update_modules_check.py sub /tmp/sub_module.txt`
@@ -916,8 +933,11 @@ jobs:
 
   jdbc-connectors-it-part-1:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -934,7 +954,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-1)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-1 -am -Pci
         env:
@@ -942,8 +961,11 @@ jobs:
 
   jdbc-connectors-it-part-2:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -960,7 +982,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-2)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-2 -am -Pci
         env:
@@ -968,8 +989,11 @@ jobs:
 
   jdbc-connectors-it-part-3:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -986,7 +1010,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-3)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-3 -am -Pci
         env:
@@ -994,8 +1017,11 @@ jobs:
 
   jdbc-connectors-it-part-4:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -1012,7 +1038,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-4)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-4 -am -Pci
         env:
@@ -1020,8 +1045,11 @@ jobs:
 
   jdbc-connectors-it-part-5:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -1038,7 +1066,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-5)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-5 -am -Pci
         env:
@@ -1046,8 +1073,11 @@ jobs:
 
   jdbc-connectors-it-part-6:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -1064,7 +1094,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-6)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-6 -am -Pci
         env:
@@ -1072,8 +1101,11 @@ jobs:
 
   jdbc-connectors-it-part-7:
     needs: [ changes, sanity-check ]
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      RUN_ALL_CONTAINER: ${{ needs.changes.outputs.api }}
+      RUN_ZETA_CONTAINER: ${{ needs.changes.outputs.engine }}
     strategy:
       matrix:
         java: [ '8', '11' ]
@@ -1090,7 +1122,6 @@ jobs:
       - name: free disk space
         run: tools/github/free_disk_space.sh
       - name: run jdbc connectors integration test (part-7)
-        if: needs.changes.outputs.api == 'true'
         run: |
           ./mvnw -B -T 1 verify -DskipUT=true -DskipIT=false -D"license.skipAddThirdParty"=true --no-snapshot-updates -pl :connector-jdbc-e2e-part-7 -am -Pci
         env:
@@ -1104,7 +1135,7 @@ jobs:
       matrix:
         java: [ '8', '11' ]
         os: [ 'ubuntu-latest' ]
-    timeout-minutes: 120
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK ${{ matrix.java }}
