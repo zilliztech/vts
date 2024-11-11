@@ -24,6 +24,7 @@ import org.apache.seatunnel.e2e.common.container.EngineType;
 import org.apache.seatunnel.e2e.common.container.TestContainer;
 import org.apache.seatunnel.e2e.common.junit.DisabledOnContainer;
 import org.apache.seatunnel.e2e.common.junit.TestContainerExtension;
+import org.apache.seatunnel.e2e.common.util.JobIdGenerator;
 
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
@@ -305,6 +306,44 @@ public class SqlServerCDCIT extends TestSuiteBase implements TestResource {
                                     querySql(SELECT_SOURCE_SQL, SOURCE_TABLE_CUSTOM_PRIMARY_KEY),
                                     querySql(SELECT_SINK_SQL, SINK_TABLE));
                         });
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason =
+                    "This case requires obtaining the task health status and manually canceling the canceled task, which is currently only supported by the zeta engine.")
+    public void testSqlServerCDCMetadataTrans(TestContainer container) throws InterruptedException {
+        initializeSqlServerTable("column_type_test");
+
+        Long jobId = JobIdGenerator.newJobId();
+        CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        container.executeJob(
+                                "/sqlservercdc_to_metadata_trans.conf", String.valueOf(jobId));
+                    } catch (Exception e) {
+                        log.error("Commit task exception :" + e.getMessage());
+                        throw new RuntimeException(e);
+                    }
+                });
+        TimeUnit.SECONDS.sleep(10);
+        // insert update delete
+        updateSourceTable(SOURCE_TABLE_CUSTOM_PRIMARY_KEY);
+        TimeUnit.SECONDS.sleep(20);
+        await().atMost(2, TimeUnit.MINUTES)
+                .untilAsserted(
+                        () -> {
+                            String jobStatus = container.getJobStatus(String.valueOf(jobId));
+                            Assertions.assertEquals("RUNNING", jobStatus);
+                        });
+        try {
+            Container.ExecResult cancelJobResult = container.cancelJob(String.valueOf(jobId));
+            Assertions.assertEquals(0, cancelJobResult.getExitCode(), cancelJobResult.getStderr());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**

@@ -256,6 +256,48 @@ public class OracleCDCIT extends AbstractOracleCDCIT implements TestResource {
     @TestTemplate
     @DisabledOnContainer(
             value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason =
+                    "This case requires obtaining the task health status and manually canceling the canceled task, which is currently only supported by the zeta engine.")
+    public void testOracleCdcMetadataTrans(TestContainer container) throws Exception {
+
+        clearTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
+        clearTable(DATABASE, SINK_TABLE1);
+
+        insertSourceTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
+        Long jobId = JobIdGenerator.newJobId();
+        CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        container.executeJob(
+                                "/oraclecdc_to_metadata_trans.conf", String.valueOf(jobId));
+                    } catch (Exception e) {
+                        log.error("Commit task exception :" + e.getMessage());
+                        throw new RuntimeException(e);
+                    }
+                    return null;
+                });
+        TimeUnit.SECONDS.sleep(10);
+        // insert update delete
+        updateSourceTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
+        TimeUnit.SECONDS.sleep(20);
+        await().atMost(2, TimeUnit.MINUTES)
+                .untilAsserted(
+                        () -> {
+                            String jobStatus = container.getJobStatus(String.valueOf(jobId));
+                            Assertions.assertEquals("RUNNING", jobStatus);
+                        });
+        try {
+            Container.ExecResult cancelJobResult = container.cancelJob(String.valueOf(jobId));
+            Assertions.assertEquals(0, cancelJobResult.getExitCode(), cancelJobResult.getStderr());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
             type = {EngineType.SPARK},
             disabledReason = "Currently SPARK do not support cdc")
     public void testOracleCdcMultiTableE2e(TestContainer container)

@@ -24,12 +24,14 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.DecimalType;
 import org.apache.seatunnel.api.table.type.MapType;
+import org.apache.seatunnel.api.table.type.MetadataUtil;
 import org.apache.seatunnel.api.table.type.MultipleRowType;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.api.table.type.SqlType;
+import org.apache.seatunnel.connectors.cdc.base.utils.SourceRecordUtils;
 import org.apache.seatunnel.connectors.cdc.debezium.DebeziumDeserializationSchema;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mongodb.exception.MongodbConnectorException;
 
@@ -111,18 +113,27 @@ public class MongoDBConnectorDeserializationSchema
             log.debug("Ignore newly added table {}", tableId);
             return;
         }
-
+        Long fetchTimestamp = SourceRecordUtils.getFetchTimestamp(record);
+        Long messageTimestamp = SourceRecordUtils.getMessageTimestamp(record);
+        long delay = -1L;
+        if (fetchTimestamp != null && messageTimestamp != null) {
+            delay = fetchTimestamp - messageTimestamp;
+        }
         switch (op) {
             case INSERT:
                 SeaTunnelRow insert = extractRowData(tableRowConverter, fullDocument);
                 insert.setRowKind(RowKind.INSERT);
                 insert.setTableId(tableId);
+                MetadataUtil.setDelay(insert, delay);
+                MetadataUtil.setEventTime(insert, fetchTimestamp);
                 emit(record, insert, out);
                 break;
             case DELETE:
                 SeaTunnelRow delete = extractRowData(tableRowConverter, documentKey);
                 delete.setRowKind(RowKind.DELETE);
                 delete.setTableId(tableId);
+                MetadataUtil.setDelay(delete, delay);
+                MetadataUtil.setEventTime(delete, fetchTimestamp);
                 emit(record, delete, out);
                 break;
             case UPDATE:
@@ -132,12 +143,16 @@ public class MongoDBConnectorDeserializationSchema
                 SeaTunnelRow updateAfter = extractRowData(tableRowConverter, fullDocument);
                 updateAfter.setRowKind(RowKind.UPDATE_AFTER);
                 updateAfter.setTableId(tableId);
+                MetadataUtil.setDelay(updateAfter, delay);
+                MetadataUtil.setEventTime(updateAfter, fetchTimestamp);
                 emit(record, updateAfter, out);
                 break;
             case REPLACE:
                 SeaTunnelRow replaceAfter = extractRowData(tableRowConverter, fullDocument);
                 replaceAfter.setRowKind(RowKind.UPDATE_AFTER);
                 replaceAfter.setTableId(tableId);
+                MetadataUtil.setDelay(replaceAfter, delay);
+                MetadataUtil.setEventTime(replaceAfter, fetchTimestamp);
                 emit(record, replaceAfter, out);
                 break;
             case INVALIDATE:

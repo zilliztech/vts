@@ -68,6 +68,10 @@ public interface TestContainer extends TestResource {
         throw new UnsupportedOperationException("Not implemented");
     }
 
+    default String getJobStatus(String jobId) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
     String getServerLogs();
 
     void copyFileToContainer(String path, String targetPath);

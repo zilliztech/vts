@@ -14,26 +14,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
-import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.SeaTunnelRowAccessor;
 
-import java.util.ArrayList;
+package org.apache.seatunnel.api.table.type;
 
+import lombok.AllArgsConstructor;
 
-    public Column[] getInlineOutputColumns(CatalogTable inputCatalogTable) {
+import java.util.Map;
 
-        ArrayList<Column> columns = new ArrayList<Column>();
-        PhysicalColumn destColumn =
-                PhysicalColumn.of("col1", BasicType.STRING_TYPE, 10, true, "", "");
-        return new Column[] {destColumn};
+@AllArgsConstructor
+public class SeaTunnelRowAccessor {
+    private final SeaTunnelRow row;
+
+    public int getArity() {
+        return row.getArity();
     }
 
-    public Object[] getInlineOutputFieldValues(SeaTunnelRowAccessor inputRow) {
-
-        Object[] fieldValues = new Object[1];
-        fieldValues[0] = "test1";
-        return fieldValues;
+    public String getTableId() {
+        return row.getTableId();
     }
+
+    public RowKind getRowKind() {
+        return row.getRowKind();
+    }
+
+    public Object getField(int pos) {
+        return row.getField(pos);
+    }
+
+    public Object[] getFields() {
+        return row.getFields();
+    }
+
+    public Map<String, Object> getOptions() {
+        return row.getOptions();
+    }
+}

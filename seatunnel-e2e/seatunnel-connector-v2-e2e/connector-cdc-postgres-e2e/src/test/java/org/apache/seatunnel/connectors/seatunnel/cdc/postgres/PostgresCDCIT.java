@@ -187,6 +187,49 @@ public class PostgresCDCIT extends TestSuiteBase implements TestResource {
     @TestTemplate
     @DisabledOnContainer(
             value = {},
+            type = {EngineType.SPARK, EngineType.FLINK},
+            disabledReason =
+                    "This case requires obtaining the task health status and manually canceling the canceled task, which is currently only supported by the zeta engine.")
+    public void testMPostgresCdcMetadataTrans(TestContainer container) throws InterruptedException {
+
+        Long jobId = JobIdGenerator.newJobId();
+        CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        container.executeJob(
+                                "/postgrescdc_to_postgres.conf", String.valueOf(jobId));
+                    } catch (Exception e) {
+                        log.error("Commit task exception :" + e.getMessage());
+                        throw new RuntimeException(e);
+                    }
+                });
+        TimeUnit.SECONDS.sleep(10);
+        // insert update delete
+        upsertDeleteSourceTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_1);
+
+        TimeUnit.SECONDS.sleep(20);
+        await().atMost(2, TimeUnit.MINUTES)
+                .untilAsserted(
+                        () -> {
+                            String jobStatus = container.getJobStatus(String.valueOf(jobId));
+                            Assertions.assertEquals("RUNNING", jobStatus);
+                        });
+
+        try {
+            Container.ExecResult cancelJobResult = container.cancelJob(String.valueOf(jobId));
+            Assertions.assertEquals(0, cancelJobResult.getExitCode(), cancelJobResult.getStderr());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // Clear related content to ensure that multiple operations are not affected
+            clearTable(POSTGRESQL_SCHEMA, SOURCE_TABLE_1);
+            clearTable(POSTGRESQL_SCHEMA, SINK_TABLE_1);
+        }
+    }
+
+    @TestTemplate
+    @DisabledOnContainer(
+            value = {},
             type = {EngineType.SPARK},
             disabledReason = "Currently SPARK do not support cdc")
     public void testPostgresCdcMultiTableE2e(TestContainer container) {
