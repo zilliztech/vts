@@ -24,10 +24,15 @@ import org.testcontainers.containers.Network;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 public interface TestContainer extends TestResource {
 
-    Network NETWORK = Network.newNetwork();
+    Network NETWORK =
+            Network.builder()
+                    .createNetworkCmdModifier(cmd -> cmd.withName("SEATUNNEL-" + UUID.randomUUID()))
+                    .enableIpv6(false)
+                    .build();
 
     TestContainerId identifier();
 
