@@ -261,10 +261,10 @@ public class OracleCDCIT extends AbstractOracleCDCIT implements TestResource {
                     "This case requires obtaining the task health status and manually canceling the canceled task, which is currently only supported by the zeta engine.")
     public void testOracleCdcMetadataTrans(TestContainer container) throws Exception {
 
-        clearTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
-        clearTable(DATABASE, SINK_TABLE1);
+        clearTable(SCEHMA_NAME, SOURCE_TABLE_NO_PRIMARY_KEY);
+        clearTable(SCEHMA_NAME, SINK_TABLE1);
 
-        insertSourceTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
+        insertSourceTable(SCEHMA_NAME, SOURCE_TABLE_NO_PRIMARY_KEY);
         Long jobId = JobIdGenerator.newJobId();
         CompletableFuture.supplyAsync(
                 () -> {
@@ -279,7 +279,7 @@ public class OracleCDCIT extends AbstractOracleCDCIT implements TestResource {
                 });
         TimeUnit.SECONDS.sleep(10);
         // insert update delete
-        updateSourceTable(DATABASE, SOURCE_TABLE_NO_PRIMARY_KEY);
+        updateSourceTable(SCEHMA_NAME, SOURCE_TABLE_NO_PRIMARY_KEY);
         TimeUnit.SECONDS.sleep(20);
         await().atMost(2, TimeUnit.MINUTES)
                 .untilAsserted(
