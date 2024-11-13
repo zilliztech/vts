@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.redis.sink;
 
 import org.apache.seatunnel.api.serialization.SerializationSchema;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
+import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
@@ -51,6 +52,7 @@ public class RedisSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     private final int batchSize;
 
+    private final List<RowKind> rowKinds;
     private final List<String> keyBuffer;
     private final List<String> valueBuffer;
 
@@ -62,12 +64,14 @@ public class RedisSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         this.serializationSchema = new JsonSerializationSchema(seaTunnelRowType);
         this.redisClient = redisParameters.buildRedisClient();
         this.batchSize = redisParameters.getBatchSize();
+        this.rowKinds = new ArrayList<>(batchSize);
         this.keyBuffer = new ArrayList<>(batchSize);
         this.valueBuffer = new ArrayList<>(batchSize);
     }
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        rowKinds.add(element.getRowKind());
         List<String> fields = Arrays.asList(seaTunnelRowType.getFieldNames());
         String key = getKey(element, fields);
         keyBuffer.add(key);
@@ -173,6 +177,7 @@ public class RedisSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     }
 
     private void clearBuffer() {
+        rowKinds.clear();
         keyBuffer.clear();
         valueBuffer.clear();
     }
@@ -180,23 +185,28 @@ public class RedisSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     private void doBatchWrite() {
         RedisDataType redisDataType = redisParameters.getRedisDataType();
         if (RedisDataType.KEY.equals(redisDataType) || RedisDataType.STRING.equals(redisDataType)) {
-            redisClient.batchWriteString(keyBuffer, valueBuffer, redisParameters.getExpire());
+            redisClient.batchWriteString(
+                    rowKinds, keyBuffer, valueBuffer, redisParameters.getExpire());
             return;
         }
         if (RedisDataType.LIST.equals(redisDataType)) {
-            redisClient.batchWriteList(keyBuffer, valueBuffer, redisParameters.getExpire());
+            redisClient.batchWriteList(
+                    rowKinds, keyBuffer, valueBuffer, redisParameters.getExpire());
             return;
         }
         if (RedisDataType.SET.equals(redisDataType)) {
-            redisClient.batchWriteSet(keyBuffer, valueBuffer, redisParameters.getExpire());
+            redisClient.batchWriteSet(
+                    rowKinds, keyBuffer, valueBuffer, redisParameters.getExpire());
             return;
         }
         if (RedisDataType.HASH.equals(redisDataType)) {
-            redisClient.batchWriteHash(keyBuffer, valueBuffer, redisParameters.getExpire());
+            redisClient.batchWriteHash(
+                    rowKinds, keyBuffer, valueBuffer, redisParameters.getExpire());
             return;
         }
         if (RedisDataType.ZSET.equals(redisDataType)) {
-            redisClient.batchWriteZset(keyBuffer, valueBuffer, redisParameters.getExpire());
+            redisClient.batchWriteZset(
+                    rowKinds, keyBuffer, valueBuffer, redisParameters.getExpire());
             return;
         }
         throw new RedisConnectorException(
