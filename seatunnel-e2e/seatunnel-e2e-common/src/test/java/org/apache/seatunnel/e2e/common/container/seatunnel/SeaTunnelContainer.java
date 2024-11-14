@@ -439,7 +439,7 @@ public class SeaTunnelContainer extends AbstractTestContainer {
     }
 
     /** The thread should be recycled but not, we should fix it in the future. */
-    private boolean isIssueWeAlreadyKnow(String threadName) {
+    protected boolean isIssueWeAlreadyKnow(String threadName) {
         // ClickHouse com.clickhouse.client.ClickHouseClientBuilder
         return threadName.startsWith("ClickHouseClientWorker")
                 // InfluxDB okio.AsyncTimeout$Watchdog
