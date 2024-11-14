@@ -343,6 +343,15 @@ public class MongoDBConnectorDeserializationSchema
                         return convertToLocalDateTime(bsonValue).toLocalDate();
                     }
                 };
+            case TIME:
+                return new SerializableFunction<BsonValue, Object>() {
+                    private static final long serialVersionUID = 1L;
+
+                    @Override
+                    public Object apply(BsonValue bsonValue) {
+                        return convertToLocalDateTime(bsonValue).toLocalTime();
+                    }
+                };
             case TIMESTAMP:
                 return new SerializableFunction<BsonValue, Object>() {
                     private static final long serialVersionUID = 1L;
@@ -382,7 +391,7 @@ public class MongoDBConnectorDeserializationSchema
     private static LocalDateTime convertToLocalDateTime(BsonValue bsonValue) {
         Instant instant;
         if (bsonValue.isTimestamp()) {
-            instant = Instant.ofEpochSecond(bsonValue.asTimestamp().getTime());
+            instant = Instant.ofEpochSecond(bsonValue.asTimestamp().getValue());
         } else if (bsonValue.isDateTime()) {
             instant = Instant.ofEpochMilli(bsonValue.asDateTime().getValue());
         } else {
@@ -521,7 +530,7 @@ public class MongoDBConnectorDeserializationSchema
     }
 
     private static double convertToDouble(@Nonnull BsonValue bsonValue) {
-        if (bsonValue.isDouble()) {
+        if (bsonValue.isNumber()) {
             return bsonValue.asNumber().doubleValue();
         }
         throw new MongodbConnectorException(
@@ -532,9 +541,20 @@ public class MongoDBConnectorDeserializationSchema
                         + bsonValue.getBsonType());
     }
 
-    private static int convertToInt(@Nonnull BsonValue bsonValue) {
+    private static int convertToInt(BsonValue bsonValue) {
         if (bsonValue.isInt32()) {
-            return bsonValue.asNumber().intValue();
+            return bsonValue.asInt32().getValue();
+        } else if (bsonValue.isNumber()) {
+            long longValue = bsonValue.asNumber().longValue();
+            if (longValue > Integer.MAX_VALUE || longValue < Integer.MIN_VALUE) {
+                throw new MongodbConnectorException(
+                        UNSUPPORTED_DATA_TYPE,
+                        "Unable to convert to integer from unexpected value '"
+                                + bsonValue
+                                + "' of type "
+                                + bsonValue.getBsonType());
+            }
+            return (int) longValue;
         }
         throw new MongodbConnectorException(
                 UNSUPPORTED_DATA_TYPE,
@@ -568,8 +588,19 @@ public class MongoDBConnectorDeserializationSchema
                 "Unsupported BYTES value type: " + bsonValue.getClass().getSimpleName());
     }
 
-    private static long convertToLong(@Nonnull BsonValue bsonValue) {
-        if (bsonValue.isInt64()) {
+    private static long convertToLong(BsonValue bsonValue) {
+        if (bsonValue.isInt64() || bsonValue.isInt32()) {
+            return bsonValue.asNumber().longValue();
+        } else if (bsonValue.isDouble()) {
+            double value = bsonValue.asNumber().doubleValue();
+            if (value > Long.MAX_VALUE || value < Long.MIN_VALUE) {
+                throw new MongodbConnectorException(
+                        UNSUPPORTED_DATA_TYPE,
+                        "Unable to convert to long from unexpected value '"
+                                + bsonValue
+                                + "' of type "
+                                + bsonValue.getBsonType());
+            }
             return bsonValue.asNumber().longValue();
         }
         throw new MongodbConnectorException(
@@ -598,5 +629,32 @@ public class MongoDBConnectorDeserializationSchema
                         + bsonValue
                         + "' of type "
                         + bsonValue.getBsonType());
+    }
+
+    @VisibleForTesting
+    public Object convertToObject(
+            @Nonnull SeaTunnelDataType<?> dataType, @Nonnull BsonValue bsonValue) {
+        switch (dataType.getSqlType()) {
+            case INT:
+                return convertToInt(bsonValue);
+            case BIGINT:
+                return convertToLong(bsonValue);
+            case DOUBLE:
+                return convertToDouble(bsonValue);
+            case STRING:
+                return convertToString(bsonValue);
+            case DATE:
+                return convertToLocalDateTime(bsonValue).toLocalDate();
+            case TIME:
+                return convertToLocalDateTime(bsonValue).toLocalTime();
+            case TIMESTAMP:
+                return convertToLocalDateTime(bsonValue);
+            case DECIMAL:
+                DecimalType decimalType = (DecimalType) dataType;
+                BigDecimal decimalValue = convertToBigDecimal(bsonValue);
+                return fromBigDecimal(
+                        decimalValue, decimalType.getPrecision(), decimalType.getScale());
+        }
+        return null;
     }
 }
