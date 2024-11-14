@@ -15,26 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.api.table.event;
+package org.apache.seatunnel.api.table.factory;
 
-import org.apache.seatunnel.api.event.EventType;
-import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.source.SourceSplit;
 
-import lombok.Getter;
-import lombok.ToString;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
-@Getter
-@ToString(callSuper = true)
-public class AlterTableDropColumnEvent extends AlterTableColumnEvent {
-    private final String column;
+import java.io.Serializable;
+import java.util.List;
 
-    public AlterTableDropColumnEvent(TableIdentifier tableIdentifier, String column) {
-        super(tableIdentifier);
-        this.column = column;
-    }
+/**
+ * The state of the enumerator and splits of the enumerator, which is used to resume the enumerator
+ * and reader.
+ *
+ * @param <StateT>
+ * @param <SplitT>
+ */
+@Data
+@AllArgsConstructor
+public class ChangeStreamTableSourceState<StateT extends Serializable, SplitT extends SourceSplit> {
+    // The state of the enumerator, which is used to resume the enumerator.
+    private StateT enumeratorState;
 
-    @Override
-    public EventType getEventType() {
-        return EventType.SCHEMA_CHANGE_DROP_COLUMN;
-    }
+    // The splits of the enumerator, which is used to resume the reader.
+    public List<List<SplitT>> splits;
 }

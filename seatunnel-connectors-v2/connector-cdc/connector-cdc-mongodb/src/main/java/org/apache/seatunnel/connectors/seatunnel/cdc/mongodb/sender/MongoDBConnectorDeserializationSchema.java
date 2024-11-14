@@ -20,19 +20,19 @@ package org.apache.seatunnel.connectors.seatunnel.cdc.mongodb.sender;
 import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 
 import org.apache.seatunnel.api.source.Collector;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.DecimalType;
 import org.apache.seatunnel.api.table.type.MapType;
 import org.apache.seatunnel.api.table.type.MetadataUtil;
-import org.apache.seatunnel.api.table.type.MultipleRowType;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.cdc.base.utils.SourceRecordUtils;
-import org.apache.seatunnel.connectors.cdc.debezium.DebeziumDeserializationSchema;
+import org.apache.seatunnel.connectors.cdc.debezium.AbstractDebeziumDeserializationSchema;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mongodb.exception.MongodbConnectorException;
 
 import org.apache.kafka.connect.data.Schema;
@@ -47,6 +47,7 @@ import org.bson.json.JsonWriterSettings;
 import org.bson.types.Decimal128;
 
 import com.mongodb.client.model.changestream.OperationType;
+import io.debezium.relational.TableId;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nonnull;
@@ -79,20 +80,27 @@ import static org.apache.seatunnel.shade.com.google.common.base.Preconditions.ch
 
 @Slf4j
 public class MongoDBConnectorDeserializationSchema
-        implements DebeziumDeserializationSchema<SeaTunnelRow> {
-    private final SeaTunnelDataType<SeaTunnelRow> resultTypeInfo;
+        extends AbstractDebeziumDeserializationSchema<SeaTunnelRow> {
+    private final List<CatalogTable> tables;
 
     private final Map<String, DeserializationRuntimeConverter> tableRowConverters;
 
+    public MongoDBConnectorDeserializationSchema(List<CatalogTable> tables) {
+        this(tables, new HashMap<>());
+    }
+
     public MongoDBConnectorDeserializationSchema(
-            SeaTunnelDataType<SeaTunnelRow> physicalDataType,
-            SeaTunnelDataType<SeaTunnelRow> resultTypeInfo) {
-        this.tableRowConverters = createConverter(physicalDataType);
-        this.resultTypeInfo = resultTypeInfo;
+            List<CatalogTable> tables, Map<TableId, Struct> tableIdTableChangeMap) {
+        super(tableIdTableChangeMap);
+        this.tableRowConverters = createConverter(tables);
+        this.tables = tables;
     }
 
     @Override
-    public void deserialize(@Nonnull SourceRecord record, Collector<SeaTunnelRow> out) {
+    public void deserialize(@Nonnull SourceRecord record, Collector<SeaTunnelRow> out)
+            throws Exception {
+        super.deserialize(record, out);
+
         Struct value = (Struct) record.value();
         Schema valueSchema = record.valueSchema();
 
@@ -166,8 +174,8 @@ public class MongoDBConnectorDeserializationSchema
     }
 
     @Override
-    public SeaTunnelDataType<SeaTunnelRow> getProducedType() {
-        return resultTypeInfo;
+    public List<CatalogTable> getProducedType() {
+        return tables;
     }
 
     private @Nonnull OperationType operationTypeFor(@Nonnull SourceRecord record) {
@@ -211,12 +219,11 @@ public class MongoDBConnectorDeserializationSchema
         Object convert(BsonValue bsonValue);
     }
 
-    public Map<String, DeserializationRuntimeConverter> createConverter(
-            SeaTunnelDataType<?> inputDataType) {
+    public Map<String, DeserializationRuntimeConverter> createConverter(List<CatalogTable> tables) {
         Map<String, DeserializationRuntimeConverter> tableRowConverters = new HashMap<>();
-        for (Map.Entry<String, SeaTunnelRowType> item : (MultipleRowType) inputDataType) {
+        for (CatalogTable table : tables) {
             SerializableFunction<BsonValue, Object> internalRowConverter =
-                    createNullSafeInternalConverter(item.getValue());
+                    createNullSafeInternalConverter(table.getSeaTunnelRowType());
             DeserializationRuntimeConverter itemRowConverter =
                     new DeserializationRuntimeConverter() {
                         private static final long serialVersionUID = 1L;
@@ -226,7 +233,7 @@ public class MongoDBConnectorDeserializationSchema
                             return internalRowConverter.apply(bsonValue);
                         }
                     };
-            tableRowConverters.put(item.getKey(), itemRowConverter);
+            tableRowConverters.put(table.getTablePath().toString(), itemRowConverter);
         }
         return tableRowConverters;
     }

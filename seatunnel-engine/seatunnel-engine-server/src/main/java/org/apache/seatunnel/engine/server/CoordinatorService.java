@@ -499,7 +499,7 @@ public class CoordinatorService {
                         jobId,
                         jobInfo.getJobImmutableInformation(),
                         nodeEngine,
-                        executorService,
+                        MDCTracer.tracing(jobId, executorService),
                         getResourceManager(),
                         getJobHistoryService(),
                         runningJobStateIMap,
@@ -688,6 +688,14 @@ public class CoordinatorService {
                                                     "The job with id '"
                                                             + jobId
                                                             + "' save point failed");
+                                        }
+                                        try {
+                                            waitForJobComplete(jobId).get();
+                                        } catch (Throwable e) {
+                                            logger.warning(
+                                                    String.format(
+                                                            "The job with id '%s' waiting state complete failed",
+                                                            jobId));
                                         }
                                         return null;
                                     },

@@ -18,13 +18,10 @@
 package mongodb.sender;
 
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.CatalogTableUtil;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mongodb.sender.MongoDBConnectorDeserializationSchema;
 import org.apache.seatunnel.connectors.seatunnel.cdc.mongodb.utils.MongodbRecordUtils;
 
@@ -71,10 +68,9 @@ public class MongoDBConnectorDeserializationSchemaTest {
                         Collections.emptyMap(),
                         Collections.emptyList(),
                         "comment");
-        SeaTunnelDataType<SeaTunnelRow> dataType =
-                CatalogTableUtil.convertToMultipleRowType(Collections.singletonList(catalogTable));
         MongoDBConnectorDeserializationSchema schema =
-                new MongoDBConnectorDeserializationSchema(dataType, dataType);
+                new MongoDBConnectorDeserializationSchema(
+                        Collections.singletonList(catalogTable), Collections.emptyMap());
 
         // Build SourceRecord
         Map<String, String> partitionMap =

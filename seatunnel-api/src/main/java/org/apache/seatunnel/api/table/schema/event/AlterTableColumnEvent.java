@@ -15,37 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.api.table.event;
+package org.apache.seatunnel.api.table.schema.event;
 
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
-import org.apache.seatunnel.api.table.catalog.TablePath;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.ToString;
 
-@Getter
-@ToString
-@RequiredArgsConstructor
-public abstract class TableEvent implements SchemaChangeEvent {
-    private long createdTime = System.currentTimeMillis();
-    protected final TableIdentifier tableIdentifier;
-    @Getter @Setter private String jobId;
-    @Getter @Setter private String statement;
-    @Getter @Setter protected String sourceDialectName;
+@ToString(callSuper = true)
+public abstract class AlterTableColumnEvent extends AlterTableEvent {
 
-    @Override
-    public TableIdentifier tableIdentifier() {
-        return tableIdentifier;
-    }
-
-    public TablePath getTablePath() {
-        return tablePath();
-    }
-
-    @Override
-    public long getCreatedTime() {
-        return createdTime;
+    public AlterTableColumnEvent(TableIdentifier tableIdentifier) {
+        super(tableIdentifier);
     }
 }

@@ -36,6 +36,8 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
     private static final String DATABASE_SERVER_NAME = "oracle_logminer";
 
     private static final String DRIVER_CLASS_NAME = "oracle.jdbc.driver.OracleDriver";
+    public static final String SCHEMA_CHANGE_KEY = "include.schema.changes";
+    public static final Boolean SCHEMA_CHANGE_DEFAULT = true;
 
     private List<String> schemaList;
 
@@ -91,6 +93,10 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
         props.setProperty("database.history.instance.name", UUID.randomUUID() + "_" + subtask);
         props.setProperty("database.history.skip.unparseable.ddl", String.valueOf(true));
         props.setProperty("database.history.refer.ddl", String.valueOf(true));
+
+        // Some scenarios do not require automatic capture of table structure changes, so the
+        // default setting is true.
+        props.setProperty(SCHEMA_CHANGE_KEY, SCHEMA_CHANGE_DEFAULT.toString());
 
         props.setProperty("connect.timeout.ms", String.valueOf(connectTimeoutMillis));
         // disable tombstones
