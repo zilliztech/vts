@@ -117,6 +117,15 @@ public class TestDynamicCompileIT extends TestSuiteBase implements TestResource 
     }
 
     @TestTemplate
+    public void testDynamicSingleCompileJavaOldVersionCompatible(TestContainer container)
+            throws IOException, InterruptedException {
+        Container.ExecResult execResult =
+                container.executeJob(
+                        basePath + "single_dynamic_java_compile_transform_compatible.conf");
+        Assertions.assertEquals(0, execResult.getExitCode());
+    }
+
+    @TestTemplate
     public void testDynamicMultipleCompileGroovy(TestContainer container)
             throws IOException, InterruptedException {
         Container.ExecResult execResult =
