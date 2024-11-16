@@ -529,6 +529,7 @@ public interface JdbcDialect extends Serializable {
             throws SQLException {
         String tableIdentifierWithQuoted = tableIdentifier(tablePath);
         Column addColumn = event.getColumn();
+        String afterColumn = event.getAfterColumn();
         String addColumnSQL =
                 buildAlterTableSql(
                         event.getSourceDialectName(),
@@ -536,7 +537,8 @@ public interface JdbcDialect extends Serializable {
                         AlterType.ADD.name(),
                         addColumn,
                         tableIdentifierWithQuoted,
-                        StringUtils.EMPTY);
+                        StringUtils.EMPTY,
+                        afterColumn);
         try (Statement statement = connection.createStatement()) {
             log.info("Executing add column SQL: " + addColumnSQL);
             statement.execute(addColumnSQL);
@@ -549,6 +551,7 @@ public interface JdbcDialect extends Serializable {
         String tableIdentifierWithQuoted = tableIdentifier(tablePath);
         Column changeColumn = event.getColumn();
         String oldColumnName = event.getOldColumn();
+        String afterColumn = event.getAfterColumn();
         String changeColumnSQL =
                 buildAlterTableSql(
                         event.getSourceDialectName(),
@@ -558,7 +561,8 @@ public interface JdbcDialect extends Serializable {
                                 : AlterType.CHANGE.name(),
                         changeColumn,
                         tableIdentifierWithQuoted,
-                        oldColumnName);
+                        oldColumnName,
+                        afterColumn);
 
         try (Statement statement = connection.createStatement()) {
             log.info("Executing change column SQL: " + changeColumnSQL);
@@ -571,6 +575,7 @@ public interface JdbcDialect extends Serializable {
             throws SQLException {
         String tableIdentifierWithQuoted = tableIdentifier(tablePath);
         Column modifyColumn = event.getColumn();
+        String afterColumn = event.getAfterColumn();
         String modifyColumnSQL =
                 buildAlterTableSql(
                         event.getSourceDialectName(),
@@ -578,7 +583,8 @@ public interface JdbcDialect extends Serializable {
                         AlterType.MODIFY.name(),
                         modifyColumn,
                         tableIdentifierWithQuoted,
-                        StringUtils.EMPTY);
+                        StringUtils.EMPTY,
+                        afterColumn);
 
         try (Statement statement = connection.createStatement()) {
             log.info("Executing modify column SQL: " + modifyColumnSQL);
@@ -598,7 +604,8 @@ public interface JdbcDialect extends Serializable {
                         AlterType.DROP.name(),
                         null,
                         tableIdentifierWithQuoted,
-                        dropColumn);
+                        dropColumn,
+                        null);
         try (Statement statement = connection.createStatement()) {
             log.info("Executing drop column SQL: " + dropColumnSQL);
             statement.execute(dropColumnSQL);
@@ -614,6 +621,7 @@ public interface JdbcDialect extends Serializable {
      * @param newColumn new column after ddl
      * @param tableName table name of sink table
      * @param oldColumnName old column name before ddl
+     * @param afterColumn column before the new column
      * @return alter table sql for sink table after schema change
      */
     default String buildAlterTableSql(
@@ -622,7 +630,8 @@ public interface JdbcDialect extends Serializable {
             String alterOperation,
             Column newColumn,
             String tableName,
-            String oldColumnName) {
+            String oldColumnName,
+            String afterColumn) {
         if (StringUtils.equals(alterOperation, AlterType.DROP.name())) {
             return String.format(
                     "ALTER TABLE %s drop column %s", tableName, quoteIdentifier(oldColumnName));
@@ -654,6 +663,7 @@ public interface JdbcDialect extends Serializable {
         }
         basicSql = decorateWithNullable(basicSql, typeBasicTypeDefine, sourceDialectName);
         basicSql = decorateWithComment(tableName, basicSql, typeBasicTypeDefine);
+        basicSql = decorateWithAfterColumn(basicSql, afterColumn);
         return dialectName().equals(DatabaseIdentifier.ORACLE) ? basicSql : basicSql + ";";
     }
 
@@ -775,6 +785,21 @@ public interface JdbcDialect extends Serializable {
         StringBuilder sql = new StringBuilder(basicSql);
         if (StringUtils.isNotBlank(comment)) {
             sql.append("COMMENT '").append(comment).append("'");
+        }
+        return sql.toString();
+    }
+
+    /**
+     * decorate with after
+     *
+     * @param basicSql alter table sql for sink table
+     * @param afterColumn column before the new column
+     * @return alter table sql with after for sink table
+     */
+    default String decorateWithAfterColumn(String basicSql, String afterColumn) {
+        StringBuilder sql = new StringBuilder(basicSql);
+        if (StringUtils.isNotBlank(afterColumn)) {
+            sql.append("AFTER ").append(afterColumn).append(StringUtils.SPACE);
         }
         return sql.toString();
     }

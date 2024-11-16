@@ -52,6 +52,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 public abstract class AbstractJdbcSinkWriter<ResourceT>
@@ -90,8 +91,27 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
         List<Column> columns = new ArrayList<>(tableSchema.getColumns());
         switch (event.getEventType()) {
             case SCHEMA_CHANGE_ADD_COLUMN:
-                Column addColumn = ((AlterTableAddColumnEvent) event).getColumn();
-                columns.add(addColumn);
+                AlterTableAddColumnEvent alterTableAddColumnEvent =
+                        (AlterTableAddColumnEvent) event;
+                Column addColumn = alterTableAddColumnEvent.getColumn();
+                String afterColumn = alterTableAddColumnEvent.getAfterColumn();
+                if (StringUtils.isNotBlank(afterColumn)) {
+                    Optional<Column> columnOptional =
+                            columns.stream()
+                                    .filter(column -> afterColumn.equals(column.getName()))
+                                    .findFirst();
+                    if (!columnOptional.isPresent()) {
+                        columns.add(addColumn);
+                        break;
+                    }
+                    columnOptional.ifPresent(
+                            column -> {
+                                int index = columns.indexOf(column);
+                                columns.add(index + 1, addColumn);
+                            });
+                } else {
+                    columns.add(addColumn);
+                }
                 break;
             case SCHEMA_CHANGE_DROP_COLUMN:
                 String dropColumn = ((AlterTableDropColumnEvent) event).getColumn();
