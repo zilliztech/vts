@@ -25,7 +25,8 @@ import org.apache.seatunnel.api.configuration.util.ConfigValidator;
 import org.apache.seatunnel.api.table.factory.TableTransformFactory;
 import org.apache.seatunnel.api.table.factory.TableTransformFactoryContext;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelFlatMapTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelMapTransform;
 import org.apache.seatunnel.api.transform.SeaTunnelTransform;
 import org.apache.seatunnel.core.starter.exception.TaskExecuteException;
 import org.apache.seatunnel.core.starter.execution.PluginUtil;
@@ -144,7 +145,7 @@ public class TransformExecuteProcessor
 
     protected DataStream<SeaTunnelRow> flinkTransform(
             SeaTunnelTransform transform, DataStream<SeaTunnelRow> stream) {
-        if (transform instanceof SeaTunnelMultiRowTransform) {
+        if (transform instanceof SeaTunnelFlatMapTransform) {
             return stream.flatMap(
                     new ArrayFlatMap(transform), TypeInformation.of(SeaTunnelRow.class));
         }
@@ -157,7 +158,7 @@ public class TransformExecuteProcessor
                                 .getStreamExecutionEnvironment()
                                 .clean(
                                         row ->
-                                                ((SeaTunnelTransform<SeaTunnelRow>) transform)
+                                                ((SeaTunnelMapTransform<SeaTunnelRow>) transform)
                                                         .map(row))));
     }
 
@@ -172,7 +173,7 @@ public class TransformExecuteProcessor
         @Override
         public void flatMap(SeaTunnelRow row, Collector<SeaTunnelRow> collector) {
             List<SeaTunnelRow> rows =
-                    ((SeaTunnelMultiRowTransform<SeaTunnelRow>) transform).flatMap(row);
+                    ((SeaTunnelFlatMapTransform<SeaTunnelRow>) transform).flatMap(row);
             if (CollectionUtils.isNotEmpty(rows)) {
                 for (SeaTunnelRow rowResult : rows) {
                     collector.collect(rowResult);

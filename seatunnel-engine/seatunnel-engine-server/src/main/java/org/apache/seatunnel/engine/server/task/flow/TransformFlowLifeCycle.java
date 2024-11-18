@@ -19,7 +19,8 @@ package org.apache.seatunnel.engine.server.task.flow;
 
 import org.apache.seatunnel.api.table.type.Record;
 import org.apache.seatunnel.api.transform.Collector;
-import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelFlatMapTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelMapTransform;
 import org.apache.seatunnel.api.transform.SeaTunnelTransform;
 import org.apache.seatunnel.engine.core.dag.actions.TransformChainAction;
 import org.apache.seatunnel.engine.server.checkpoint.ActionStateKey;
@@ -113,9 +114,9 @@ public class TransformFlowLifeCycle<T> extends ActionFlowLifeCycle
 
         for (SeaTunnelTransform<T> transformer : transform) {
             List<T> nextInputDataList = new ArrayList<>();
-            if (transformer instanceof SeaTunnelMultiRowTransform) {
-                SeaTunnelMultiRowTransform<T> transformDecorator =
-                        (SeaTunnelMultiRowTransform<T>) transformer;
+            if (transformer instanceof SeaTunnelFlatMapTransform) {
+                SeaTunnelFlatMapTransform<T> transformDecorator =
+                        (SeaTunnelFlatMapTransform<T>) transformer;
                 for (T data : dataList) {
                     List<T> outputDataArray = transformDecorator.flatMap(data);
                     log.debug(
@@ -127,9 +128,11 @@ public class TransformFlowLifeCycle<T> extends ActionFlowLifeCycle
                         nextInputDataList.addAll(outputDataArray);
                     }
                 }
-            } else {
+            } else if (transformer instanceof SeaTunnelMapTransform) {
                 for (T data : dataList) {
-                    T outputData = transformer.map(data);
+                    SeaTunnelMapTransform<T> transformDecorator =
+                            (SeaTunnelMapTransform<T>) transformer;
+                    T outputData = transformDecorator.map(data);
                     log.debug(
                             "Transform[{}] input row {} and output row {}",
                             transformer,

@@ -18,7 +18,7 @@ package org.apache.seatunnel.transform.common;
 
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelFlatMapTransform;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -26,15 +26,15 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
 @Slf4j
-public abstract class AbstractCatalogMultiRowTransform
+public abstract class AbstractCatalogSupportFlatMapTransform
         extends AbstractSeaTunnelTransform<SeaTunnelRow, List<SeaTunnelRow>>
-        implements SeaTunnelMultiRowTransform<SeaTunnelRow> {
+        implements SeaTunnelFlatMapTransform<SeaTunnelRow> {
 
-    public AbstractCatalogMultiRowTransform(@NonNull CatalogTable inputCatalogTable) {
+    public AbstractCatalogSupportFlatMapTransform(@NonNull CatalogTable inputCatalogTable) {
         super(inputCatalogTable);
     }
 
-    public AbstractCatalogMultiRowTransform(
+    public AbstractCatalogSupportFlatMapTransform(
             @NonNull CatalogTable inputCatalogTable, ErrorHandleWay rowErrorHandleWay) {
         super(inputCatalogTable, rowErrorHandleWay);
     }

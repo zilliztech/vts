@@ -19,20 +19,20 @@ package org.apache.seatunnel.transform.common;
 
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.transform.SeaTunnelTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelMapTransform;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class AbstractCatalogSupportTransform
+public abstract class AbstractCatalogSupportMapTransform
         extends AbstractSeaTunnelTransform<SeaTunnelRow, SeaTunnelRow>
-        implements SeaTunnelTransform<SeaTunnelRow> {
-    public AbstractCatalogSupportTransform(@NonNull CatalogTable inputCatalogTable) {
+        implements SeaTunnelMapTransform<SeaTunnelRow> {
+    public AbstractCatalogSupportMapTransform(@NonNull CatalogTable inputCatalogTable) {
         super(inputCatalogTable);
     }
 
-    public AbstractCatalogSupportTransform(
+    public AbstractCatalogSupportMapTransform(
             @NonNull CatalogTable inputCatalogTable, ErrorHandleWay rowErrorHandleWay) {
         super(inputCatalogTable, rowErrorHandleWay);
     }

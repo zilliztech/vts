@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.seatunnel.api.transform;
 
-import java.util.List;
-
-public interface SeaTunnelMultiRowTransform<T> extends SeaTunnelTransform<T> {
+public interface SeaTunnelMapTransform<T> extends SeaTunnelTransform<T> {
 
     /**
      * Transform input data to {@link this#getProducedCatalogTable().getSeaTunnelRowType()} types
@@ -27,9 +26,5 @@ public interface SeaTunnelMultiRowTransform<T> extends SeaTunnelTransform<T> {
      * @param row the data need be transformed.
      * @return transformed data.
      */
-    List<T> flatMap(T row);
-
-    default T map(T row) {
-        throw new UnsupportedOperationException("Heads-up conversion is not supported");
-    }
+    T map(T row);
 }

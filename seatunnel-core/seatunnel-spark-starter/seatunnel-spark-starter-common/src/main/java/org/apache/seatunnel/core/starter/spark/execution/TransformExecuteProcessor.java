@@ -26,7 +26,8 @@ import org.apache.seatunnel.api.table.factory.TableTransformFactory;
 import org.apache.seatunnel.api.table.factory.TableTransformFactoryContext;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.api.transform.SeaTunnelMultiRowTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelFlatMapTransform;
+import org.apache.seatunnel.api.transform.SeaTunnelMapTransform;
 import org.apache.seatunnel.api.transform.SeaTunnelTransform;
 import org.apache.seatunnel.core.starter.exception.TaskExecuteException;
 import org.apache.seatunnel.core.starter.execution.PluginUtil;
@@ -192,17 +193,17 @@ public class TransformExecuteProcessor
             List<Row> rows = new ArrayList<>();
 
             SeaTunnelRow seaTunnelRow = inputRowConverter.unpack((GenericRowWithSchema) row);
-            if (transform instanceof SeaTunnelMultiRowTransform) {
+            if (transform instanceof SeaTunnelFlatMapTransform) {
                 List<SeaTunnelRow> seaTunnelRows =
-                        ((SeaTunnelMultiRowTransform<SeaTunnelRow>) transform)
-                                .flatMap(seaTunnelRow);
+                        ((SeaTunnelFlatMapTransform<SeaTunnelRow>) transform).flatMap(seaTunnelRow);
                 if (CollectionUtils.isNotEmpty(seaTunnelRows)) {
                     for (SeaTunnelRow seaTunnelRowTransform : seaTunnelRows) {
                         rows.add(outputRowConverter.parcel(seaTunnelRowTransform));
                     }
                 }
-            } else {
-                SeaTunnelRow seaTunnelRowTransform = transform.map(seaTunnelRow);
+            } else if (transform instanceof SeaTunnelMapTransform) {
+                SeaTunnelRow seaTunnelRowTransform =
+                        ((SeaTunnelMapTransform<SeaTunnelRow>) transform).map(seaTunnelRow);
                 if (seaTunnelRowTransform != null) {
                     rows.add(outputRowConverter.parcel(seaTunnelRowTransform));
                 }

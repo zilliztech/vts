@@ -26,7 +26,7 @@ import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.transform.common.AbstractCatalogSupportTransform;
+import org.apache.seatunnel.transform.common.AbstractCatalogSupportMapTransform;
 import org.apache.seatunnel.transform.exception.TransformCommonError;
 
 import org.apache.commons.collections4.CollectionUtils;
@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
-public class FieldMapperTransform extends AbstractCatalogSupportTransform {
+public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
     public static String PLUGIN_NAME = "FieldMapper";
     private final FieldMapperTransformConfig config;
     private List<Integer> needReaderColIndex;

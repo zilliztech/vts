@@ -14,28 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.seatunnel.api.transform;
 
-package org.apache.seatunnel.transform.common;
+import java.util.List;
 
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.TableIdentifier;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
+public interface SeaTunnelFlatMapTransform<T> extends SeaTunnelTransform<T> {
 
-import lombok.NonNull;
-
-public abstract class FilterRowTransform extends AbstractCatalogSupportMapTransform {
-
-    public FilterRowTransform(@NonNull CatalogTable inputCatalogTable) {
-        super(inputCatalogTable);
-    }
-
-    @Override
-    protected TableSchema transformTableSchema() {
-        return inputCatalogTable.getTableSchema().copy();
-    }
-
-    @Override
-    protected TableIdentifier transformTableIdentifier() {
-        return inputCatalogTable.getTableId().copy();
-    }
+    /**
+     * Transform input data to {@link this#getProducedCatalogTable().getSeaTunnelRowType()} types
+     * data.
+     *
+     * @param row the data need be transformed.
+     * @return transformed data.
+     */
+    List<T> flatMap(T row);
 }
