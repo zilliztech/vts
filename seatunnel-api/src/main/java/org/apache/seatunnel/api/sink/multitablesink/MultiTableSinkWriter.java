@@ -21,7 +21,6 @@ import org.apache.seatunnel.api.sink.MultiTableResourceManager;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
-import org.apache.seatunnel.api.sink.event.WriterCloseEvent;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.tracing.MDCTracer;
@@ -327,10 +326,6 @@ public class MultiTableSinkWriter
                         (identifier, sinkWriter) -> {
                             try {
                                 sinkWriter.close();
-                                sinkWritersContext
-                                        .get(identifier)
-                                        .getEventListener()
-                                        .onEvent(new WriterCloseEvent());
                             } catch (Throwable e) {
                                 if (firstE[0] == null) {
                                     firstE[0] = e;
