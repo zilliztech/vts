@@ -15,25 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.config;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.config;
 
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.api.sink.DataSaveMode;
+import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
+import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
+import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
-import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
-import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
-
 public class MilvusSinkConfig extends MilvusCommonConfig {
 
     public static final Option<String> DATABASE =
-            Options.key("database").stringType().noDefaultValue().withDescription("database");
+            Options.key("database")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("database");
     public static final Option<Map<String, String>> COLLECTION_DESCRIPTION =
             Options.key("collection_description")
                     .mapType()
@@ -65,12 +68,6 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .defaultValue(false)
                     .withDescription("Enable Auto Id");
 
-    public static final Option<Boolean> ENABLE_UPSERT =
-            Options.key("enable_upsert")
-                    .booleanType()
-                    .defaultValue(true)
-                    .withDescription("Enable upsert mode");
-
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
                     .booleanType()
@@ -82,19 +79,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .intType()
                     .defaultValue(1000)
                     .withDescription("writer batch size");
-    public static final Option<Integer> RATE_LIMIT =
-            Options.key("rate_limit")
-                    .intType()
-                    .defaultValue(100000)
-                    .withDescription("writer rate limit");
-    public static final Option<Boolean> LOAD_COLLECTION =
-            Options.key("load_collection")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription("if load collection");
-    public static final Option<Boolean> CREATE_INDEX =
-            Options.key("create_index")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription("if load collection");
+
+    public static final Option<Map<String, String>> BULK_WRITER_CONFIG =
+            Options.key("bulk_writer_config")
+                    .mapType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("bulk writer config");
+
 }

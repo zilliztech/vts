@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.config;
+package org.apache.seatunnel.connectors.seatunnel.milvus.source.config;
 
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
+import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
 public class MilvusSourceConfig extends MilvusCommonConfig {
 

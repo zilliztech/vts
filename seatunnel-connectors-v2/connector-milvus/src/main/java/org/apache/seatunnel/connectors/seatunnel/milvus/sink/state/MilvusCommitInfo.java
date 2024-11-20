@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.state;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.state;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

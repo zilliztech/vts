@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
+package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import com.google.protobuf.ProtocolStringList;
 import io.milvus.client.MilvusServiceClient;
@@ -50,10 +50,9 @@ import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -15,13 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
-
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.sink.SinkCommitter;
-import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusCommitInfo;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.state;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.sink.SinkCommitter;
 
 import java.io.IOException;
 import java.util.Collections;

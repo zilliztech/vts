@@ -15,17 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.utils;
-
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.common.constants.CommonOptions;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.common.constants.CommonOptions;
 
 import java.util.ArrayList;
 import java.util.List;

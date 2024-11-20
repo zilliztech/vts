@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.utils.source;
+package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

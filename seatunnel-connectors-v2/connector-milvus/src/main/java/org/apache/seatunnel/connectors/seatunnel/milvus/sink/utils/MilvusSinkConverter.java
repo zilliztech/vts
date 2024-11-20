@@ -15,12 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.milvus.grpc.DataType;
+import io.milvus.param.collection.CollectionSchemaParam;
+import io.milvus.param.collection.FieldType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -32,24 +42,14 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-
-import org.apache.commons.lang3.StringUtils;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import io.milvus.grpc.DataType;
-import io.milvus.param.collection.FieldType;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_AUTO_ID;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_AUTO_ID;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 
 public class MilvusSinkConverter {
     private static final Gson gson = new Gson();
@@ -289,5 +289,32 @@ public class MilvusSinkConverter {
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
+    }
+
+    public static CollectionSchemaParam convertToMilvusSchema(DescribeCollectionResp describeCollectionResp) {
+        List<FieldType> fieldTypes = new ArrayList<>();
+        for(CreateCollectionReq.FieldSchema fieldSchema : describeCollectionResp.getCollectionSchema().getFieldSchemaList()){
+            FieldType.Builder fieldType = FieldType.newBuilder()
+                    .withName(fieldSchema.getName())
+                    .withDataType(DataType.forNumber(fieldSchema.getDataType().getCode()))
+                    .withPrimaryKey(fieldSchema.getIsPrimaryKey())
+                    .withAutoID(fieldSchema.getAutoID())
+                    .withDescription(fieldSchema.getDescription());
+            if(fieldSchema.getDimension() != null){
+                fieldType.withDimension(fieldSchema.getDimension());
+            }
+            if(fieldSchema.getMaxLength() != null){
+                fieldType.withMaxLength(fieldSchema.getMaxLength());
+            }
+            if(fieldSchema.getMaxCapacity() != null){
+                fieldType.withMaxCapacity(fieldSchema.getMaxCapacity());
+                fieldType.withElementType(DataType.forNumber(fieldSchema.getElementType().getCode()));
+            }
+            fieldTypes.add(fieldType.build());
+        }
+        return CollectionSchemaParam.newBuilder()
+                .withEnableDynamicField(describeCollectionResp.getEnableDynamicField())
+                .withFieldTypes(fieldTypes)
+                .build();
     }
 }

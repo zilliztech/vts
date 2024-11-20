@@ -27,8 +27,8 @@ import org.apache.seatunnel.api.source.SupportParallelism;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusConvertUtils;
 
 import java.util.ArrayList;
 import java.util.List;

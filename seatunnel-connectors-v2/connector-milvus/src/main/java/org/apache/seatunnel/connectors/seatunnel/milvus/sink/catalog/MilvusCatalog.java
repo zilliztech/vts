@@ -15,42 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.catalog;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.table.catalog.Catalog;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.api.table.catalog.ConstraintKey;
-import org.apache.seatunnel.api.table.catalog.InfoPreviewResult;
-import org.apache.seatunnel.api.table.catalog.PreviewResult;
-import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.catalog.VectorIndex;
-import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
-import org.apache.seatunnel.api.table.catalog.exception.DatabaseAlreadyExistException;
-import org.apache.seatunnel.api.table.catalog.exception.DatabaseNotExistException;
-import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistException;
-import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
-import org.apache.seatunnel.common.constants.CommonOptions;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.sink.MilvusSinkConverter;
-
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-
-import com.google.protobuf.ProtocolStringList;
+import static com.google.common.base.Preconditions.checkNotNull;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.common.clientenum.ConsistencyLevelEnum;
 import io.milvus.grpc.ListDatabasesResponse;
 import io.milvus.grpc.ShowCollectionsResponse;
-import io.milvus.grpc.ShowPartitionsResponse;
 import io.milvus.grpc.ShowType;
 import io.milvus.param.ConnectParam;
-import io.milvus.param.IndexType;
-import io.milvus.param.MetricType;
 import io.milvus.param.R;
 import io.milvus.param.RpcStatus;
 import io.milvus.param.collection.CreateCollectionParam;
@@ -60,10 +33,28 @@ import io.milvus.param.collection.DropDatabaseParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.collection.ShowCollectionsParam;
-import io.milvus.param.index.CreateIndexParam;
-import io.milvus.param.partition.CreatePartitionParam;
-import io.milvus.param.partition.ShowPartitionsParam;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.Catalog;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.InfoPreviewResult;
+import org.apache.seatunnel.api.table.catalog.PreviewResult;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
+import org.apache.seatunnel.api.table.catalog.exception.DatabaseAlreadyExistException;
+import org.apache.seatunnel.api.table.catalog.exception.DatabaseNotExistException;
+import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistException;
+import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
+import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,9 +62,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig.CREATE_INDEX;
 
 @Slf4j
 public class MilvusCatalog implements Catalog {
@@ -206,10 +194,11 @@ public class MilvusCatalog implements Catalog {
             Map<String, String> options = catalogTable.getOptions();
 
             // partition key logic
-            boolean existPartitionKeyField = options.containsKey(MilvusOptions.PARTITION_KEY_FIELD);
-            String partitionKeyField =
-                    existPartitionKeyField ? options.get(MilvusOptions.PARTITION_KEY_FIELD) : null;
-            // if options set, will overwrite aut read
+            String partitionKeyField = null;
+            if(options.containsKey(MilvusOptions.PARTITION_KEY_FIELD)){
+                partitionKeyField = options.get(MilvusOptions.PARTITION_KEY_FIELD);
+            }
+            // if partition key is set in config, use the one in config
             if (StringUtils.isNotEmpty(config.get(MilvusSinkConfig.PARTITION_KEY))) {
                 partitionKeyField = config.get(MilvusSinkConfig.PARTITION_KEY);
             }
@@ -232,10 +221,17 @@ public class MilvusCatalog implements Catalog {
                 fieldTypes.add(fieldType);
             }
 
-            Boolean enableDynamicField =
-                    (options.containsKey(MilvusOptions.ENABLE_DYNAMIC_FIELD))
-                            ? Boolean.valueOf(options.get(MilvusOptions.ENABLE_DYNAMIC_FIELD))
-                            : config.get(MilvusSinkConfig.ENABLE_DYNAMIC_FIELD);
+            Boolean enableDynamicField = true;
+
+            if(options.containsKey(MilvusOptions.ENABLE_DYNAMIC_FIELD)) {
+                enableDynamicField = Boolean.valueOf(options.get(MilvusOptions.ENABLE_DYNAMIC_FIELD));
+            }
+            // if enable_dynamic_field is set in config, use the one in config
+            if(config.get(ENABLE_DYNAMIC_FIELD) != null){
+                enableDynamicField = config.get(ENABLE_DYNAMIC_FIELD);
+            }
+
+
             String collectionDescription = "";
             if (config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION) != null
                     && config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION)
