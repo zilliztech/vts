@@ -58,7 +58,7 @@ env {
 }
 source {
   FakeSource {
-    result_table_name = "fake"
+    plugin_output = "fake"
     parallelism = 1
     schema = {
       fields {
@@ -71,7 +71,7 @@ transform {
 }
 sink {
   console {
-    source_table_name="fake"
+    plugin_input="fake"
   }
 }
 ```

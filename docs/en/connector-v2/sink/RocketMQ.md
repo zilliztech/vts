@@ -115,7 +115,7 @@ source {
   Rocketmq {
     name.srv.addr = "localhost:9876"
     topics = "test_topic"
-    result_table_name = "rocketmq_table"
+    plugin_output = "rocketmq_table"
     schema = {
       fields {
         c_map = "map<string, string>"
@@ -161,7 +161,7 @@ source {
   Rocketmq {
     name.srv.addr = "localhost:9876"
     topics = "test_topic"
-    result_table_name = "rocketmq_table"
+    plugin_output = "rocketmq_table"
     start.mode = "CONSUME_FROM_FIRST_OFFSET"
     batch.size = "400"
     consumer.group = "test_topic_group"

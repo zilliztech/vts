@@ -49,7 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.seatunnel.api.common.CommonOptions.RESULT_TABLE_NAME;
+import static org.apache.seatunnel.api.common.CommonOptions.PLUGIN_OUTPUT;
 
 @SuppressWarnings("unchecked,rawtypes")
 public class TransformExecuteProcessor
@@ -121,17 +121,15 @@ public class TransformExecuteProcessor
                 transform.setJobContext(jobContext);
                 DataStream<SeaTunnelRow> inputStream =
                         flinkTransform(transform, stream.getDataStream());
-                String resultTableName =
-                        pluginConfig.hasPath(RESULT_TABLE_NAME.key())
-                                ? pluginConfig.getString(RESULT_TABLE_NAME.key())
-                                : null;
+                String pluginOutputIdentifier =
+                        ReadonlyConfig.fromConfig(pluginConfig).get(PLUGIN_OUTPUT);
                 // TODO transform support multi tables
                 outputTables.put(
-                        resultTableName,
+                        pluginOutputIdentifier,
                         new DataStreamTableInfo(
                                 inputStream,
                                 Collections.singletonList(transform.getProducedCatalogTable()),
-                                resultTableName));
+                                pluginOutputIdentifier));
             } catch (Exception e) {
                 throw new TaskExecuteException(
                         String.format(

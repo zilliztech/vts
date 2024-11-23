@@ -180,7 +180,7 @@ constraintKeys = [
 source {
   FakeSource {
     parallelism = 2
-    result_table_name = "fake"
+    plugin_output = "fake"
     row.num = 16
     schema {
         table = "FakeDatabase.FakeTable"
@@ -234,7 +234,7 @@ source {
 source {
   FakeSource {
     parallelism = 2
-    result_table_name = "fake"
+    plugin_output = "fake"
     row.num = 16
     schema = {
       fields {

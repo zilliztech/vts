@@ -141,7 +141,7 @@ env {
 source {
   # This is a example source plugin **only for test and demonstrate the feature source plugin**
   SqlServer-CDC {
-    result_table_name = "customers"
+    plugin_output = "customers"
     username = "sa"
     password = "Y.sa123456"
     startup.mode="initial"
@@ -156,7 +156,7 @@ transform {
 
 sink {
   console {
-    source_table_name = "customers"
+    plugin_input = "customers"
   }
 ```
 
@@ -177,7 +177,7 @@ source {
   SqlServer-CDC {
    # Set up accurate one read
     exactly_once=true 
-    result_table_name = "customers"
+    plugin_output = "customers"
     username = "sa"
     password = "Y.sa123456"
     startup.mode="latest"
@@ -192,7 +192,7 @@ transform {
 
 sink {
   console {
-    source_table_name = "customers"
+    plugin_input = "customers"
   }
 ```
 

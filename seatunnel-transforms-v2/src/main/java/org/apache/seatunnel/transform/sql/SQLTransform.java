@@ -75,9 +75,9 @@ public class SQLTransform extends AbstractCatalogSupportFlatMapTransform {
             this.engineType = ZETA;
         }
 
-        List<String> sourceTableNames = config.get(CommonOptions.SOURCE_TABLE_NAME);
-        if (sourceTableNames != null && !sourceTableNames.isEmpty()) {
-            this.inputTableName = sourceTableNames.get(0);
+        List<String> pluginInputIdentifiers = config.get(CommonOptions.PLUGIN_INPUT);
+        if (pluginInputIdentifiers != null && !pluginInputIdentifiers.isEmpty()) {
+            this.inputTableName = pluginInputIdentifiers.get(0);
         } else {
             this.inputTableName = catalogTable.getTableId().getTableName();
         }

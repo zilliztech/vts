@@ -22,6 +22,7 @@ import org.apache.seatunnel.shade.com.typesafe.config.ConfigValue;
 
 import org.apache.seatunnel.api.common.CommonOptions;
 import org.apache.seatunnel.api.common.JobContext;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.common.Constants;
@@ -47,7 +48,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.seatunnel.api.common.CommonOptions.PLUGIN_NAME;
-import static org.apache.seatunnel.api.common.CommonOptions.RESULT_TABLE_NAME;
+import static org.apache.seatunnel.api.common.CommonOptions.PLUGIN_OUTPUT;
 
 @SuppressWarnings("rawtypes")
 public class SourceExecuteProcessor extends SparkAbstractPluginExecuteProcessor<SourceTableInfo> {
@@ -101,9 +102,7 @@ public class SourceExecuteProcessor extends SparkAbstractPluginExecuteProcessor<
                     new DatasetTableInfo(
                             dataset,
                             sourceTableInfo.getCatalogTables(),
-                            pluginConfig.hasPath(RESULT_TABLE_NAME.key())
-                                    ? pluginConfig.getString(RESULT_TABLE_NAME.key())
-                                    : null));
+                            ReadonlyConfig.fromConfig(pluginConfig).get(PLUGIN_OUTPUT)));
             registerInputTempView(pluginConfigs.get(i), dataset);
         }
         return sources;

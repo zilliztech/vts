@@ -132,7 +132,7 @@ env {
 
 source {
   Postgres-CDC {
-    result_table_name = "customers_Postgre_cdc"
+    plugin_output = "customers_Postgre_cdc"
     username = "postgres"
     password = "postgres"
     database-names = ["postgres_cdc"]
@@ -148,7 +148,7 @@ transform {
 
 sink {
   jdbc {
-    source_table_name = "customers_Postgre_cdc"
+    plugin_input = "customers_Postgre_cdc"
     url = "jdbc:postgresql://postgres_cdc_e2e:5432/postgres_cdc?loggerLevel=OFF"
     driver = "org.postgresql.Driver"
     user = "postgres"
@@ -169,7 +169,7 @@ sink {
 ```
 source {
   Postgres-CDC {
-    result_table_name = "customers_mysql_cdc"
+    plugin_output = "customers_mysql_cdc"
     username = "postgres"
     password = "postgres"
     database-names = ["postgres_cdc"]

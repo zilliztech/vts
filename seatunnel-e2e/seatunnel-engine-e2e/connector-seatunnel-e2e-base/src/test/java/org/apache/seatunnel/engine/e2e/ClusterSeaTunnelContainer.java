@@ -1193,7 +1193,7 @@ public class ClusterSeaTunnelContainer extends SeaTunnelContainer {
             List<Map<String, Object>> sourceList = new ArrayList<>();
             Map<String, Object> source = new HashMap<>();
             source.put("plugin_name", "FakeSource");
-            source.put("result_table_name", "fake");
+            source.put("plugin_output", "fake");
             source.put("row.num", 1000);
 
             Map<String, Object> schema = new HashMap<>();
@@ -1213,9 +1213,9 @@ public class ClusterSeaTunnelContainer extends SeaTunnelContainer {
             List<Map<String, Object>> sinkList = new ArrayList<>();
             Map<String, Object> sink = new HashMap<>();
             sink.put("plugin_name", "Console");
-            List<String> sourceTableName = new ArrayList<>();
-            sourceTableName.add("fake");
-            sink.put("source_table_name", sourceTableName);
+            List<String> pluginInputIdentifier = new ArrayList<>();
+            pluginInputIdentifier.add("fake");
+            sink.put("plugin_input", pluginInputIdentifier);
 
             sinkList.add(sink);
             job.put("sink", sinkList);
@@ -1246,7 +1246,7 @@ public class ClusterSeaTunnelContainer extends SeaTunnelContainer {
                         + "    \"source\": [\n"
                         + "        {\n"
                         + "            \"plugin_name\": \"FakeSource\",\n"
-                        + "            \"result_table_name\": \"fake\",\n"
+                        + "            \"plugin_output\": \"fake\",\n"
                         + "            \"row.num\": 100,\n"
                         + "            \"schema\": {\n"
                         + "                \"fields\": {\n"
@@ -1262,7 +1262,7 @@ public class ClusterSeaTunnelContainer extends SeaTunnelContainer {
                         + "    \"sink\": [\n"
                         + "        {\n"
                         + "            \"plugin_name\": \"Console\",\n"
-                        + "            \"source_table_name\": [\"fake\"]\n"
+                        + "            \"plugin_input\": [\"fake\"]\n"
                         + "        }\n"
                         + "    ]\n"
                         + "}";

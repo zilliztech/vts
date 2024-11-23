@@ -393,7 +393,7 @@ source {
           file_format_type = "orc"
       }
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
@@ -510,7 +510,7 @@ source {
           }
       }
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 

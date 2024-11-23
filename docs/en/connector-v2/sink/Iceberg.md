@@ -91,7 +91,7 @@ env {
 
 source {
   MySQL-CDC {
-    result_table_name = "customers_mysql_cdc_iceberg"
+    plugin_output = "customers_mysql_cdc_iceberg"
     server-id = 5652
     username = "st_user"
     password = "seatunnel"

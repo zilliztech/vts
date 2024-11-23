@@ -216,9 +216,9 @@ public class CatalogTableUtil implements Serializable {
                             schemaConfig.get(
                                     TableSchemaOptions.TableIdentifierOptions.SCHEMA_FIRST));
         } else {
-            Optional<String> resultTableNameOptional =
-                    readonlyConfig.getOptional(CommonOptions.RESULT_TABLE_NAME);
-            tablePath = resultTableNameOptional.map(TablePath::of).orElse(TablePath.DEFAULT);
+            Optional<String> pluginOutputIdentifierOptional =
+                    readonlyConfig.getOptional(CommonOptions.PLUGIN_OUTPUT);
+            tablePath = pluginOutputIdentifierOptional.map(TablePath::of).orElse(TablePath.DEFAULT);
         }
 
         return CatalogTable.of(

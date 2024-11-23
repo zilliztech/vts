@@ -98,7 +98,7 @@ public class PluginUtil {
             // TODO remove it when all connector use `getProducedCatalogTables`
             SeaTunnelDataType<?> seaTunnelDataType = source.getProducedType();
             final String tableId =
-                    readonlyConfig.getOptional(CommonOptions.RESULT_TABLE_NAME).orElse(DEFAULT_ID);
+                    readonlyConfig.getOptional(CommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
             catalogTables =
                     CatalogTableUtil.convertDataTypeToCatalogTables(seaTunnelDataType, tableId);
         }

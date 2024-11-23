@@ -98,7 +98,7 @@ public final class FactoryUtil {
                 // TODO remove it when all connector use `getProducedCatalogTables`
                 SeaTunnelDataType<T> seaTunnelDataType = source.getProducedType();
                 final String tableId =
-                        options.getOptional(CommonOptions.RESULT_TABLE_NAME).orElse(DEFAULT_ID);
+                        options.getOptional(CommonOptions.PLUGIN_OUTPUT).orElse(DEFAULT_ID);
                 catalogTables =
                         CatalogTableUtil.convertDataTypeToCatalogTables(seaTunnelDataType, tableId);
             }
