@@ -144,6 +144,7 @@ The compress codec of archive files and the details that supported as the follow
 | ZIP                    | txt,json,excel,xml | .zip                    |
 | TAR                    | txt,json,excel,xml | .tar                    |
 | TAR_GZ                 | txt,json,excel,xml | .tar.gz                 |
+| GZ                     | txt,json,xml       | .gz                     |
 | NONE                   | all                | .*                      |
 
 ### encoding [string]

@@ -238,6 +238,11 @@ public abstract class AbstractReadStrategy implements ReadStrategy {
                     }
                 }
                 break;
+            case GZ:
+                GzipCompressorInputStream gzipIn =
+                        new GzipCompressorInputStream(hadoopFileSystemProxy.getInputStream(path));
+                readProcess(path, tableId, output, copyInputStream(gzipIn), partitionsMap, path);
+                break;
             case NONE:
                 readProcess(
                         path,

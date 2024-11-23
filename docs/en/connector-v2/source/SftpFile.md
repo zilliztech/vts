@@ -235,11 +235,12 @@ The compress codec of files and the details that supported as the following show
 The compress codec of archive files and the details that supported as the following shown:
 
 | archive_compress_codec | file_format        | archive_compress_suffix |
-|------------------------|--------------------|-------------------------|
-| ZIP                    | txt,json,excel,xml | .zip                    |
-| TAR                    | txt,json,excel,xml | .tar                    |
-| TAR_GZ                 | txt,json,excel,xml | .tar.gz                 |
-| NONE                   | all                | .*                      |
+|--------------------|--------------------|---------------------|
+| ZIP                | txt,json,excel,xml | .zip                |
+| TAR                | txt,json,excel,xml | .tar                |
+| TAR_GZ             | txt,json,excel,xml | .tar.gz             |
+| GZ                 | txt,json,xml       | .gz                 |
+| NONE               | all                | .*                  |
 
 ### encoding [string]
 
