@@ -255,7 +255,7 @@ public class CatalogTableUtil implements Serializable {
                 finalColumns.add(column);
             } else {
                 finalColumns.add(
-                        PhysicalColumn.of(fieldNames[i], fieldTypes[i], 0, false, null, null));
+                        PhysicalColumn.of(fieldNames[i], fieldTypes[i], 0, true, null, null));
             }
         }
 
