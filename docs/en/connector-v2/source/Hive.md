@@ -120,6 +120,24 @@ Source plugin common parameters, please refer to [Source Common Options](../sour
 ```
 
 ### Example 2: Multiple tables
+> Note: Hive is a structured data source and should be use 'table_list', and 'tables_configs' will be removed in the future.
+
+```bash
+
+  Hive {
+    table_list = [
+        {
+          table_name = "default.seatunnel_orc_1"
+          metastore_uri = "thrift://namenode001:9083"
+        },
+        {
+          table_name = "default.seatunnel_orc_2"
+          metastore_uri = "thrift://namenode001:9083"
+        }
+    ]
+  }
+
+```
 
 ```bash
 

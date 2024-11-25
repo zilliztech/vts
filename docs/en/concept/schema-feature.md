@@ -172,6 +172,46 @@ constraintKeys = [
 | INDEX_KEY      | key         |
 | UNIQUE_KEY     | unique key  |
 
+## Multi table schemas
+
+```
+tables_configs = [
+  {
+    schema {
+      table = "database.schema.table1"
+      schema_first = false
+      comment = "comment"
+      columns = [
+        ...
+      ]
+      primaryKey {
+        ...
+      }
+      constraintKeys {
+        ...
+      }
+    }
+  },
+  {
+    schema = {
+      table = "database.schema.table2"
+      schema_first = false
+      comment = "comment"
+      columns = [
+        ...
+      ]
+      primaryKey {
+        ...
+      }
+      constraintKeys {
+        ...
+      }
+    }
+  }
+]
+
+```
+
 ## How to use schema
 
 ### Recommended

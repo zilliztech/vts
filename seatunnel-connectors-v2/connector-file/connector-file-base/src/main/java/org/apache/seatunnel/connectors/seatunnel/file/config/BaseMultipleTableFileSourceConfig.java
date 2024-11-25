@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.file.config;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.schema.TableSchemaOptions;
 
 import com.google.common.collect.Lists;
 import lombok.Getter;
@@ -33,7 +34,7 @@ public abstract class BaseMultipleTableFileSourceConfig implements Serializable 
     @Getter private List<BaseFileSourceConfig> fileSourceConfigs;
 
     public BaseMultipleTableFileSourceConfig(ReadonlyConfig fileSourceRootConfig) {
-        if (fileSourceRootConfig.getOptional(BaseSourceConfigOptions.TABLE_CONFIGS).isPresent()) {
+        if (fileSourceRootConfig.getOptional(TableSchemaOptions.TABLE_CONFIGS).isPresent()) {
             parseFromFileSourceConfigs(fileSourceRootConfig);
         } else {
             parseFromFileSourceConfig(fileSourceRootConfig);
@@ -42,7 +43,7 @@ public abstract class BaseMultipleTableFileSourceConfig implements Serializable 
 
     private void parseFromFileSourceConfigs(ReadonlyConfig fileSourceRootConfig) {
         this.fileSourceConfigs =
-                fileSourceRootConfig.get(BaseSourceConfigOptions.TABLE_CONFIGS).stream()
+                fileSourceRootConfig.get(TableSchemaOptions.TABLE_CONFIGS).stream()
                         .map(ReadonlyConfig::fromMap)
                         .map(this::getBaseSourceConfig)
                         .collect(Collectors.toList());

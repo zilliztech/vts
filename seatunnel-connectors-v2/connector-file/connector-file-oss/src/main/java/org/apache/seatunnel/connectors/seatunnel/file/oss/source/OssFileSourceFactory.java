@@ -51,9 +51,7 @@ public class OssFileSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(
-                        org.apache.seatunnel.connectors.seatunnel.file.config
-                                .BaseSourceConfigOptions.TABLE_CONFIGS)
+                .optional(TableSchemaOptions.TABLE_CONFIGS)
                 .optional(OssConfigOptions.FILE_PATH)
                 .optional(OssConfigOptions.BUCKET)
                 .optional(OssConfigOptions.ACCESS_KEY)

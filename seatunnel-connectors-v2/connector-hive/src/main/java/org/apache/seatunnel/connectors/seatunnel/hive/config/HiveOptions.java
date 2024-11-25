@@ -15,22 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.hive.source.config;
-
-import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
+package org.apache.seatunnel.connectors.seatunnel.hive.config;
 
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
-import org.apache.seatunnel.connectors.seatunnel.hive.config.BaseHiveOptions;
+import org.apache.seatunnel.connectors.seatunnel.file.config.BaseSourceConfigOptions;
 
-import java.util.List;
-import java.util.Map;
+public class HiveOptions extends BaseSourceConfigOptions {
 
-public class HiveSourceOptions extends BaseHiveOptions {
-    public static final Option<List<Map<String, Object>>> TABLE_CONFIGS =
-            Options.key("tables_configs")
-                    .type(new TypeReference<List<Map<String, Object>>>() {})
+    public static final Option<String> TABLE_NAME =
+            Options.key("table_name")
+                    .stringType()
                     .noDefaultValue()
-                    .withDescription(
-                            "Local file source configs, used to create multiple local file source.");
+                    .withDescription("Hive table name");
+
+    public static final Option<String> METASTORE_URI =
+            Options.key("metastore_uri")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Hive metastore uri");
+
+    public static final Option<String> HIVE_SITE_PATH =
+            Options.key("hive_site_path")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The path of hive-site.xml");
 }

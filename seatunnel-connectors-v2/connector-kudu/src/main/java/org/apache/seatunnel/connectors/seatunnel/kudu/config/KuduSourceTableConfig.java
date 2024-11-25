@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.kudu.config;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.Catalog;
+import org.apache.seatunnel.api.table.catalog.CatalogOptions;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.CatalogTableUtil;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -59,8 +60,8 @@ public class KuduSourceTableConfig implements Serializable {
 
         try (KuduCatalog kuduCatalog = (KuduCatalog) optionalCatalog.get()) {
             kuduCatalog.open();
-            if (config.getOptional(KuduSourceConfig.TABLE_LIST).isPresent()) {
-                return config.get(KuduSourceConfig.TABLE_LIST).stream()
+            if (config.getOptional(CatalogOptions.TABLE_LIST).isPresent()) {
+                return config.get(CatalogOptions.TABLE_LIST).stream()
                         .map(ReadonlyConfig::fromMap)
                         .map(readonlyConfig -> parseKuduSourceConfig(readonlyConfig, kuduCatalog))
                         .collect(Collectors.toList());

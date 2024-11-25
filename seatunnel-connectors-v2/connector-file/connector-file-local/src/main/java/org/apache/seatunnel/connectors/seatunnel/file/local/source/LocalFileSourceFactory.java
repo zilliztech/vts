@@ -50,7 +50,7 @@ public class LocalFileSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(BaseSourceConfigOptions.TABLE_CONFIGS)
+                .optional(TableSchemaOptions.TABLE_CONFIGS)
                 .optional(BaseSourceConfigOptions.FILE_PATH)
                 .optional(BaseSourceConfigOptions.FILE_FORMAT_TYPE)
                 .optional(BaseSourceConfigOptions.ENCODING)

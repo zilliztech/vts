@@ -17,8 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.file.config;
 
-import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
-
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.common.utils.DateTimeUtils;
@@ -27,7 +25,6 @@ import org.apache.seatunnel.common.utils.TimeUtils;
 import org.apache.seatunnel.format.text.constant.TextFormatConstant;
 
 import java.util.List;
-import java.util.Map;
 
 public class BaseSourceConfigOptions {
     public static final Option<FileFormat> FILE_FORMAT_TYPE =
@@ -169,11 +166,4 @@ public class BaseSourceConfigOptions {
                     .enumType(ArchiveCompressFormat.class)
                     .defaultValue(ArchiveCompressFormat.NONE)
                     .withDescription("Archive compression codec");
-
-    public static final Option<List<Map<String, Object>>> TABLE_CONFIGS =
-            Options.key("tables_configs")
-                    .type(new TypeReference<List<Map<String, Object>>>() {})
-                    .noDefaultValue()
-                    .withDescription(
-                            "Local file source configs, used to create multiple local file source.");
 }

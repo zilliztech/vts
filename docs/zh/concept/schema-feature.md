@@ -172,6 +172,46 @@ constraintKeys = [
 | INDEX_KEY  | 键   |
 | UNIQUE_KEY | 唯一键 |
 
+## 多表Schema
+
+```
+tables_configs = [
+  {
+    schema {
+      table = "database.schema.table1"
+      schema_first = false
+      comment = "comment"
+      columns = [
+        ...
+      ]
+      primaryKey {
+        ...
+      }
+      constraintKeys {
+        ...
+      }
+    }
+  },
+  {
+    schema = {
+      table = "database.schema.table2"
+      schema_first = false
+      comment = "comment"
+      columns = [
+        ...
+      ]
+      primaryKey {
+        ...
+      }
+      constraintKeys {
+        ...
+      }
+    }
+  }
+]
+
+```
+
 ## 如何使用schema
 
 ### 推荐
