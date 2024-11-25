@@ -138,6 +138,30 @@ Source plugin common parameters, please refer to [Source Common Options](../sour
 
 ```
 
+### Example3 : Kerberos
+
+```bash
+source {
+  Hive {
+    table_name = "default.test_hive_sink_on_hdfs_with_kerberos"
+    metastore_uri = "thrift://metastore:9083"
+    hive.hadoop.conf-path = "/tmp/hadoop"
+    result_table_name = hive_source
+    hive_site_path = "/tmp/hive-site.xml"
+    kerberos_principal = "hive/metastore.seatunnel@EXAMPLE.COM"
+    kerberos_keytab_path = "/tmp/hive.keytab"
+    krb5_path = "/tmp/krb5.conf"
+  }
+}
+```
+
+Description:
+
+- `hive_site_path`: The path to the `hive-site.xml` file.
+- `kerberos_principal`: The principal for Kerberos authentication.
+- `kerberos_keytab_path`: The keytab file path for Kerberos authentication.
+- `krb5_path`: The path to the `krb5.conf` file used for Kerberos authentication.
+
 ## Hive on s3
 
 ### Step 1

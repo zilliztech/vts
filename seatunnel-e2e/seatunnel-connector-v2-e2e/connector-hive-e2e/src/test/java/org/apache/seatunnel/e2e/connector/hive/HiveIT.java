@@ -180,6 +180,7 @@ public class HiveIT extends TestSuiteBase implements TestResource {
                 .await()
                 .atMost(360, TimeUnit.SECONDS)
                 .pollDelay(Duration.ofSeconds(10L))
+                .pollInterval(Duration.ofSeconds(3L))
                 .untilAsserted(this::initializeConnection);
         prepareTable();
     }
