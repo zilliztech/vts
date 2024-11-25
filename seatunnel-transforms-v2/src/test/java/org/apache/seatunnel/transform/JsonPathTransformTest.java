@@ -29,8 +29,8 @@ import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.transform.common.CommonOptions;
 import org.apache.seatunnel.transform.common.ErrorHandleWay;
+import org.apache.seatunnel.transform.common.TransformCommonOptions;
 import org.apache.seatunnel.transform.exception.ErrorDataTransformException;
 import org.apache.seatunnel.transform.jsonpath.JsonPathTransform;
 import org.apache.seatunnel.transform.jsonpath.JsonPathTransformConfig;
@@ -106,7 +106,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.FAIL.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);
@@ -126,7 +126,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.SKIP.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);
@@ -145,7 +145,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.SKIP_ROW.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);
@@ -153,7 +153,9 @@ public class JsonPathTransformTest {
         outputRow = transform.map(new SeaTunnelRow(new Object[] {"{\"f2\": 1}"}));
         Assertions.assertNull(outputRow);
 
-        configMap.put(CommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(), ErrorHandleWay.SKIP.name());
+        configMap.put(
+                TransformCommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(),
+                ErrorHandleWay.SKIP.name());
         configMap.put(
                 JsonPathTransformConfig.COLUMNS.key(),
                 Arrays.asList(
@@ -167,7 +169,9 @@ public class JsonPathTransformTest {
         outputRow = transform.map(new SeaTunnelRow(new Object[] {"{\"f2\": 1}"}));
         Assertions.assertNull(outputRow);
 
-        configMap.put(CommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(), ErrorHandleWay.SKIP.name());
+        configMap.put(
+                TransformCommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(),
+                ErrorHandleWay.SKIP.name());
         configMap.put(
                 JsonPathTransformConfig.COLUMNS.key(),
                 Arrays.asList(
@@ -178,7 +182,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.FAIL.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);
@@ -190,7 +194,9 @@ public class JsonPathTransformTest {
             // ignore
         }
 
-        configMap.put(CommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(), ErrorHandleWay.FAIL.name());
+        configMap.put(
+                TransformCommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(),
+                ErrorHandleWay.FAIL.name());
         configMap.put(
                 JsonPathTransformConfig.COLUMNS.key(),
                 Arrays.asList(
@@ -201,7 +207,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.SKIP.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);
@@ -210,7 +216,9 @@ public class JsonPathTransformTest {
         Assertions.assertNotNull(outputRow);
         Assertions.assertNull(outputRow.getField(outputTable.getSeaTunnelRowType().indexOf("f1")));
 
-        configMap.put(CommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(), ErrorHandleWay.FAIL.name());
+        configMap.put(
+                TransformCommonOptions.ROW_ERROR_HANDLE_WAY_OPTION.key(),
+                ErrorHandleWay.FAIL.name());
         configMap.put(
                 JsonPathTransformConfig.COLUMNS.key(),
                 Arrays.asList(
@@ -221,7 +229,7 @@ public class JsonPathTransformTest {
                                 "$.f1",
                                 JsonPathTransformConfig.DEST_FIELD.key(),
                                 "f1",
-                                CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
+                                TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key(),
                                 ErrorHandleWay.SKIP_ROW.name())));
         config = ReadonlyConfig.fromMap(configMap);
         transform = new JsonPathTransform(JsonPathTransformConfig.of(config, table), table);

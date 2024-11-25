@@ -20,9 +20,11 @@ package org.apache.seatunnel.api.transform;
 import org.apache.seatunnel.api.common.PluginIdentifierInterface;
 import org.apache.seatunnel.api.source.SeaTunnelJobAware;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 
 import java.io.Serializable;
+import java.util.List;
 
 public interface SeaTunnelTransform<T>
         extends Serializable, PluginIdentifierInterface, SeaTunnelJobAware {
@@ -43,6 +45,12 @@ public interface SeaTunnelTransform<T>
 
     /** Get the catalog table output by this transform */
     CatalogTable getProducedCatalogTable();
+
+    List<CatalogTable> getProducedCatalogTables();
+
+    default SchemaChangeEvent mapSchemaChangeEvent(SchemaChangeEvent schemaChangeEvent) {
+        return schemaChangeEvent;
+    }
 
     /** call it when Transformer completed */
     default void close() {}

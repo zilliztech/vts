@@ -42,7 +42,6 @@ import org.apache.flink.util.Collector;
 
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -128,7 +127,7 @@ public class TransformExecuteProcessor
                         pluginOutputIdentifier,
                         new DataStreamTableInfo(
                                 inputStream,
-                                Collections.singletonList(transform.getProducedCatalogTable()),
+                                transform.getProducedCatalogTables(),
                                 pluginOutputIdentifier));
             } catch (Exception e) {
                 throw new TaskExecuteException(

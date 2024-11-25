@@ -26,8 +26,8 @@ import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.SeaTunnelDataTypeConvertorUtil;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
-import org.apache.seatunnel.transform.common.CommonOptions;
 import org.apache.seatunnel.transform.common.ErrorHandleWay;
+import org.apache.seatunnel.transform.common.TransformCommonOptions;
 import org.apache.seatunnel.transform.exception.TransformCommonError;
 import org.apache.seatunnel.transform.exception.TransformException;
 
@@ -96,7 +96,8 @@ public class JsonPathTransformConfig implements Serializable {
             throw new TransformException(
                     COLUMNS_MUST_NOT_EMPTY, COLUMNS_MUST_NOT_EMPTY.getErrorMessage());
         }
-        ErrorHandleWay rowErrorHandleWay = config.get(CommonOptions.ROW_ERROR_HANDLE_WAY_OPTION);
+        ErrorHandleWay rowErrorHandleWay =
+                config.get(TransformCommonOptions.ROW_ERROR_HANDLE_WAY_OPTION);
         List<Map<String, String>> columns = config.get(COLUMNS);
         List<ColumnConfig> configs = new ArrayList<>(columns.size());
         for (Map<String, String> map : columns) {
@@ -106,7 +107,10 @@ public class JsonPathTransformConfig implements Serializable {
             String destField = map.get(DEST_FIELD.key());
             String type = map.getOrDefault(DEST_TYPE.key(), DEST_TYPE.defaultValue());
             ErrorHandleWay columnErrorHandleWay =
-                    Optional.ofNullable(map.get(CommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION.key()))
+                    Optional.ofNullable(
+                                    map.get(
+                                            TransformCommonOptions.COLUMN_ERROR_HANDLE_WAY_OPTION
+                                                    .key()))
                             .map(ErrorHandleWay::valueOf)
                             .orElse(null);
 

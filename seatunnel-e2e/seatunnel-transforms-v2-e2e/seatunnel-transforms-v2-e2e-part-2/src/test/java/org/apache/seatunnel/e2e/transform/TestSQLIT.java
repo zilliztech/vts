@@ -79,6 +79,17 @@ public class TestSQLIT extends TestSuiteBase {
         Assertions.assertEquals(0, splitSql.getExitCode());
     }
 
+    @DisabledOnContainer(
+            value = {},
+            type = {EngineType.SPARK},
+            disabledReason = "Currently SPARK do not multi table transform")
+    @TestTemplate
+    public void testSQLTransformMultiTable(TestContainer container)
+            throws IOException, InterruptedException {
+        Container.ExecResult sqlTransform = container.executeJob("/sql_transform.conf");
+        Assertions.assertEquals(0, sqlTransform.getExitCode());
+    }
+
     @TestTemplate
     @DisabledOnContainer(
             value = {},
