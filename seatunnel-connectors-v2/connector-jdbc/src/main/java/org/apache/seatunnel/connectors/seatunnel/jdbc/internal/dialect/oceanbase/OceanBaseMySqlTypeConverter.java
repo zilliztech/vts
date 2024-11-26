@@ -104,6 +104,8 @@ public class OceanBaseMySqlTypeConverter
     private static final String VECTOR_TYPE_NAME = "";
     private static final String VECTOR_NAME = "VECTOR";
 
+    public static final OceanBaseMySqlTypeConverter INSTANCE = new OceanBaseMySqlTypeConverter();
+
     @Override
     public String identifier() {
         return DatabaseIdentifier.OCENABASE;

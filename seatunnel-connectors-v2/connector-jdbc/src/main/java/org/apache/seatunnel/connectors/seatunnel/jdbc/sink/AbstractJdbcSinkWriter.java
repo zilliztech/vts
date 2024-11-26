@@ -17,20 +17,15 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.sink;
 
-import org.apache.seatunnel.api.event.EventType;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
-import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.schema.event.AlterTableAddColumnEvent;
-import org.apache.seatunnel.api.table.schema.event.AlterTableChangeColumnEvent;
 import org.apache.seatunnel.api.table.schema.event.AlterTableColumnEvent;
 import org.apache.seatunnel.api.table.schema.event.AlterTableColumnsEvent;
-import org.apache.seatunnel.api.table.schema.event.AlterTableDropColumnEvent;
-import org.apache.seatunnel.api.table.schema.event.AlterTableModifyColumnEvent;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
+import org.apache.seatunnel.api.table.schema.handler.TableSchemaChangeEventDispatcher;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
@@ -50,9 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 public abstract class AbstractJdbcSinkWriter<ResourceT>
@@ -67,6 +60,8 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
     protected JdbcConnectionProvider connectionProvider;
     protected JdbcSinkConfig jdbcSinkConfig;
     protected JdbcOutputFormat<SeaTunnelRow, JdbcBatchStatementExecutor<SeaTunnelRow>> outputFormat;
+    protected TableSchemaChangeEventDispatcher tableSchemaChanger =
+            new TableSchemaChangeEventDispatcher();
 
     @Override
     public void applySchemaChange(SchemaChangeEvent event) throws IOException {
@@ -88,57 +83,7 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
     }
 
     protected void processSchemaChangeEvent(AlterTableColumnEvent event) throws IOException {
-        List<Column> columns = new ArrayList<>(tableSchema.getColumns());
-        switch (event.getEventType()) {
-            case SCHEMA_CHANGE_ADD_COLUMN:
-                AlterTableAddColumnEvent alterTableAddColumnEvent =
-                        (AlterTableAddColumnEvent) event;
-                Column addColumn = alterTableAddColumnEvent.getColumn();
-                String afterColumn = alterTableAddColumnEvent.getAfterColumn();
-                if (StringUtils.isNotBlank(afterColumn)) {
-                    Optional<Column> columnOptional =
-                            columns.stream()
-                                    .filter(column -> afterColumn.equals(column.getName()))
-                                    .findFirst();
-                    if (!columnOptional.isPresent()) {
-                        columns.add(addColumn);
-                        break;
-                    }
-                    columnOptional.ifPresent(
-                            column -> {
-                                int index = columns.indexOf(column);
-                                columns.add(index + 1, addColumn);
-                            });
-                } else {
-                    columns.add(addColumn);
-                }
-                break;
-            case SCHEMA_CHANGE_DROP_COLUMN:
-                String dropColumn = ((AlterTableDropColumnEvent) event).getColumn();
-                columns.removeIf(column -> column.getName().equalsIgnoreCase(dropColumn));
-                break;
-            case SCHEMA_CHANGE_MODIFY_COLUMN:
-                Column modifyColumn = ((AlterTableModifyColumnEvent) event).getColumn();
-                replaceColumnByIndex(
-                        event.getEventType(), columns, modifyColumn.getName(), modifyColumn);
-                break;
-            case SCHEMA_CHANGE_CHANGE_COLUMN:
-                AlterTableChangeColumnEvent alterTableChangeColumnEvent =
-                        (AlterTableChangeColumnEvent) event;
-                Column changeColumn = alterTableChangeColumnEvent.getColumn();
-                String oldColumnName = alterTableChangeColumnEvent.getOldColumn();
-                replaceColumnByIndex(event.getEventType(), columns, oldColumnName, changeColumn);
-                break;
-            default:
-                throw new SeaTunnelException(
-                        "Unsupported schemaChangeEvent for event type: " + event.getEventType());
-        }
-        this.tableSchema =
-                TableSchema.builder()
-                        .columns(columns)
-                        .primaryKey(tableSchema.getPrimaryKey())
-                        .constraintKey(tableSchema.getConstraintKeys())
-                        .build();
+        this.tableSchema = tableSchemaChanger.reset(tableSchema).apply(event);
         reOpenOutputFormat(event);
     }
 
@@ -148,7 +93,7 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
                 dialect.getJdbcConnectionProvider(jdbcSinkConfig.getJdbcConnectionConfig());
         try (Connection connection =
                 refreshTableSchemaConnectionProvider.getOrEstablishConnection()) {
-            dialect.applySchemaChange(event, connection, sinkTablePath);
+            dialect.applySchemaChange(connection, sinkTablePath, event);
         } catch (Throwable e) {
             throw new JdbcConnectorException(
                     JdbcConnectorErrorCode.REFRESH_PHYSICAL_TABLESCHEMA_BY_SCHEMA_CHANGE_EVENT, e);
@@ -158,21 +103,5 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
                                 dialect, connectionProvider, jdbcSinkConfig, tableSchema)
                         .build();
         this.outputFormat.open();
-    }
-
-    protected void replaceColumnByIndex(
-            EventType eventType, List<Column> columns, String oldColumnName, Column newColumn) {
-        for (int i = 0; i < columns.size(); i++) {
-            Column column = columns.get(i);
-            if (column.getName().equalsIgnoreCase(oldColumnName)) {
-                // rename ...... to ......  which just has column name
-                if (eventType.equals(EventType.SCHEMA_CHANGE_CHANGE_COLUMN)
-                        && newColumn.getDataType() == null) {
-                    columns.set(i, column.rename(newColumn.getName()));
-                } else {
-                    columns.set(i, newColumn);
-                }
-            }
-        }
     }
 }

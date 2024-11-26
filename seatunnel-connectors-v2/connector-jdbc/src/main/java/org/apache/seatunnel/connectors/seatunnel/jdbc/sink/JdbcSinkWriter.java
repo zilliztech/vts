@@ -17,9 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.sink;
 
-import org.apache.seatunnel.api.event.EventType;
 import org.apache.seatunnel.api.sink.MultiTableResourceManager;
-import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -30,7 +28,6 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorExc
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.JdbcOutputFormatBuilder;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.connection.SimpleJdbcConnectionPoolProviderProxy;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialect;
-import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.oracle.OracleDialect;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.state.JdbcSinkState;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.state.XidInfo;
 
@@ -42,8 +39,6 @@ import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
-import static org.apache.seatunnel.api.event.EventType.SCHEMA_CHANGE_CHANGE_COLUMN;
 
 @Slf4j
 public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager> {
@@ -166,23 +161,5 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
         } finally {
             outputFormat.close();
         }
-    }
-
-    @Override
-    protected void replaceColumnByIndex(
-            EventType eventType, List<Column> columns, String oldColumnName, Column newColumn) {
-        // The operation of renaming a column in Oracle is only supported to modify the column name,
-        // so we just modify the column name directly.
-        if (eventType.equals(SCHEMA_CHANGE_CHANGE_COLUMN) && dialect instanceof OracleDialect) {
-            for (int i = 0; i < columns.size(); i++) {
-                Column column = columns.get(i);
-                if (column.getName().equalsIgnoreCase(oldColumnName)) {
-                    column = column.rename(newColumn.getName());
-                    columns.set(i, column);
-                }
-            }
-            return;
-        }
-        super.replaceColumnByIndex(eventType, columns, oldColumnName, newColumn);
     }
 }
