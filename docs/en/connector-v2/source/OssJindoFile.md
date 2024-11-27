@@ -72,6 +72,7 @@ It only supports hadoop version **2.9.X+**.
 | compress_codec            | string  | no       | none                |
 | archive_compress_codec    | string  | no       | none                |
 | encoding                  | string  | no       | UTF-8               |
+| null_format               | string  | no       | -                   |
 | common-options            |         | no       | -                   |
 
 ### path [string]
@@ -342,6 +343,13 @@ The compress codec of archive files and the details that supported as the follow
 
 Only used when file_format_type is json,text,csv,xml.
 The encoding of the file to read. This param will be parsed by `Charset.forName(encoding)`.
+
+### null_format [string]
+
+Only used when file_format_type is text.
+null_format to define which strings can be represented as null.
+
+e.g: `\N`
 
 ### common options
 

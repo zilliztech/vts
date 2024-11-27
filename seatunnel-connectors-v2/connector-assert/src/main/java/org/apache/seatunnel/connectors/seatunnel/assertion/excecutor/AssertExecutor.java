@@ -285,11 +285,11 @@ public class AssertExecutor {
 
     private Boolean checkType(Object value, SeaTunnelDataType<?> fieldType) {
         if (value == null) {
-            if (fieldType.getSqlType() == SqlType.NULL) {
-                return true;
-            } else {
-                return false;
-            }
+            return true;
+        }
+
+        if (fieldType.getSqlType() == SqlType.NULL) {
+            return false;
         }
 
         if (fieldType.getSqlType() == SqlType.ROW) {

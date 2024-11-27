@@ -268,6 +268,12 @@ public class LocalFileIT extends TestSuiteBase {
                         "/excel/e2e.xlsx",
                         "/seatunnel/read/excel_filter/name=tyrantlucifer/hobby=coding/e2e_filter.xlsx",
                         container);
+
+                ContainerUtil.copyFileIntoContainers(
+                        "/text/e2e_null_format.txt",
+                        "/seatunnel/read/e2e_null_format/e2e_null_format.txt",
+                        container);
+
                 container.execInContainer("mkdir", "-p", "/tmp/fake_empty");
             };
 
@@ -293,6 +299,7 @@ public class LocalFileIT extends TestSuiteBase {
         helper.execute("/text/fake_to_local_file_with_encoding.conf");
         // test read local csv file with assigning encoding
         helper.execute("/text/local_file_text_to_console_with_encoding.conf");
+        helper.execute("/text/local_file_null_format_assert.conf");
 
         // test write local json file
         helper.execute("/json/fake_to_local_file_json.conf");
