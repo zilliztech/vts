@@ -533,7 +533,7 @@ public interface JdbcDialect extends Serializable {
     default void applySchemaChange(
             Connection connection, TablePath tablePath, AlterTableAddColumnEvent event)
             throws SQLException {
-        boolean sameCatalog = event.getSourceDialectName().equals(dialectName());
+        boolean sameCatalog = StringUtils.equals(dialectName(), event.getSourceDialectName());
         BasicTypeDefine typeDefine = getTypeConverter().reconvert(event.getColumn());
         String columnType =
                 sameCatalog ? event.getColumn().getSourceType() : typeDefine.getColumnType();
@@ -613,7 +613,7 @@ public interface JdbcDialect extends Serializable {
             return;
         }
 
-        boolean sameCatalog = event.getSourceDialectName().equals(dialectName());
+        boolean sameCatalog = StringUtils.equals(dialectName(), event.getSourceDialectName());
         BasicTypeDefine typeDefine = getTypeConverter().reconvert(event.getColumn());
         String columnType =
                 sameCatalog ? event.getColumn().getSourceType() : typeDefine.getColumnType();
@@ -675,7 +675,7 @@ public interface JdbcDialect extends Serializable {
             Connection connection, TablePath tablePath, AlterTableModifyColumnEvent event)
             throws SQLException {
 
-        boolean sameCatalog = event.getSourceDialectName().equals(dialectName());
+        boolean sameCatalog = StringUtils.equals(dialectName(), event.getSourceDialectName());
         BasicTypeDefine typeDefine = getTypeConverter().reconvert(event.getColumn());
         String columnType =
                 sameCatalog ? event.getColumn().getSourceType() : typeDefine.getColumnType();

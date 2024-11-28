@@ -425,7 +425,7 @@ public class OracleDialect implements JdbcDialect {
             throw new IllegalArgumentException("Unsupported AlterTableColumnEvent: " + event);
         }
 
-        boolean sameCatalog = event.getSourceDialectName().equals(dialectName());
+        boolean sameCatalog = StringUtils.equals(dialectName(), event.getSourceDialectName());
         BasicTypeDefine typeDefine = getTypeConverter().reconvert(column);
         String columnType = sameCatalog ? column.getSourceType() : typeDefine.getColumnType();
         StringBuilder sqlBuilder =

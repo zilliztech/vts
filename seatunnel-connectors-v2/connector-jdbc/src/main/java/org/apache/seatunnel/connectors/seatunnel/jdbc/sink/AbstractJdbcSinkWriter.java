@@ -22,12 +22,9 @@ import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.schema.event.AlterTableColumnEvent;
-import org.apache.seatunnel.api.table.schema.event.AlterTableColumnsEvent;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.schema.handler.TableSchemaChangeEventDispatcher;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
@@ -39,13 +36,10 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.executor.JdbcBatc
 import org.apache.seatunnel.connectors.seatunnel.jdbc.state.JdbcSinkState;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.state.XidInfo;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.util.List;
 
 @Slf4j
 public abstract class AbstractJdbcSinkWriter<ResourceT>
@@ -65,29 +59,11 @@ public abstract class AbstractJdbcSinkWriter<ResourceT>
 
     @Override
     public void applySchemaChange(SchemaChangeEvent event) throws IOException {
-        if (event instanceof AlterTableColumnsEvent) {
-            AlterTableColumnsEvent alterTableColumnsEvent = (AlterTableColumnsEvent) event;
-            List<AlterTableColumnEvent> events = alterTableColumnsEvent.getEvents();
-            for (AlterTableColumnEvent alterTableColumnEvent : events) {
-                String sourceDialectName = alterTableColumnEvent.getSourceDialectName();
-                if (StringUtils.isBlank(sourceDialectName)) {
-                    throw new SeaTunnelException(
-                            "The sourceDialectName in AlterTableColumnEvent can not be empty. event: "
-                                    + event);
-                }
-                processSchemaChangeEvent(alterTableColumnEvent);
-            }
-        } else {
-            log.warn("We only support AlterTableColumnsEvent, but actual event is " + event);
-        }
-    }
-
-    protected void processSchemaChangeEvent(AlterTableColumnEvent event) throws IOException {
         this.tableSchema = tableSchemaChanger.reset(tableSchema).apply(event);
         reOpenOutputFormat(event);
     }
 
-    protected void reOpenOutputFormat(AlterTableColumnEvent event) throws IOException {
+    protected void reOpenOutputFormat(SchemaChangeEvent event) throws IOException {
         this.prepareCommit();
         JdbcConnectionProvider refreshTableSchemaConnectionProvider =
                 dialect.getJdbcConnectionProvider(jdbcSinkConfig.getJdbcConnectionConfig());
