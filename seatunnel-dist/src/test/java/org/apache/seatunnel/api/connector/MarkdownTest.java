@@ -20,6 +20,8 @@ package org.apache.seatunnel.api.connector;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +33,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class MarkdownHeaderTest {
+public class MarkdownTest {
 
     private static final List<Path> docsDirectorys = new ArrayList<>();
 
@@ -39,6 +41,53 @@ public class MarkdownHeaderTest {
     public static void setup() {
         docsDirectorys.add(Paths.get("..", "docs", "en"));
         docsDirectorys.add(Paths.get("..", "docs", "zh"));
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    public void testChineseDocFileNameContainsInEnglishVersionDoc() {
+        // Verify that the file names in the English and Chinese directories are the same.
+        List<String> enFileName =
+                fileName(docsDirectorys.get(0)).stream()
+                        .map(path -> path.replace("/en/", "/"))
+                        .collect(Collectors.toList());
+        List<String> zhFileName =
+                fileName(docsDirectorys.get(1)).stream()
+                        .map(path -> path.replace("/zh/", "/"))
+                        .collect(Collectors.toList());
+
+        // Find Chinese files that don't have English counterparts
+        List<String> missingEnglishFiles =
+                zhFileName.stream()
+                        .filter(zhFile -> !enFileName.contains(zhFile))
+                        .collect(Collectors.toList());
+
+        // If there are files missing English versions, throw an exception
+        if (!missingEnglishFiles.isEmpty()) {
+            StringBuilder errorMessage = new StringBuilder();
+            errorMessage.append(
+                    String.format(
+                            "Found %d Chinese files without English versions:\n",
+                            missingEnglishFiles.size()));
+
+            missingEnglishFiles.forEach(
+                    file ->
+                            errorMessage.append(
+                                    String.format("Missing English version for: %s\n", file)));
+
+            throw new AssertionError(errorMessage.toString());
+        }
+    }
+
+    private List<String> fileName(Path docDirectory) {
+        try (Stream<Path> paths = Files.walk(docDirectory)) {
+            return paths.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".md"))
+                    .map(Path::toString)
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
