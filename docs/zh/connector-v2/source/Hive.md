@@ -1,129 +1,126 @@
 # Hive
 
-> Hive source connector
+> Hive 源连接器
 
-## Description
+## 描述
 
-Read data from Hive.
+从 Hive 读取数据。
 
-:::tip
+:::提示
 
-In order to use this connector, You must ensure your spark/flink cluster already integrated hive. The tested hive version is 2.3.9 and 3.1.3 .
+为了使用此连接器，您必须确保您的 Spark/Flink 集群已经集成了 Hive。测试过的 Hive 版本是 2.3.9 和 3.1.3。
 
-If you use SeaTunnel Engine, You need put seatunnel-hadoop3-3.1.4-uber.jar and hive-exec-3.1.3.jar and libfb303-0.9.3.jar in $SEATUNNEL_HOME/lib/ dir.
+如果您使用 SeaTunnel 引擎，您需要将 `seatunnel-hadoop3-3.1.4-uber.jar`、`hive-exec-3.1.3.jar` 和 `libfb303-0.9.3.jar` 放在 `$SEATUNNEL_HOME/lib/` 目录中。
 :::
 
-## Key features
+## 关键特性
 
-- [x] [batch](../../concept/connector-v2-features.md)
-- [ ] [stream](../../concept/connector-v2-features.md)
-- [x] [exactly-once](../../concept/connector-v2-features.md)
+- [x] [批处理](../../concept/connector-v2-features.md)
+- [ ] [流处理](../../concept/connector-v2-features.md)
+- [x] [精确一次](../../concept/connector-v2-features.md)
 
-Read all the data in a split in a pollNext call. What splits are read will be saved in snapshot.
+在 `pollNext` 调用中读取分片中的所有数据。读取的分片将保存在快照中。
 
-- [x] [schema projection](../../concept/connector-v2-features.md)
-- [x] [parallelism](../../concept/connector-v2-features.md)
-- [ ] [support user-defined split](../../concept/connector-v2-features.md)
-- [x] file format
-  - [x] text
-  - [x] csv
-  - [x] parquet
-  - [x] orc
-  - [x] json
+- [x] [schema 投影](../../concept/connector-v2-features.md)
+- [x] [并行度](../../concept/connector-v2-features.md)
+- [ ] [支持用户定义的分片](../../concept/connector-v2-features.md)
+- [x] 文件格式
+    - [x] 文本
+    - [x] CSV
+    - [x] Parquet
+    - [x] ORC
+    - [x] JSON
 
-## Options
+## 选项
 
-|         name          |  type  | required | default value  |
-|-----------------------|--------|----------|----------------|
-| table_name            | string | yes      | -              |
-| metastore_uri         | string | yes      | -              |
-| krb5_path             | string | no       | /etc/krb5.conf |
-| kerberos_principal    | string | no       | -              |
-| kerberos_keytab_path  | string | no       | -              |
-| hdfs_site_path        | string | no       | -              |
-| hive_site_path        | string | no       | -              |
-| hive.hadoop.conf      | Map    | no       | -              |
-| hive.hadoop.conf-path | string | no       | -              |
-| read_partitions       | list   | no       | -              |
-| read_columns          | list   | no       | -              |
-| compress_codec        | string | no       | none           |
-| common-options        |        | no       | -              |
+|         名称          |  类型  | 必需 | 默认值  |
+|-----------------------|--------|------|---------|
+| table_name            | string | 是   | -       |
+| metastore_uri         | string | 是   | -       |
+| krb5_path             | string | 否   | /etc/krb5.conf |
+| kerberos_principal    | string | 否   | -       |
+| kerberos_keytab_path  | string | 否   | -       |
+| hdfs_site_path        | string | 否   | -       |
+| hive_site_path        | string | 否   | -       |
+| hive.hadoop.conf      | Map    | 否   | -       |
+| hive.hadoop.conf-path | string | 否   | -       |
+| read_partitions       | list   | 否   | -       |
+| read_columns          | list   | 否   | -       |
+| compress_codec        | string | 否   | none    |
+| common-options        |        | 否   | -       |
 
 ### table_name [string]
 
-Target Hive table name eg: db1.table1
+目标 Hive 表名，例如：`db1.table1`
 
 ### metastore_uri [string]
 
-Hive metastore uri
+Hive 元存储 URI
 
 ### hdfs_site_path [string]
 
-The path of `hdfs-site.xml`, used to load ha configuration of namenodes
+`hdfs-site.xml` 的路径，用于加载 Namenode 的高可用配置
 
 ### hive.hadoop.conf [map]
 
-Properties in hadoop conf('core-site.xml', 'hdfs-site.xml', 'hive-site.xml')
+Hadoop 配置中的属性（`core-site.xml`、`hdfs-site.xml`、`hive-site.xml`）
 
 ### hive.hadoop.conf-path [string]
 
-The specified loading path for the 'core-site.xml', 'hdfs-site.xml', 'hive-site.xml' files
+指定加载 `core-site.xml`、`hdfs-site.xml`、`hive-site.xml` 文件的路径
 
 ### read_partitions [list]
 
-The target partitions that user want to read from hive table, if user does not set this parameter, it will read all the data from hive table.
+用户希望从 Hive 表中读取的目标分区，如果用户未设置此参数，将读取 Hive 表中的所有数据。
 
-**Tips: Every partition in partitions list should have the same directory depth. For example, a hive table has two partitions: par1 and par2, if user sets it like as the following:**
-**read_partitions = [par1=xxx, par1=yyy/par2=zzz], it is illegal**
+**提示：分区列表中的每个分区应具有相同的目录层级。例如，一个 Hive 表有两个分区：`par1` 和 `par2`，如果用户设置如下：**
+**`read_partitions = [par1=xxx, par1=yyy/par2=zzz]`，这是不合法的**
 
 ### krb5_path [string]
 
-The path of `krb5.conf`, used to authentication kerberos
+`krb5.conf` 的路径，用于 Kerberos 认证
 
 ### kerberos_principal [string]
 
-The principal of kerberos authentication
+Kerberos 认证的主体
 
 ### kerberos_keytab_path [string]
 
-The keytab file path of kerberos authentication
+Kerberos 认证的 keytab 文件路径
 
 ### read_columns [list]
 
-The read column list of the data source, user can use it to implement field projection.
+数据源的读取列列表，用户可以使用它来实现字段投影。
 
 ### compress_codec [string]
 
-The compress codec of files and the details that supported as the following shown:
+文件的压缩编解码器，支持的详细信息如下所示：
 
 - txt: `lzo` `none`
 - json: `lzo` `none`
 - csv: `lzo` `none`
 - orc/parquet:  
-  automatically recognizes the compression type, no additional settings required.
+  自动识别压缩类型，无需额外设置。
 
-### common options
+### 通用选项
 
-Source plugin common parameters, please refer to [Source Common Options](../source-common-options.md) for details
+源插件的通用参数，请参阅 [Source Common Options](../source-common-options.md) 了解详细信息。
 
-## Example
+## 示例
 
-### Example 1: Single table
+### 示例 1：单表
 
 ```bash
-
   Hive {
     table_name = "default.seatunnel_orc"
     metastore_uri = "thrift://namenode001:9083"
   }
-
 ```
 
-### Example 2: Multiple tables
-> Note: Hive is a structured data source and should be use 'table_list', and 'tables_configs' will be removed in the future.
+### 示例 2：多表
+> 注意：Hive 是结构化数据源，应使用 `table_list`，`tables_configs` 将在未来移除。
 
 ```bash
-
   Hive {
     table_list = [
         {
@@ -136,11 +133,9 @@ Source plugin common parameters, please refer to [Source Common Options](../sour
         }
     ]
   }
-
 ```
 
 ```bash
-
   Hive {
     tables_configs = [
         {
@@ -153,10 +148,9 @@ Source plugin common parameters, please refer to [Source Common Options](../sour
         }
     ]
   }
-
 ```
 
-### Example3 : Kerberos
+### 示例 3：Kerberos
 
 ```bash
 source {
@@ -173,14 +167,14 @@ source {
 }
 ```
 
-Description:
+描述：
 
-- `hive_site_path`: The path to the `hive-site.xml` file.
-- `kerberos_principal`: The principal for Kerberos authentication.
-- `kerberos_keytab_path`: The keytab file path for Kerberos authentication.
-- `krb5_path`: The path to the `krb5.conf` file used for Kerberos authentication.
+- `hive_site_path`：`hive-site.xml` 文件的路径。
+- `kerberos_principal`：Kerberos 认证的主体。
+- `kerberos_keytab_path`：Kerberos 认证的 keytab 文件路径。
+- `krb5_path`：用于 Kerberos 认证的 `krb5.conf` 文件路径。
 
-Run the case:
+运行案例：
 
 ```bash
 env {
@@ -247,17 +241,17 @@ sink {
 
 ## Hive on s3
 
-### Step 1
+### 步骤 1
 
-Create the lib dir for hive of emr.
+为 EMR 的 Hive 创建 lib 目录。
 
 ```shell
 mkdir -p ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 2
+### 步骤 2
 
-Get the jars from maven center to the lib.
+从 Maven 中心获取 jar 文件到 lib。
 
 ```shell
 cd ${SEATUNNEL_HOME}/plugins/Hive/lib
@@ -265,9 +259,9 @@ wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.6.5/hadoop-aw
 wget https://repo1.maven.org/maven2/org/apache/hive/hive-exec/2.3.9/hive-exec-2.3.9.jar
 ```
 
-### Step 3
+### 步骤 3
 
-Copy the jars from your environment on emr to the lib dir.
+从您的 EMR 环境中复制 jar 文件到 lib 目录。
 
 ```shell
 cp /usr/share/aws/emr/emrfs/lib/emrfs-hadoop-assembly-2.60.0.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
@@ -276,9 +270,9 @@ cp /usr/share/aws/emr/hadoop-state-pusher/lib/javax.inject-1.jar ${SEATUNNEL_HOM
 cp /usr/share/aws/emr/hadoop-state-pusher/lib/aopalliance-1.0.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 4
+### 步骤 4
 
-Run the case.
+运行案例。
 
 ```shell
 env {
@@ -314,35 +308,35 @@ sink {
 
 ## Hive on oss
 
-### Step 1
+### 步骤 1
 
-Create the lib dir for hive of emr.
+为 EMR 的 Hive 创建 lib 目录。
 
 ```shell
 mkdir -p ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 2
+### 步骤 2
 
-Get the jars from maven center to the lib.
+从 Maven 中心获取 jar 文件到 lib。
 
 ```shell
 cd ${SEATUNNEL_HOME}/plugins/Hive/lib
 wget https://repo1.maven.org/maven2/org/apache/hive/hive-exec/2.3.9/hive-exec-2.3.9.jar
 ```
 
-### Step 3
+### 步骤 3
 
-Copy the jars from your environment on emr to the lib dir and delete the conflicting jar.
+从您的 EMR 环境中复制 jar 文件到 lib 目录并删除冲突的 jar。
 
 ```shell
 cp -r /opt/apps/JINDOSDK/jindosdk-current/lib/jindo-*.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
 rm -f ${SEATUNNEL_HOME}/lib/hadoop-aliyun-*.jar
 ```
 
-### Step 4
+### 步骤 4
 
-Run the case.
+运行案例。
 
 ```shell
 env {

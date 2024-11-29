@@ -1,111 +1,109 @@
 # Hive
 
-> Hive sink connector
+> Hive Sink 连接器
 
-## Description
+## 描述
 
-Write data to Hive.
+将数据写入 Hive。
 
-:::tip
+:::提示
 
-In order to use this connector, You must ensure your spark/flink cluster already integrated hive. The tested hive version is 2.3.9 and 3.1.3 .
+为了使用此连接器，您必须确保您的 Spark/Flink 集群已经集成了 Hive。测试过的 Hive 版本是 2.3.9 和 3.1.3。
 
-If you use SeaTunnel Engine, You need put seatunnel-hadoop3-3.1.4-uber.jar and hive-exec-3.1.3.jar and libfb303-0.9.3.jar in $SEATUNNEL_HOME/lib/ dir.
+如果您使用 SeaTunnel 引擎，您需要将 `seatunnel-hadoop3-3.1.4-uber.jar`、`hive-exec-3.1.3.jar` 和 `libfb303-0.9.3.jar` 放在 `$SEATUNNEL_HOME/lib/` 目录中。
 :::
 
-## Key features
+## 关键特性
 
-- [x] [support multiple table write](../../concept/connector-v2-features.md)
-- [x] [exactly-once](../../concept/connector-v2-features.md)
+- [x] [支持多表写入](../../concept/connector-v2-features.md)
+- [x] [精确一次](../../concept/connector-v2-features.md)
 
-By default, we use 2PC commit to ensure `exactly-once`
+默认情况下，我们使用 2PC 提交来确保“精确一次”。
 
-- [x] file format
-  - [x] text
-  - [x] csv
-  - [x] parquet
-  - [x] orc
-  - [x] json
-- [x] compress codec
-  - [x] lzo
+- [x] 文件格式
+    - [x] 文本
+    - [x] CSV
+    - [x] Parquet
+    - [x] ORC
+    - [x] JSON
+- [x] 压缩编解码器
+    - [x] LZO
 
-## Options
+## 选项
 
-|             name              |  type   | required | default value  |
-|-------------------------------|---------|----------|----------------|
-| table_name                    | string  | yes      | -              |
-| metastore_uri                 | string  | yes      | -              |
-| compress_codec                | string  | no       | none           |
-| hdfs_site_path                | string  | no       | -              |
-| hive_site_path                | string  | no       | -              |
-| hive.hadoop.conf              | Map     | no       | -              |
-| hive.hadoop.conf-path         | string  | no       | -              |
-| krb5_path                     | string  | no       | /etc/krb5.conf |
-| kerberos_principal            | string  | no       | -              |
-| kerberos_keytab_path          | string  | no       | -              |
-| abort_drop_partition_metadata | boolean | no       | true           |
-| common-options                |         | no       | -              |
+|             名称              |  类型   | 必需 | 默认值  |
+|-------------------------------|---------|------|---------|
+| table_name                    | string  | 是   | -       |
+| metastore_uri                 | string  | 是   | -       |
+| compress_codec                | string  | 否   | none    |
+| hdfs_site_path                | string  | 否   | -       |
+| hive_site_path                | string  | 否   | -       |
+| hive.hadoop.conf              | Map     | 否   | -       |
+| hive.hadoop.conf-path         | string  | 否   | -       |
+| krb5_path                     | string  | 否   | /etc/krb5.conf |
+| kerberos_principal            | string  | 否   | -       |
+| kerberos_keytab_path          | string  | 否   | -       |
+| abort_drop_partition_metadata | boolean | 否   | true    |
+| common-options                |         | 否   | -       |
 
 ### table_name [string]
 
-Target Hive table name eg: db1.table1, and if the source is multiple mode, you can use `${database_name}.${table_name}` to generate the table name, it will replace the `${database_name}` and `${table_name}` with the value of the CatalogTable generate from the source.
+目标 Hive 表名，例如：`db1.table1`。如果源是多模式，您可以使用 `${database_name}.${table_name}` 来生成表名，它将用源生成的 CatalogTable 的值替换 `${database_name}` 和 `${table_name}`。
 
 ### metastore_uri [string]
 
-Hive metastore uri
+Hive 元存储 URI
 
 ### hdfs_site_path [string]
 
-The path of `hdfs-site.xml`, used to load ha configuration of namenodes
+`hdfs-site.xml` 的路径，用于加载 Namenode 的高可用配置
 
 ### hive_site_path [string]
 
-The path of `hive-site.xml`
+`hive-site.xml` 的路径
 
 ### hive.hadoop.conf [map]
 
-Properties in hadoop conf('core-site.xml', 'hdfs-site.xml', 'hive-site.xml')
+Hadoop 配置中的属性（`core-site.xml`、`hdfs-site.xml`、`hive-site.xml`）
 
 ### hive.hadoop.conf-path [string]
 
-The specified loading path for the 'core-site.xml', 'hdfs-site.xml', 'hive-site.xml' files
+指定加载 `core-site.xml`、`hdfs-site.xml`、`hive-site.xml` 文件的路径
 
 ### krb5_path [string]
 
-The path of `krb5.conf`, used to authentication kerberos
+`krb5.conf` 的路径，用于 Kerberos 认证
 
-The path of `hive-site.xml`, used to authentication hive metastore
+`hive-site.xml` 的路径，用于 Hive 元存储认证
 
 ### kerberos_principal [string]
 
-The principal of kerberos
+Kerberos 的主体
 
 ### kerberos_keytab_path [string]
 
-The keytab path of kerberos
+Kerberos 的 keytab 文件路径
 
 ### abort_drop_partition_metadata [boolean]
 
-Flag to decide whether to drop partition metadata from Hive Metastore during an abort operation. Note: this only affects the metadata in the metastore, the data in the partition will always be deleted(data generated during the synchronization process).
+在中止操作期间是否从 Hive Metastore 中删除分区元数据的标志。注意：这只影响元存储中的元数据，分区中的数据将始终被删除（同步过程中生成的数据）。
 
-### common options
+### 通用选项
 
-Sink plugin common parameters, please refer to [Sink Common Options](../sink-common-options.md) for details
+Sink 插件的通用参数，请参阅 [Sink Common Options](../sink-common-options.md) 了解详细信息。
 
-## Example
+## 示例
 
 ```bash
-
   Hive {
     table_name = "default.seatunnel_orc"
     metastore_uri = "thrift://namenode001:9083"
   }
-
 ```
 
-### example 1
+### 示例 1
 
-We have a source table like this:
+我们有一个源表如下：
 
 ```bash
 create table test_hive_source(
@@ -128,10 +126,9 @@ create table test_hive_source(
      test_struct                           STRUCT<street:STRING, city:STRING, state:STRING, zip:INT>
      )
 PARTITIONED BY (test_par1 STRING, test_par2 STRING);
-
 ```
 
-We need read data from the source table and write to another table:
+我们需要从源表读取数据并写入另一个表：
 
 ```bash
 create table test_hive_sink_text_simple(
@@ -151,10 +148,9 @@ create table test_hive_sink_text_simple(
      test_date                             DATE
      )
 PARTITIONED BY (test_par1 STRING, test_par2 STRING);
-
 ```
 
-The job config file can like this:
+作业配置文件可以如下：
 
 ```
 env {
@@ -170,7 +166,7 @@ source {
 }
 
 sink {
-  # choose stdout output plugin to output data to console
+  # 选择 stdout 输出插件将数据输出到控制台
 
   Hive {
     table_name = "test_hive.test_hive_sink_text_simple"
@@ -182,7 +178,7 @@ sink {
 }
 ```
 
-### example2: Kerberos
+### 示例 2：Kerberos
 
 ```bash
 sink {
@@ -197,14 +193,14 @@ sink {
 }
 ```
 
-Description:
+描述：
 
-- `hive_site_path`: The path to the `hive-site.xml` file.
-- `kerberos_principal`: The principal for Kerberos authentication.
-- `kerberos_keytab_path`: The keytab file path for Kerberos authentication.
-- `krb5_path`: The path to the `krb5.conf` file used for Kerberos authentication.
+- `hive_site_path`：`hive-site.xml` 文件的路径。
+- `kerberos_principal`：Kerberos 认证的主体。
+- `kerberos_keytab_path`：Kerberos 认证的 keytab 文件路径。
+- `krb5_path`：用于 Kerberos 认证的 `krb5.conf` 文件路径。
 
-Run the case:
+运行案例：
 
 ```bash
 env {
@@ -256,17 +252,17 @@ sink {
 
 ## Hive on s3
 
-### Step 1
+### 步骤 1
 
-Create the lib dir for hive of emr.
+为 EMR 的 Hive 创建 lib 目录。
 
 ```shell
 mkdir -p ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 2
+### 步骤 2
 
-Get the jars from maven center to the lib.
+从 Maven 中心获取 jar 文件到 lib。
 
 ```shell
 cd ${SEATUNNEL_HOME}/plugins/Hive/lib
@@ -274,9 +270,9 @@ wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.6.5/hadoop-aw
 wget https://repo1.maven.org/maven2/org/apache/hive/hive-exec/2.3.9/hive-exec-2.3.9.jar
 ```
 
-### Step 3
+### 步骤 3
 
-Copy the jars from your environment on emr to the lib dir.
+从您的 EMR 环境中复制 jar 文件到 lib 目录。
 
 ```shell
 cp /usr/share/aws/emr/emrfs/lib/emrfs-hadoop-assembly-2.60.0.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
@@ -285,9 +281,9 @@ cp /usr/share/aws/emr/hadoop-state-pusher/lib/javax.inject-1.jar ${SEATUNNEL_HOM
 cp /usr/share/aws/emr/hadoop-state-pusher/lib/aopalliance-1.0.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 4
+### 步骤 4
 
-Run the case.
+运行案例。
 
 ```shell
 env {
@@ -340,35 +336,35 @@ sink {
 
 ## Hive on oss
 
-### Step 1
+### 步骤 1
 
-Create the lib dir for hive of emr.
+为 EMR 的 Hive 创建 lib 目录。
 
 ```shell
 mkdir -p ${SEATUNNEL_HOME}/plugins/Hive/lib
 ```
 
-### Step 2
+### 步骤 2
 
-Get the jars from maven center to the lib.
+从 Maven 中心获取 jar 文件到 lib。
 
 ```shell
 cd ${SEATUNNEL_HOME}/plugins/Hive/lib
 wget https://repo1.maven.org/maven2/org/apache/hive/hive-exec/2.3.9/hive-exec-2.3.9.jar
 ```
 
-### Step 3
+### 步骤 3
 
-Copy the jars from your environment on emr to the lib dir and delete the conflicting jar.
+从您的 EMR 环境中复制 jar 文件到 lib 目录并删除冲突的 jar。
 
 ```shell
 cp -r /opt/apps/JINDOSDK/jindosdk-current/lib/jindo-*.jar ${SEATUNNEL_HOME}/plugins/Hive/lib
 rm -f ${SEATUNNEL_HOME}/lib/hadoop-aliyun-*.jar
 ```
 
-### Step 4
+### 步骤 4
 
-Run the case.
+运行案例。
 
 ```shell
 env {
@@ -418,9 +414,9 @@ sink {
 }
 ```
 
-### example 2
+### 示例 2
 
-We have multiple source table like this:
+我们有多个源表如下：
 
 ```bash
 create table test_1(
@@ -433,13 +429,13 @@ PARTITIONED BY (xx);
 ...
 ```
 
-We need read data from these source tables and write to another tables:
+我们需要从这些源表读取数据并写入其他表：
 
-The job config file can like this:
+作业配置文件可以如下：
 
 ```
 env {
-  # You can set flink configuration here
+  # 您可以在此处设置 Flink 配置
   parallelism = 3
   job.name="test_hive_source_to_hive"
 }
@@ -460,7 +456,7 @@ source {
 }
 
 sink {
-  # choose stdout output plugin to output data to console
+  # 选择 stdout 输出插件将数据输出到控制台
   Hive {
     table_name = "${database_name}.${table_name}"
     metastore_uri = "thrift://ctyun7:9083"
