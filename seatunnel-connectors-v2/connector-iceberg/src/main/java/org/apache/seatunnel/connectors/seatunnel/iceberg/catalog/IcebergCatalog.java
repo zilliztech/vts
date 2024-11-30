@@ -62,9 +62,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.seatunnel.connectors.seatunnel.iceberg.utils.SchemaUtils.toIcebergTableIdentifier;
 import static org.apache.seatunnel.connectors.seatunnel.iceberg.utils.SchemaUtils.toTablePath;
+import static org.apache.seatunnel.shade.com.google.common.base.Preconditions.checkArgument;
 
 @Slf4j
 public class IcebergCatalog implements Catalog {
