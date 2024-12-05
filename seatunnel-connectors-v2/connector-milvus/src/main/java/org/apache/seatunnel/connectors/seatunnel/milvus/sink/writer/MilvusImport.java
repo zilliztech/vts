@@ -3,11 +3,12 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 import com.google.gson.reflect.TypeToken;
 import io.milvus.bulkwriter.BulkImport;
 import io.milvus.bulkwriter.request.describe.CloudDescribeImportRequest;
-import io.milvus.bulkwriter.request.import_.CloudImportRequest;
 import io.milvus.bulkwriter.response.BulkImportResponse;
 import io.milvus.bulkwriter.response.GetImportProgressResponse;
 import io.milvus.bulkwriter.response.RestfulResponse;
 import io.milvus.common.utils.JsonUtils;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
@@ -18,6 +19,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 public class MilvusImport {
@@ -26,21 +28,15 @@ public class MilvusImport {
     private final String clusterId;
     private final String collectionName;
     private final String partitionName;
-    private final String minioUrl;
-    private final String bucketName;
     private final String apiKey;
-    private final String accessKey;
-    private final String secretKey;
+    private final StageBucket stageBucket;
     private HashMap<String, String> objectUrls = new HashMap<>();
     public MilvusImport(String url, String collectionName, String partitionName, StageBucket stageBucket) {
+        this.stageBucket = stageBucket;
         this.clusterId = stageBucket.getInstanceId();
         this.collectionName = collectionName;
         this.partitionName = partitionName;
         this.apiKey = stageBucket.getApiKey();
-        this.minioUrl = stageBucket.getMinioUrl();
-        this.bucketName = stageBucket.getBucketName();
-        this.accessKey = stageBucket.getAccessKey();
-        this.secretKey = stageBucket.getSecretKey();
         this.baseUrl = ControllerAPI.getControllerAPI(url);
     }
     public void importDatas(List<List<String>> objectUrls) {
@@ -54,25 +50,29 @@ public class MilvusImport {
             return;
         }
         log.info("import objectUrl: " + objectUrl);
-        CloudImportRequest importRequest = CloudImportRequest.builder()
+        InnerImportRequest importRequest = InnerImportRequest.builder()
                 .apiKey(apiKey)
                 .clusterId(clusterId)
                 .collectionName(collectionName)
-                .objectUrl("https://" + bucketName +  "." + minioUrl+ "/" + objectUrl)
-                .accessKey(accessKey)
-                .secretKey(secretKey)
+                .objectUrl("https://" + stageBucket.getBucketName() +  "." + stageBucket.getMinioUrl()+ "/" + objectUrl)
+                .accessKey(stageBucket.getAccessKey())
+                .secretKey(stageBucket.getSecretKey())
+                //the import job will be executed in the background, not showup in the console
+                .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall())
                 .build();
+
         if(StringUtils.isNotEmpty(partitionName) && !partitionName.equals("_default")){
             importRequest.setPartitionName(partitionName);
         }
         log.info("import objectUrl: " + objectUrl + " to collection: " + collectionName + " partition: " + partitionName);
         log.info("importRequest: " + importRequest);
-        String body = BulkImport.bulkImport(baseUrl, importRequest);
-        RestfulResponse<BulkImportResponse> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<BulkImportResponse>>() {
-        }).getType());
-        objectUrls.put(objectUrl, response.getData().getJobId());
+
+        BulkImportResponse importResponse = importToCloud(baseUrl, importRequest);
+
+        objectUrls.put(objectUrl, importResponse.getJobId());
         log.info("import objectUrl: " + objectUrl + " success");
     }
+
     public void waitImportFinish() {
         while(!checkImportFinish()) {
             try {
@@ -105,5 +105,36 @@ public class MilvusImport {
             }
         }
         return true;
+    }
+
+    private BulkImportResponse importToCloud(String baseUrl, InnerImportRequest importRequest) {
+        String requestURL = baseUrl + "/v2/vectordb/jobs/import/create";
+
+        HttpResponse<String> body = Unirest.post(requestURL)
+                .connectTimeout(60000)
+                .headers(httpHeaders(apiKey))
+                .body(JsonUtils.toJson(importRequest))
+                .asString();
+
+        RestfulResponse<BulkImportResponse> importResponseRestfulResponse =  JsonUtils.fromJson(body.getBody(), (new TypeToken<RestfulResponse<BulkImportResponse>>() {
+        }).getType());
+        if(importResponseRestfulResponse.getCode() != 0) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, "import job failed");
+        }
+        return importResponseRestfulResponse.getData();
+    }
+
+    protected static Map<String, String> httpHeaders(String apiKey) {
+        Map<String, String> header = new HashMap<>();
+        header.put("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11");
+        header.put("Accept", "application/json");
+        header.put("Content-Type", "application/json");
+        header.put("Accept-Encodin", "gzip,deflate,sdch");
+        header.put("Accept-Languag", "en-US,en;q=0.5");
+        if (StringUtils.isNotEmpty(apiKey)) {
+            header.put("Authorization", "Bearer " + apiKey);
+        }
+
+        return header;
     }
 }
