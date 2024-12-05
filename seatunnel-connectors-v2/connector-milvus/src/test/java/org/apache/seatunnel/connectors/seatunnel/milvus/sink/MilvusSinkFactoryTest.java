@@ -1,6 +1,6 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

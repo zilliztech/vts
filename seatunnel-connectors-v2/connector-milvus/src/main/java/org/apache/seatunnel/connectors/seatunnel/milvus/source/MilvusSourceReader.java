@@ -17,23 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.source.Boundedness;
-import org.apache.seatunnel.api.source.Collector;
-import org.apache.seatunnel.api.source.SourceReader;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.source.MilvusSourceConverter;
-
-import org.apache.curator.shaded.com.google.common.collect.Lists;
-
-import org.codehaus.plexus.util.StringUtils;
-
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.GetLoadStateResponse;
 import io.milvus.grpc.LoadState;
@@ -48,6 +31,22 @@ import io.milvus.param.dml.QueryIteratorParam;
 import io.milvus.param.dml.QueryParam;
 import io.milvus.response.QueryResultsWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.curator.shaded.com.google.common.collect.Lists;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.source.Boundedness;
+import org.apache.seatunnel.api.source.Collector;
+import org.apache.seatunnel.api.source.SourceReader;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig.BATCH_SIZE;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig.RATE_LIMIT;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConverter;
+import org.codehaus.plexus.util.StringUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,9 +55,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
-
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.BATCH_SIZE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig.RATE_LIMIT;
 
 @Slf4j
 public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSourceSplit> {

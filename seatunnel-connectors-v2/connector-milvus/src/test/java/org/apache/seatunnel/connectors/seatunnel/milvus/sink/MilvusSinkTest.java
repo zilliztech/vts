@@ -3,7 +3,7 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 import io.milvus.client.MilvusClient;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.common.clientenum.ConsistencyLevelEnum;
-import io.milvus.common.utils.JacksonUtils;
+import io.milvus.common.utils.JsonUtils;
 import io.milvus.grpc.QueryResults;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.R;
@@ -48,7 +48,7 @@ class MilvusSinkTest {
                                 .outputFields(Arrays.asList("count(*)"))
                                 .collectionName(collectionName)
                                 .build());
-        System.out.println(JacksonUtils.toJsonString(resp));
+        System.out.println(JsonUtils.toJson(resp));
     }
 
     @Test

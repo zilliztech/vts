@@ -17,15 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.source.SourceSplitEnumerator;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-
 import io.milvus.client.MilvusClient;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.grpc.DescribeCollectionResponse;
@@ -36,6 +27,14 @@ import io.milvus.param.R;
 import io.milvus.param.collection.DescribeCollectionParam;
 import io.milvus.param.partition.ShowPartitionsParam;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.source.SourceSplitEnumerator;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;

@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
+import com.google.auto.service.AutoService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
@@ -24,10 +26,7 @@ import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-
-import com.google.auto.service.AutoService;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.io.Serializable;
 
