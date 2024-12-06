@@ -64,7 +64,7 @@ public class MilvusSourceConverter {
     }
 
     public SeaTunnelRow convertToSeaTunnelRow(
-            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, TablePath tablePath) {
+            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, String collectionName, String partitionName) {
         // get field names and types
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         String[] fieldNames = typeInfo.getFieldNames();
@@ -249,7 +249,8 @@ public class MilvusSourceConverter {
         }
 
         SeaTunnelRow seaTunnelRow = new SeaTunnelRow(seatunnelField);
-        seaTunnelRow.setTableId(tablePath.getFullName());
+        seaTunnelRow.setTableId(collectionName+"_"+partitionName);
+        seaTunnelRow.setPartitionName(partitionName);
         seaTunnelRow.setRowKind(RowKind.INSERT);
         return seaTunnelRow;
     }

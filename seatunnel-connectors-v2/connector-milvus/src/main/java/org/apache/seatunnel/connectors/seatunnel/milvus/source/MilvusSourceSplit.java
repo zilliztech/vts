@@ -28,7 +28,10 @@ public class MilvusSourceSplit implements SourceSplit {
 
     private TablePath tablePath;
     private String splitId;
+    private String collectionName;
     private String partitionName;
+    private Long offset;
+    private Long limit;
 
     @Override
     public String splitId() {

@@ -46,4 +46,8 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .intType()
                     .defaultValue(1000000)
                     .withDescription("writer rate limit");
+    public static final Option<Integer> PARALLELISM = Options.key("parallelism")
+            .intType()
+            .defaultValue(4)
+            .withDescription("parallelism");
 }
