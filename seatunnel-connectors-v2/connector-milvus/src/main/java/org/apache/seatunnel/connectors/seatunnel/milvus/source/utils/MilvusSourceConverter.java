@@ -19,10 +19,11 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import io.milvus.grpc.DataType;
 import io.milvus.grpc.FieldSchema;
 import io.milvus.grpc.KeyValuePair;
 import io.milvus.response.QueryResultsWrapper;
+import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -255,7 +256,7 @@ public class MilvusSourceConverter {
         return seaTunnelRow;
     }
 
-    public static PhysicalColumn convertColumn(FieldSchema fieldSchema) {
+    public static PhysicalColumn convertColumn(CreateCollectionReq.FieldSchema fieldSchema) {
         DataType dataType = fieldSchema.getDataType();
         PhysicalColumn.PhysicalColumnBuilder builder = PhysicalColumn.builder();
         builder.name(fieldSchema.getName());
@@ -286,12 +287,7 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("max_length")) {
-                        builder.columnLength(Long.parseLong(keyValuePair.getValue()) * 4);
-                        break;
-                    }
-                }
+                builder.columnLength((long)fieldSchema.getMaxLength() * 4);
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
@@ -307,42 +303,22 @@ public class MilvusSourceConverter {
                 break;
             case FloatVector:
                 builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case BinaryVector:
                 builder.dataType(VectorType.VECTOR_BINARY_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case SparseFloatVector:
                 builder.dataType(VectorType.VECTOR_SPARSE_FLOAT_TYPE);
                 break;
             case Float16Vector:
                 builder.dataType(VectorType.VECTOR_FLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case BFloat16Vector:
                 builder.dataType(VectorType.VECTOR_BFLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             default:
                 throw new UnsupportedOperationException("Unsupported data type: " + dataType);

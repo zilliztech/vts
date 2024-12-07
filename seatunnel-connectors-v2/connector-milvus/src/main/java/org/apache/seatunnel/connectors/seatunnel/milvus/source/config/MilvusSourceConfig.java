@@ -21,6 +21,9 @@ import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MilvusSourceConfig extends MilvusCommonConfig {
 
     public static final Option<String> DATABASE =
@@ -29,10 +32,10 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .defaultValue("default")
                     .withDescription("database");
 
-    public static final Option<String> COLLECTION =
+    public static final Option<List<String>> COLLECTION =
             Options.key("collection")
-                    .stringType()
-                    .noDefaultValue()
+                    .listType()
+                    .defaultValue(new ArrayList<>())
                     .withDescription("Milvus collection to read");
 
     public static final Option<Integer> BATCH_SIZE =
