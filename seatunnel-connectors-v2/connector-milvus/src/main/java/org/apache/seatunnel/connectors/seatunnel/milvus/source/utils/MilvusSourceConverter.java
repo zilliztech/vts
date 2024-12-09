@@ -19,14 +19,11 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import io.milvus.grpc.FieldSchema;
-import io.milvus.grpc.KeyValuePair;
 import io.milvus.response.QueryResultsWrapper;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
-import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;

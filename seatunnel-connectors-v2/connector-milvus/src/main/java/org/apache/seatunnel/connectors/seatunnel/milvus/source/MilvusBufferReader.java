@@ -15,10 +15,9 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConverter;
 import org.codehaus.plexus.util.StringUtils;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
 
 @Slf4j
 public class MilvusBufferReader {

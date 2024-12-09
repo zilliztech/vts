@@ -34,7 +34,10 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSour
 import static org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig.BATCH_SIZE;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 @Slf4j

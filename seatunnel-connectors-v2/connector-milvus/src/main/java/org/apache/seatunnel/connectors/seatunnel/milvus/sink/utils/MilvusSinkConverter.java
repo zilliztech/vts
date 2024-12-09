@@ -49,6 +49,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class MilvusSinkConverter {
@@ -125,122 +126,122 @@ public class MilvusSinkConverter {
         }
     }
 
-    public static FieldType convertToFieldType(
+    public static CreateCollectionReq.FieldSchema convertToFieldType(
             Column column, PrimaryKey primaryKey, String partitionKeyField, Boolean autoId) {
+
         SeaTunnelDataType<?> seaTunnelDataType = column.getDataType();
-        DataType milvusDataType = convertSqlTypeToDataType(seaTunnelDataType.getSqlType());
-        FieldType.Builder build =
-                FieldType.newBuilder().withName(column.getName()).withDataType(milvusDataType);
+
+        io.milvus.v2.common.DataType milvusDataType = convertSqlTypeToDataType(seaTunnelDataType.getSqlType());
+
+        CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
+                .name(column.getName())
+                .dataType(milvusDataType)
+                .build();
+
         if (StringUtils.isNotEmpty(column.getComment())) {
-            build.withDescription(column.getComment());
+            fieldSchema.setDescription(column.getComment());
         }
         switch (seaTunnelDataType.getSqlType()) {
             case ROW:
-                build.withMaxLength(65535);
+                fieldSchema.setMaxLength(65535);
                 break;
             case DATE:
-                build.withMaxLength(20);
+                fieldSchema.setMaxLength(20);
                 break;
             case STRING:
                 if (column.getOptions() != null
                         && column.getOptions().get(CommonOptions.JSON.getName()) != null
                         && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
                     // check if is json
-                    build.withDataType(DataType.JSON);
+                    fieldSchema.setDataType(io.milvus.v2.common.DataType.JSON);
                 } else if (column.getColumnLength() == null || column.getColumnLength() == 0) {
-                    build.withMaxLength(65535);
+                    fieldSchema.setMaxLength(65535);
                 } else {
-                    build.withMaxLength((int) (column.getColumnLength() / 4));
+                    fieldSchema.setMaxLength((int) (column.getColumnLength() / 4));
                 }
                 break;
             case ARRAY:
                 ArrayType arrayType = (ArrayType) column.getDataType();
                 SeaTunnelDataType elementType = arrayType.getElementType();
-                build.withElementType(convertSqlTypeToDataType(elementType.getSqlType()));
-                build.withMaxCapacity(4095);
-                switch (elementType.getSqlType()) {
-                    case STRING:
-                        if (column.getColumnLength() == null || column.getColumnLength() == 0) {
-                            build.withMaxLength(65535);
-                        } else {
-                            build.withMaxLength((int) (column.getColumnLength() / 4));
-                        }
-                        break;
+                fieldSchema.setElementType(convertSqlTypeToDataType(elementType.getSqlType()));
+                fieldSchema.setMaxCapacity(4095);
+                if (Objects.requireNonNull(elementType.getSqlType()) == SqlType.STRING) {
+                    if (column.getColumnLength() == null || column.getColumnLength() == 0) {
+                        fieldSchema.setMaxLength(65535);
+                    } else {
+                        fieldSchema.setMaxLength((int) (column.getColumnLength() / 4));
+                    }
                 }
                 break;
             case BINARY_VECTOR:
             case FLOAT_VECTOR:
             case FLOAT16_VECTOR:
             case BFLOAT16_VECTOR:
-                build.withDimension(column.getScale());
+                fieldSchema.setDimension(column.getScale());
                 break;
         }
 
         // check is primaryKey
         if (null != primaryKey && primaryKey.getColumnNames().contains(column.getName())) {
-            build.withPrimaryKey(true);
+            fieldSchema.setIsPrimaryKey(true);
             List<SqlType> integerTypes = new ArrayList<>();
             integerTypes.add(SqlType.INT);
             integerTypes.add(SqlType.SMALLINT);
             integerTypes.add(SqlType.TINYINT);
             integerTypes.add(SqlType.BIGINT);
             if (integerTypes.contains(seaTunnelDataType.getSqlType())) {
-                build.withDataType(DataType.Int64);
+                fieldSchema.setDataType(io.milvus.v2.common.DataType.Int64);
             } else {
-                build.withDataType(DataType.VarChar);
-                build.withMaxLength(65535);
+                fieldSchema.setDataType(io.milvus.v2.common.DataType.VarChar);
+                fieldSchema.setMaxLength(65535);
             }
-            if (null != primaryKey.getEnableAutoId()) {
-                build.withAutoID(primaryKey.getEnableAutoId());
-            } else {
-                build.withAutoID(autoId);
-            }
+            fieldSchema.setAutoID(autoId);
         }
 
         // check is partitionKey
         if (column.getName().equals(partitionKeyField)) {
-            build.withPartitionKey(true);
+            fieldSchema.setIsPartitionKey(true);
         }
 
-        return build.build();
+        return fieldSchema;
     }
 
-    public static DataType convertSqlTypeToDataType(SqlType sqlType) {
+    public static io.milvus.v2.common.DataType convertSqlTypeToDataType(SqlType sqlType) {
         switch (sqlType) {
             case BOOLEAN:
-                return DataType.Bool;
+                return io.milvus.v2.common.DataType.Bool;
             case TINYINT:
-                return DataType.Int8;
+                return io.milvus.v2.common.DataType.Int8;
             case SMALLINT:
-                return DataType.Int16;
+                return io.milvus.v2.common.DataType.Int16;
             case INT:
-                return DataType.Int32;
+                return io.milvus.v2.common.DataType.Int32;
             case BIGINT:
-                return DataType.Int64;
+                return io.milvus.v2.common.DataType.Int64;
             case FLOAT:
-                return DataType.Float;
+                return io.milvus.v2.common.DataType.Float;
             case DOUBLE:
-                return DataType.Double;
+                return io.milvus.v2.common.DataType.Double;
             case STRING:
-                return DataType.VarChar;
+                return io.milvus.v2.common.DataType.VarChar;
             case ARRAY:
-                return DataType.Array;
+                return io.milvus.v2.common.DataType.Array;
             case MAP:
-                return DataType.JSON;
+                return io.milvus.v2.common.DataType.JSON;
             case FLOAT_VECTOR:
-                return DataType.FloatVector;
+                return io.milvus.v2.common.DataType.FloatVector;
             case BINARY_VECTOR:
-                return DataType.BinaryVector;
+                return io.milvus.v2.common.DataType.BinaryVector;
             case FLOAT16_VECTOR:
-                return DataType.Float16Vector;
+                return io.milvus.v2.common.DataType.Float16Vector;
             case BFLOAT16_VECTOR:
-                return DataType.BFloat16Vector;
+                return io.milvus.v2.common.DataType.BFloat16Vector;
             case SPARSE_FLOAT_VECTOR:
-                return DataType.SparseFloatVector;
+                return io.milvus.v2.common.DataType.SparseFloatVector;
             case DATE:
-                return DataType.VarChar;
+                return io.milvus.v2.common.DataType.VarChar;
             case ROW:
-                return DataType.VarChar;
+                return io.milvus.v2.common.DataType.VarChar;
         }
         throw new CatalogException(
                 String.format("Not support convert to milvus type, sqlType is %s", sqlType));
