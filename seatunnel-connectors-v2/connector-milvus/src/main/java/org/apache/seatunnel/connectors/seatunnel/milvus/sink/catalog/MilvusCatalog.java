@@ -18,12 +18,9 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import io.milvus.client.MilvusServiceClient;
 import io.milvus.common.clientenum.ConsistencyLevelEnum;
-import io.milvus.grpc.ListDatabasesResponse;
 import io.milvus.grpc.ShowCollectionsResponse;
 import io.milvus.grpc.ShowType;
-import io.milvus.param.ConnectParam;
 import io.milvus.param.R;
 import io.milvus.param.RpcStatus;
 import io.milvus.param.collection.CreateCollectionParam;
@@ -33,16 +30,29 @@ import io.milvus.param.collection.DropDatabaseParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.collection.ShowCollectionsParam;
+import io.milvus.v2.client.ConnectConfig;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.common.ConsistencyLevel;
+import io.milvus.v2.common.IndexParam;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.collection.request.DropCollectionReq;
+import io.milvus.v2.service.collection.request.HasCollectionReq;
+import io.milvus.v2.service.collection.response.ListCollectionsResp;
+import io.milvus.v2.service.database.request.CreateDatabaseReq;
+import io.milvus.v2.service.database.request.DropDatabaseReq;
+import io.milvus.v2.service.index.request.CreateIndexReq;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.Catalog;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.ConstraintKey;
 import org.apache.seatunnel.api.table.catalog.InfoPreviewResult;
 import org.apache.seatunnel.api.table.catalog.PreviewResult;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.catalog.exception.DatabaseAlreadyExistException;
 import org.apache.seatunnel.api.table.catalog.exception.DatabaseNotExistException;
@@ -57,6 +67,7 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.Milvu
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -69,7 +80,9 @@ public class MilvusCatalog implements Catalog {
     private final String catalogName;
     private final ReadonlyConfig config;
 
-    private MilvusServiceClient client;
+    private MilvusClientV2 client;
+
+    private CatalogUtils catalogUtils;
 
     public MilvusCatalog(String catalogName, ReadonlyConfig config) {
         this.catalogName = catalogName;
@@ -78,13 +91,15 @@ public class MilvusCatalog implements Catalog {
 
     @Override
     public void open() throws CatalogException {
-        ConnectParam connectParam =
-                ConnectParam.newBuilder()
-                        .withUri(config.get(MilvusSinkConfig.URL))
-                        .withToken(config.get(MilvusSinkConfig.TOKEN))
+        ConnectConfig connectConfig =
+                ConnectConfig.builder()
+                        .uri(config.get(MilvusSinkConfig.URL))
+                        .token(config.get(MilvusSinkConfig.TOKEN))
+                        .dbName(config.get(MilvusSinkConfig.DATABASE))
                         .build();
         try {
-            this.client = new MilvusServiceClient(connectParam);
+            this.client = new MilvusClientV2(connectConfig);
+            catalogUtils = new CatalogUtils(client, config);
         } catch (Exception e) {
             throw new CatalogException(String.format("Failed to open catalog %s", catalogName), e);
         }
@@ -98,6 +113,44 @@ public class MilvusCatalog implements Catalog {
     @Override
     public String name() {
         return catalogName;
+    }
+
+    /**
+     * Get the name of the default database for this catalog. The default database will be the
+     * current database for the catalog when user's session doesn't specify a current database. The
+     * value probably comes from configuration, will not change for the life time of the catalog
+     * instance.
+     *
+     * @return the name of the current database
+     * @throws CatalogException in case of any runtime exception
+     */
+    @Override
+    public String getDefaultDatabase() throws CatalogException {
+        return "default";
+    }
+
+    /**
+     * Check if a database exists in this catalog.
+     *
+     * @param databaseName Name of the database
+     * @return true if the given database exists in the catalog false otherwise
+     * @throws CatalogException in case of any runtime exception
+     */
+    @Override
+    public boolean databaseExists(String databaseName) throws CatalogException {
+        // no need to check db existence, db will be check in ConnectConfig
+        return true;
+    }
+
+    /**
+     * Get the names of all databases in this catalog.
+     *
+     * @return a list of the names of all databases
+     * @throws CatalogException in case of any runtime exception
+     */
+    @Override
+    public List<String> listDatabases() throws CatalogException {
+        return Collections.emptyList();
     }
 
     @Override
@@ -117,65 +170,30 @@ public class MilvusCatalog implements Catalog {
     }
 
     @Override
-    public String getDefaultDatabase() throws CatalogException {
-        return "default";
-    }
-
-    @Override
-    public boolean databaseExists(String databaseName) throws CatalogException {
-        List<String> databases = this.listDatabases();
-        return databases.contains(databaseName);
-    }
-
-    @Override
-    public List<String> listDatabases() throws CatalogException {
-        R<ListDatabasesResponse> response = this.client.listDatabases();
-        return response.getData().getDbNamesList();
-    }
-
-    @Override
     public List<String> listTables(String databaseName)
             throws CatalogException, DatabaseNotExistException {
-        R<ShowCollectionsResponse> response =
-                this.client.showCollections(
-                        ShowCollectionsParam.newBuilder()
-                                .withDatabaseName(databaseName)
-                                .withShowType(ShowType.All)
-                                .build());
+        ListCollectionsResp listCollectionsResp = client.listCollections();
 
-        return response.getData().getCollectionNamesList();
+        return listCollectionsResp.getCollectionNames();
     }
 
     @Override
     public boolean tableExists(TablePath tablePath) throws CatalogException {
-        R<Boolean> response =
-                this.client.hasCollection(
-                        HasCollectionParam.newBuilder()
-                                .withDatabaseName(tablePath.getDatabaseName())
-                                .withCollectionName(tablePath.getTableName())
-                                .build());
-        if (response.getData() != null) {
-            return response.getData();
-        }
-        throw new MilvusConnectorException(
-                MilvusConnectionErrorCode.SERVER_RESPONSE_FAILED,
-                response.getMessage(),
-                response.getException());
+
+        return this.client.hasCollection(HasCollectionReq.builder()
+                        .collectionName(tablePath.getTableName())
+                        .build());
     }
 
     @Override
     public CatalogTable getTable(TablePath tablePath)
             throws CatalogException, TableNotExistException {
-        throw new RuntimeException("not implemented");
+        return null;
     }
 
     @Override
-    public void createTable(TablePath tablePath, CatalogTable catalogTable, boolean ignoreIfExists)
-            throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
+    public void createTable(TablePath tablePath, CatalogTable catalogTable, boolean ignoreIfExists) throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
         checkNotNull(tablePath, "Table path cannot be null");
-        if (!databaseExists(tablePath.getDatabaseName())) {
-            throw new DatabaseNotExistException(catalogName, tablePath.getDatabaseName());
-        }
         if (tableExists(tablePath)) {
             if (ignoreIfExists) {
                 return;
@@ -186,106 +204,17 @@ public class MilvusCatalog implements Catalog {
         checkNotNull(catalogTable, "catalogTable must not be null");
         TableSchema tableSchema = catalogTable.getTableSchema();
         checkNotNull(tableSchema, "tableSchema must not be null");
-        createTableInternal(tablePath, catalogTable);
-    }
-
-    public void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
-        try {
-            Map<String, String> options = catalogTable.getOptions();
-
-            // partition key logic
-            String partitionKeyField = null;
-            if(options.containsKey(MilvusOptions.PARTITION_KEY_FIELD)){
-                partitionKeyField = options.get(MilvusOptions.PARTITION_KEY_FIELD);
-            }
-            // if partition key is set in config, use the one in config
-            if (StringUtils.isNotEmpty(config.get(MilvusSinkConfig.PARTITION_KEY))) {
-                partitionKeyField = config.get(MilvusSinkConfig.PARTITION_KEY);
-            }
-
-            TableSchema tableSchema = catalogTable.getTableSchema();
-            List<FieldType> fieldTypes = new ArrayList<>();
-            for (Column column : tableSchema.getColumns()) {
-                if (column.getOptions() != null
-                        && column.getOptions().containsKey(CommonOptions.METADATA.getName())
-                        && (Boolean) column.getOptions().get(CommonOptions.METADATA.getName())) {
-                    // skip dynamic field
-                    continue;
-                }
-                FieldType fieldType =
-                        MilvusSinkConverter.convertToFieldType(
-                                column,
-                                tableSchema.getPrimaryKey(),
-                                partitionKeyField,
-                                config.get(MilvusSinkConfig.ENABLE_AUTO_ID));
-                fieldTypes.add(fieldType);
-            }
-
-            Boolean enableDynamicField = true;
-
-            if(options.containsKey(MilvusOptions.ENABLE_DYNAMIC_FIELD)) {
-                enableDynamicField = Boolean.valueOf(options.get(MilvusOptions.ENABLE_DYNAMIC_FIELD));
-            }
-            // if enable_dynamic_field is set in config, use the one in config
-            if(config.get(ENABLE_DYNAMIC_FIELD) != null){
-                enableDynamicField = config.get(ENABLE_DYNAMIC_FIELD);
-            }
-
-
-            String collectionDescription = "";
-            if (config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION) != null
-                    && config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION)
-                            .containsKey(tablePath.getTableName())) {
-                // use description from config first
-                collectionDescription =
-                        config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION)
-                                .get(tablePath.getTableName());
-            } else if (null != catalogTable.getComment()) {
-                collectionDescription = catalogTable.getComment();
-            }
-            CreateCollectionParam.Builder builder =
-                    CreateCollectionParam.newBuilder()
-                            .withDatabaseName(tablePath.getDatabaseName())
-                            .withCollectionName(tablePath.getTableName())
-                            .withDescription(collectionDescription)
-                            .withFieldTypes(fieldTypes)
-                            .withEnableDynamicField(enableDynamicField)
-                            .withConsistencyLevel(ConsistencyLevelEnum.BOUNDED);
-            if (StringUtils.isNotEmpty(options.get(MilvusOptions.SHARDS_NUM))) {
-                builder.withShardsNum(Integer.parseInt(options.get(MilvusOptions.SHARDS_NUM)));
-            }
-            int retry = 5;
-            CreateCollectionParam createCollectionParam = builder.build();
-            R<RpcStatus> response = this.client.createCollection(createCollectionParam);
-            if (!Objects.equals(response.getStatus(), R.success().getStatus())) {
-                boolean status = false;
-                while(retry > 0) {
-                    TimeUnit.SECONDS.sleep(1);
-                    response = this.client.createCollection(createCollectionParam);
-                    if(Objects.equals(response.getStatus(), R.success().getStatus())) {
-                        status = true;
-                        break;
-                    }
-                    retry--;
-                }
-                if(!status) {
-                    throw new MilvusConnectorException(
-                            MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, response.getMessage());
-                }
-            }
-
-        } catch (Exception e) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, e);
+        catalogUtils.createTableInternal(tablePath, catalogTable);
+        if(config.get(MilvusSinkConfig.CREATE_INDEX)) {
+            catalogUtils.createIndex(tablePath, tableSchema);
         }
     }
+
+
 
     @Override
     public void dropTable(TablePath tablePath, boolean ignoreIfNotExists)
             throws TableNotExistException, CatalogException {
-        if (!databaseExists(tablePath.getDatabaseName())) {
-            throw new DatabaseNotExistException(catalogName, tablePath.getDatabaseName());
-        }
         if (!tableExists(tablePath)) {
             if (!ignoreIfNotExists) {
                 throw new TableNotExistException(catalogName, tablePath);
@@ -293,10 +222,7 @@ public class MilvusCatalog implements Catalog {
             return;
         }
         this.client.dropCollection(
-                DropCollectionParam.newBuilder()
-                        .withDatabaseName(tablePath.getDatabaseName())
-                        .withCollectionName(tablePath.getTableName())
-                        .build());
+                DropCollectionReq.builder().collectionName(tablePath.getTableName()).build());
     }
 
     @Override
@@ -308,15 +234,8 @@ public class MilvusCatalog implements Catalog {
             }
             return;
         }
-        R<RpcStatus> response =
-                this.client.createDatabase(
-                        CreateDatabaseParam.newBuilder()
-                                .withDatabaseName(tablePath.getDatabaseName())
-                                .build());
-        if (!R.success().getStatus().equals(response.getStatus())) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.CREATE_DATABASE_ERROR, response.getMessage());
-        }
+        this.client.createDatabase(CreateDatabaseReq.builder().databaseName(tablePath.getDatabaseName()).build());
+
     }
 
     @Override
@@ -329,8 +248,8 @@ public class MilvusCatalog implements Catalog {
             return;
         }
         this.client.dropDatabase(
-                DropDatabaseParam.newBuilder()
-                        .withDatabaseName(tablePath.getDatabaseName())
+                DropDatabaseReq.builder()
+                        .databaseName(tablePath.getDatabaseName())
                         .build());
     }
 }

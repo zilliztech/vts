@@ -17,22 +17,21 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import io.milvus.client.MilvusClient;
-import io.milvus.client.MilvusServiceClient;
-import io.milvus.grpc.DescribeCollectionResponse;
-import io.milvus.grpc.FieldSchema;
-import io.milvus.grpc.ShowPartitionsResponse;
-import io.milvus.param.ConnectParam;
-import io.milvus.param.R;
-import io.milvus.param.collection.DescribeCollectionParam;
-import io.milvus.param.partition.ShowPartitionsParam;
+import io.milvus.v2.client.ConnectConfig;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.collection.request.DescribeCollectionReq;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import io.milvus.v2.service.partition.request.ListPartitionsReq;
+import io.milvus.v2.service.vector.request.QueryReq;
+import io.milvus.v2.service.vector.response.QueryResp;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
-import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
@@ -55,7 +54,8 @@ public class MilvusSourceSplitEnumertor
     private final ConcurrentLinkedQueue<TablePath> pendingTables;
     private final Map<Integer, List<MilvusSourceSplit>> pendingSplits;
     private final Object stateLock = new Object();
-    private MilvusClient client = null;
+    private MilvusClientV2 client = null;
+    private Integer parallelism;
 
     private final ReadonlyConfig config;
 
@@ -78,12 +78,14 @@ public class MilvusSourceSplitEnumertor
 
     @Override
     public void open() {
-        ConnectParam connectParam =
-                ConnectParam.newBuilder()
-                        .withUri(config.get(MilvusSourceConfig.URL))
-                        .withToken(config.get(MilvusSourceConfig.TOKEN))
+        ConnectConfig connectConfig =
+                ConnectConfig.builder()
+                        .uri(config.get(MilvusSourceConfig.URL))
+                        .token(config.get(MilvusSourceConfig.TOKEN))
+                        .dbName(config.get(MilvusSourceConfig.DATABASE))
                         .build();
-        this.client = new MilvusServiceClient(connectParam);
+        this.client = new MilvusClientV2(connectConfig);
+        parallelism = config.get(MilvusSourceConfig.PARALLELISM);
     }
 
     @Override
@@ -110,57 +112,103 @@ public class MilvusSourceSplitEnumertor
     }
 
     private Collection<MilvusSourceSplit> generateSplits(CatalogTable table) {
-        log.info("Start splitting table {} into chunks by partition...", table.getTablePath());
-        String database = table.getTablePath().getDatabaseName();
+        log.info("Start splitting collection {} into chunks by partition...", table.getTablePath());
         String collection = table.getTablePath().getTableName();
-        R<DescribeCollectionResponse> describeCollectionResponseR =
+        DescribeCollectionResp describeCollectionResp =
                 client.describeCollection(
-                        DescribeCollectionParam.newBuilder()
-                                .withDatabaseName(database)
-                                .withCollectionName(collection)
+                        DescribeCollectionReq.builder()
+                                .collectionName(collection)
                                 .build());
         boolean hasPartitionKey =
-                describeCollectionResponseR.getData().getSchema().getFieldsList().stream()
-                        .anyMatch(FieldSchema::getIsPartitionKey);
+                describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()
+                        .anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
+
         List<MilvusSourceSplit> milvusSourceSplits = new ArrayList<>();
-        if (!hasPartitionKey) {
-            ShowPartitionsParam showPartitionsParam =
-                    ShowPartitionsParam.newBuilder()
-                            .withDatabaseName(database)
-                            .withCollectionName(collection)
-                            .build();
-            R<ShowPartitionsResponse> showPartitionsResponseR =
-                    client.showPartitions(showPartitionsParam);
-            if (showPartitionsResponseR.getStatus() != R.Status.Success.getCode()) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.LIST_PARTITIONS_FAILED,
-                        "Failed to show partitions: " + showPartitionsResponseR.getMessage());
-            }
-            List<String> partitionList = showPartitionsResponseR.getData().getPartitionNamesList();
+        ListPartitionsReq listPartitionsReq =
+                ListPartitionsReq.builder()
+                        .collectionName(collection)
+                        .build();
+        List<String> partitionList = client.listPartitions(listPartitionsReq);
+        if (!hasPartitionKey && partitionList.size() > 1) {
+            // more than 1 partition
             for (String partitionName : partitionList) {
                 MilvusSourceSplit milvusSourceSplit =
                         MilvusSourceSplit.builder()
                                 .tablePath(table.getTablePath())
-                                .splitId(createSplitId(table.getTablePath(), partitionName))
+                                .splitId(String.format("%s-%s", table.getTablePath(), partitionName))
                                 .partitionName(partitionName)
                                 .build();
-                log.info("Generated split: {}", milvusSourceSplit);
-                milvusSourceSplits.add(milvusSourceSplit);
+                List<MilvusSourceSplit> milvusSourceSplitsInParallel = splitByOffset(milvusSourceSplit, parallelism);
+                milvusSourceSplits.addAll(milvusSourceSplitsInParallel);
             }
         } else {
             MilvusSourceSplit milvusSourceSplit =
                     MilvusSourceSplit.builder()
                             .tablePath(table.getTablePath())
-                            .splitId(createSplitId(table.getTablePath(), "0"))
+                            .splitId(String.format("%s", table.getTablePath()))
+                            .collectionName(table.getTablePath().getTableName())
                             .build();
-            log.info("Generated split: {}", milvusSourceSplit);
-            milvusSourceSplits.add(milvusSourceSplit);
+            List<MilvusSourceSplit> milvusSourceSplitsInParallel = splitByOffset(milvusSourceSplit, parallelism);
+            milvusSourceSplits.addAll(milvusSourceSplitsInParallel);
         }
         return milvusSourceSplits;
     }
 
-    protected String createSplitId(TablePath tablePath, String index) {
-        return String.format("%s-%s", tablePath, index);
+    private List<MilvusSourceSplit> splitByOffset(MilvusSourceSplit split, Integer parallelism) {
+        if(parallelism < 2){
+            return Collections.singletonList(split);
+        }
+        QueryReq queryReq = QueryReq.builder()
+                .collectionName(split.getCollectionName())
+                .filter("")
+                .outputFields(Collections.singletonList("count(*)"))
+                .build();
+
+        if (StringUtils.isNotEmpty(split.getPartitionName())) {
+            queryReq.setPartitionNames(Collections.singletonList(split.getPartitionName()));
+        }
+
+        QueryResp queryResp = client.query(queryReq);
+        long numOfEntities = (long) queryResp.getQueryResults().get(0).getEntity().get("count(*)");
+
+        log.info("Total records num: " + numOfEntities);
+        List<MilvusSourceSplit> splits = new ArrayList<>();
+
+        // Calculate the size of each split
+        long splitSize = Math.max(1, numOfEntities / parallelism);
+
+        for (int i = 0; i < parallelism; i++) {
+            long offset = i * splitSize;
+
+            // For the final batch, don't set a limit
+            if (i == parallelism - 1) {
+                MilvusSourceSplit newSplit = MilvusSourceSplit.builder()
+                        .tablePath(split.getTablePath())
+                        .splitId(String.format("%s-offset-%d", split.getCollectionName(), offset))
+                        .collectionName(split.getCollectionName())
+                        .partitionName(split.getPartitionName())
+                        .offset(offset)
+                        .build();
+                splits.add(newSplit);
+
+                log.info("Generated final split: {}", newSplit);
+            } else {
+                MilvusSourceSplit newSplit = MilvusSourceSplit.builder()
+                        .tablePath(split.getTablePath())
+                        .splitId(String.format("%s-offset-%d-limit-%d", split.getCollectionName(), offset, splitSize))
+                        .collectionName(split.getCollectionName())
+                        .partitionName(split.getPartitionName())
+                        .offset(offset)
+                        .limit(splitSize)
+                        .build();
+                splits.add(newSplit);
+
+                log.info("Generated split: {}", newSplit);
+            }
+        }
+
+        return splits;
+
     }
 
     private void addPendingSplit(Collection<MilvusSourceSplit> splits) {

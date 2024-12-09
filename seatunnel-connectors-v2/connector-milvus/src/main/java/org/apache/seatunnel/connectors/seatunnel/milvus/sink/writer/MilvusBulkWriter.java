@@ -61,7 +61,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         RemoteBulkWriterParam remoteBulkWriterParam = RemoteBulkWriterParam.newBuilder()
                 .withCollectionSchema(collectionSchemaParam)
                 .withConnectParam(storageConnectParam)
-                .withChunkSize(512 * 1024 * 1024)
+                .withChunkSize(stageBucket.getChunkSize() * 1024 * 1024)
                 .withRemotePath(stageBucket.getPrefix() + "/" + collectionName + "/" + partitionName)
                 .withFileType(BulkFileType.PARQUET)
                 .build();
