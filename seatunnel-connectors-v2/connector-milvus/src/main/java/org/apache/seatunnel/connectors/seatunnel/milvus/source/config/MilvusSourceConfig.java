@@ -33,10 +33,10 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .withDescription("database");
 
     public static final Option<List<String>> COLLECTION =
-            Options.key("collection")
+            Options.key("collections")
                     .listType()
                     .defaultValue(new ArrayList<>())
-                    .withDescription("Milvus collection to read");
+                    .withDescription("Milvus collections to read");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
@@ -44,13 +44,9 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .defaultValue(1000)
                     .withDescription("writer batch size");
 
-    public static final Option<Integer> RATE_LIMIT =
-            Options.key("rate_limit")
-                    .intType()
-                    .defaultValue(1000000)
-                    .withDescription("writer rate limit");
-    public static final Option<Integer> PARALLELISM = Options.key("parallelism")
+    public static final Option<Integer> PARALLELISM =
+            Options.key("parallelism")
             .intType()
-            .defaultValue(4)
+            .defaultValue(1)
             .withDescription("parallelism");
 }

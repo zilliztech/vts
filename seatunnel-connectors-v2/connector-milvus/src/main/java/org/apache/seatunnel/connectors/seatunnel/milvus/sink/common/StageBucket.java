@@ -37,5 +37,5 @@ public class StageBucket {
     private Boolean autoImport = true;
     @Builder.Default
     @SerializedName("inner_call")
-    private Boolean innerCall = true;
+    private Boolean innerCall = false;
 }
