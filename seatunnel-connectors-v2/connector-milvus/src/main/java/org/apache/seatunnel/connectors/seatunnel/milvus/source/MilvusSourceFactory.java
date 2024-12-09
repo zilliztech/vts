@@ -44,7 +44,7 @@ public class MilvusSourceFactory implements TableSourceFactory {
     public OptionRule optionRule() {
         return OptionRule.builder()
                 .required(MilvusSourceConfig.URL, MilvusSourceConfig.TOKEN)
-                .optional(MilvusSourceConfig.DATABASE, MilvusSourceConfig.COLLECTION)
+                .optional(MilvusSourceConfig.DATABASE, MilvusSourceConfig.COLLECTION_LIST)
                 .build();
     }
 

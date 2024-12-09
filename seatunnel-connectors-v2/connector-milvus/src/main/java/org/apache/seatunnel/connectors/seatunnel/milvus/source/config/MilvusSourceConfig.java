@@ -32,8 +32,8 @@ public class MilvusSourceConfig extends MilvusCommonConfig {
                     .defaultValue("default")
                     .withDescription("database");
 
-    public static final Option<List<String>> COLLECTION =
-            Options.key("collections")
+    public static final Option<List<String>> COLLECTION_LIST =
+            Options.key("collection_list")
                     .listType()
                     .defaultValue(new ArrayList<>())
                     .withDescription("Milvus collections to read");

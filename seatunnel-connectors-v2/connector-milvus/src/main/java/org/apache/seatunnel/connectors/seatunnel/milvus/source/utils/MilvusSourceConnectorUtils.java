@@ -69,8 +69,8 @@ public class MilvusSourceConnectorUtils {
                                 .build());
 
         List<String> collectionList = new ArrayList<>();
-        if (!config.get(MilvusSourceConfig.COLLECTION).isEmpty()) {
-            collectionList.addAll(config.get(MilvusSourceConfig.COLLECTION));
+        if (!config.get(MilvusSourceConfig.COLLECTION_LIST).isEmpty()) {
+            collectionList.addAll(config.get(MilvusSourceConfig.COLLECTION_LIST));
         } else {
             ListCollectionsResp response =
                     client.listCollections();
