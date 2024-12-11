@@ -16,6 +16,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,17 +46,29 @@ public class MilvusImport {
             importData(objectUrl.get(0));
         }
     }
+
+    private String processUrl(String path) {
+        if(stageBucket.getCloudId().equals("gcp")){
+            return "https://storage.cloud.google.com/" + stageBucket.getBucketName() + "/" + path;
+        }else if(stageBucket.getCloudId().equals("az")) {
+            https://myaccount.blob.core.windows.net/bucket-name/parquet-folder/data.parquet
+            return "https://" + stageBucket.getAccessKey() + ".blob.core.windows.net/" + stageBucket.getBucketName() + "/" + path;
+        }
+        return "https://" + stageBucket.getBucketName() +  "." + stageBucket.getMinioUrl()+ "/" + path;
+    }
+
     public void importData(String objectUrl) {
         if(objectUrls.containsKey(objectUrl)) {
             log.info("objectUrl: " + objectUrl + " has been imported, skip");
             return;
         }
+        String objectUrlStr = processUrl(objectUrl);
         log.info("import objectUrl: " + objectUrl);
         InnerImportRequest importRequest = InnerImportRequest.builder()
                 .apiKey(apiKey)
                 .clusterId(clusterId)
                 .collectionName(collectionName)
-                .objectUrl("https://" + stageBucket.getBucketName() +  "." + stageBucket.getMinioUrl()+ "/" + objectUrl)
+                .objectUrl(objectUrlStr)
                 .accessKey(stageBucket.getAccessKey())
                 .secretKey(stageBucket.getSecretKey())
                 //the import job will be executed in the background, not showup in the console
@@ -119,7 +133,7 @@ public class MilvusImport {
         RestfulResponse<BulkImportResponse> importResponseRestfulResponse =  JsonUtils.fromJson(body.getBody(), (new TypeToken<RestfulResponse<BulkImportResponse>>() {
         }).getType());
         if(importResponseRestfulResponse.getCode() != 0) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, "import job failed");
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, importResponseRestfulResponse.getMessage());
         }
         return importResponseRestfulResponse.getData();
     }
