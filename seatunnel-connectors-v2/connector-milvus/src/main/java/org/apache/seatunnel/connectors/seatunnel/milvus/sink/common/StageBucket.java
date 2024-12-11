@@ -12,8 +12,13 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @NoArgsConstructor
 public class StageBucket {
+    @SerializedName("cloud_id")
+    @Builder.Default
+    private String cloudId = "aws";
     @SerializedName("minio_url")
     private String minioUrl;
+    @SerializedName("region_id")
+    private String regionId;
     @SerializedName("access_key")
     private String accessKey;
     @SerializedName("secret_key")

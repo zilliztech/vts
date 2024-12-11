@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import io.milvus.bulkwriter.RemoteBulkWriter;
 import io.milvus.bulkwriter.RemoteBulkWriterParam;
 import io.milvus.bulkwriter.common.clientenum.BulkFileType;
+import io.milvus.bulkwriter.connect.AzureConnectParam;
 import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
 import io.milvus.param.collection.CollectionSchemaParam;
@@ -21,6 +22,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkCon
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
@@ -51,13 +53,24 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.dynamicFieldName = MilvusConnectorUtils.getDynamicField(catalogTable);
         this.jsonFieldNames = MilvusConnectorUtils.getJsonField(catalogTable);
         String collectionName = catalogTable.getTablePath().getTableName();
+        StorageConnectParam storageConnectParam;
+        if(Objects.equals(stageBucket.getCloudId(), "az")){
+            String connectionStr = "DefaultEndpointsProtocol=https;AccountName=" + stageBucket.getBucketName() +
+                    ";AccountKey=" + stageBucket.getSecretKey() + ";EndpointSuffix=core.windows.net";
+            storageConnectParam = AzureConnectParam.newBuilder()
+                    .withConnStr(connectionStr)
+                    .withContainerName(stageBucket.getAccessKey())
+                    .build();
+        }else {
+            storageConnectParam = S3ConnectParam.newBuilder()
+                    .withEndpoint(stageBucket.getMinioUrl())
+                    .withRegion(stageBucket.getRegionId())
+                    .withAccessKey(stageBucket.getAccessKey())
+                    .withSecretKey(stageBucket.getSecretKey())
+                    .withBucketName(stageBucket.getBucketName())
+                    .build();
+        }
 
-        StorageConnectParam storageConnectParam = S3ConnectParam.newBuilder()
-                .withEndpoint(stageBucket.getMinioUrl())
-                .withAccessKey(stageBucket.getAccessKey())
-                .withSecretKey(stageBucket.getSecretKey())
-                .withBucketName(stageBucket.getBucketName())
-                .build();
         RemoteBulkWriterParam remoteBulkWriterParam = RemoteBulkWriterParam.newBuilder()
                 .withCollectionSchema(collectionSchemaParam)
                 .withConnectParam(storageConnectParam)
@@ -96,13 +109,17 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public boolean needCommit() {
-        return writeCache.get() >= 10000;
+        return writeCache.get() >= 10;
     }
 
     @Override
     public void close() throws Exception {
         remoteBulkWriter.commit(false);
         remoteBulkWriter.close();
+        if(remoteBulkWriter.getBatchFiles().isEmpty()){
+            log.info("No data uploaded to remote");
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR);
+        }
         if(stageBucket.getAutoImport()) {
             milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
             milvusImport.waitImportFinish();
