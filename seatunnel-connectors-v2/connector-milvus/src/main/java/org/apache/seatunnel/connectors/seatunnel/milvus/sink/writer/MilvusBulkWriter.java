@@ -55,11 +55,11 @@ public class MilvusBulkWriter implements MilvusWriter {
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
         if(Objects.equals(stageBucket.getCloudId(), "az")){
-            String connectionStr = "DefaultEndpointsProtocol=https;AccountName=" + stageBucket.getBucketName() +
+            String connectionStr = "DefaultEndpointsProtocol=https;AccountName=" + stageBucket.getAccessKey() +
                     ";AccountKey=" + stageBucket.getSecretKey() + ";EndpointSuffix=core.windows.net";
             storageConnectParam = AzureConnectParam.newBuilder()
                     .withConnStr(connectionStr)
-                    .withContainerName(stageBucket.getAccessKey())
+                    .withContainerName(stageBucket.getBucketName())
                     .build();
         }else {
             storageConnectParam = S3ConnectParam.newBuilder()
@@ -109,7 +109,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public boolean needCommit() {
-        return writeCache.get() >= 10;
+        return writeCache.get() >= 10000;
     }
 
     @Override
