@@ -39,7 +39,7 @@ import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT
 import org.apache.seatunnel.common.constants.CommonOptions;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
-import org.openapitools.control.client.model.IndexModel;
+import org.openapitools.db_control.client.model.IndexModel;
 
 import java.util.ArrayList;
 import java.util.Collections;
