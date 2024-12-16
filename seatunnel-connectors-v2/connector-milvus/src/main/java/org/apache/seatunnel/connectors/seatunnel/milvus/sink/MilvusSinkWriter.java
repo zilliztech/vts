@@ -107,6 +107,10 @@ public class MilvusSinkWriter
             // If the collection has a partition key, just ignore the partition name in the element
             partition = DEFAULT_PARTITION;
         }
+        if(partition.contains("-")){
+            // Replace the '-' in the partition name with '_', milvus does not support '-'
+            partition = partition.replace("-", "_");
+        }
         MilvusWriter batchWriter = batchWriters.get(partition);
         if(batchWriter == null){
             // Check if the partition exists, if not, create it
