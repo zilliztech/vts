@@ -43,6 +43,7 @@
 <!--        <module>connector-astradb</module>-->
         <module>connector-mongodb</module>
         <module>connector-shopify</module>
+        <module>connector-iceberg</module>
     </modules>
 
     <dependencyManagement>
