@@ -30,7 +30,7 @@ source {
     url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19530"
     token="***"
     database="default"
-    collection="medium_articles"
+    collections=["medium_articles"]
     batch_size=100
   }
 }
