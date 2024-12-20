@@ -38,6 +38,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StageHelper;
@@ -84,7 +85,7 @@ public class MilvusSinkWriter
         ConnectConfig connectConfig = ConnectConfig.builder()
                         .uri(config.get(URL))
                         .token(config.get(TOKEN))
-                        .dbName(catalogTable.getTablePath().getDatabaseName())
+                        .dbName(config.get(DATABASE))
                         .build();
         this.milvusClient = new MilvusClientV2(connectConfig);
         describeCollectionResp = milvusClient.describeCollection(DescribeCollectionReq.builder().collectionName(collection).build());
