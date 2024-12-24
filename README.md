@@ -116,6 +116,9 @@ Verify data integrity in Milvus after migration. If Need help with specific conf
 ### Docker Deployment
 VTS can also be deployed using Docker. To deploy VTS using Docker, follow the instructions in the [Docker Deployment Guide](./docs/zilliz/Docker%20Deployment.md).
 
+```shell
+docker pull zilliz/vector-transport-service:latest
+```
 ## Tutorial
 In addition to the quick start guide, vts has much more powerful features like
 - lots of transformer to support TabelPathMapper, FieldMapper, Embedding etc.
