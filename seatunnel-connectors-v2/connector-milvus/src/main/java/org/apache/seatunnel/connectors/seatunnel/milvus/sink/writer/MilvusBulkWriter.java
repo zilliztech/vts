@@ -17,6 +17,7 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusComm
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
@@ -82,7 +83,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         try {
             remoteBulkWriter = new RemoteBulkWriter(remoteBulkWriterParam);
             if(stageBucket.getAutoImport()) {
-                milvusImport = new MilvusImport(config.get(URL), collectionName, partitionName, stageBucket);
+                milvusImport = new MilvusImport(config.get(URL), config.get(DATABASE), collectionName, partitionName, stageBucket);
             }
         } catch (IOException e) {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.INIT_WRITER_ERROR, e);
