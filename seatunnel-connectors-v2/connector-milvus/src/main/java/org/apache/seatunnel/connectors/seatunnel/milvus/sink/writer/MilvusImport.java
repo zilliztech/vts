@@ -28,14 +28,16 @@ public class MilvusImport {
 
     private final String baseUrl;
     private final String clusterId;
+    private final String dbName;
     private final String collectionName;
     private final String partitionName;
     private final String apiKey;
     private final StageBucket stageBucket;
     private HashMap<String, String> objectUrls = new HashMap<>();
-    public MilvusImport(String url, String collectionName, String partitionName, StageBucket stageBucket) {
+    public MilvusImport(String url, String dbName, String collectionName, String partitionName, StageBucket stageBucket) {
         this.stageBucket = stageBucket;
         this.clusterId = stageBucket.getInstanceId();
+        this.dbName = dbName;
         this.collectionName = collectionName;
         this.partitionName = partitionName;
         this.apiKey = stageBucket.getApiKey();
@@ -74,7 +76,9 @@ public class MilvusImport {
                 //the import job will be executed in the background, not showup in the console
                 .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall())
                 .build();
-
+        if(StringUtils.isNotEmpty(dbName) && !dbName.equals("default")){
+            importRequest.setDbName(dbName);
+        }
         if(StringUtils.isNotEmpty(partitionName) && !partitionName.equals("_default")){
             importRequest.setPartitionName(partitionName);
         }

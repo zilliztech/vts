@@ -15,6 +15,7 @@ public class InnerImportRequest {
     private String secretKey;
     private String clusterId;
     private String apiKey;
+    private String dbName;
     private String collectionName;
     private String partitionName;
     private Boolean innerCall;
