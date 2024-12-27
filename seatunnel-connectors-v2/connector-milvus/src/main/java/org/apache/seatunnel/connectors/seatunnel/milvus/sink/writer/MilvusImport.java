@@ -61,7 +61,6 @@ public class MilvusImport {
 
     public void importData(String objectUrl) {
         if(objectUrls.containsKey(objectUrl)) {
-            log.info("objectUrl: " + objectUrl + " has been imported, skip");
             return;
         }
         String objectUrlStr = processUrl(objectUrl);
