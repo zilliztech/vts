@@ -511,9 +511,10 @@ public class DynamicChunkSplitter extends ChunkSplitter {
                 schema.getColumns().stream().collect(Collectors.toMap(c -> c.getName(), c -> c));
         for (int i = 0; i < rowType.getTotalFields(); i++) {
             String fieldName = jdbcDialect.quoteIdentifier(rowType.getFieldName(i));
-            fieldName =
-                    jdbcDialect.convertType(
-                            fieldName, columns.get(rowType.getFieldName(i)).getSourceType());
+            String sourceType = columns.get(rowType.getFieldName(i)).getSourceType();
+//            fieldName =
+//                    jdbcDialect.convertType(
+//                            fieldName, sourceType);
             sql.append(fieldName).append(predicate);
             if (i < rowType.getTotalFields() - 1) {
                 sql.append(" AND ");
