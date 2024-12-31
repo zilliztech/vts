@@ -37,6 +37,7 @@ public class JdbcSourceConfig implements Serializable {
     private int fetchSize;
 
     private boolean useDynamicSplitter;
+    private boolean useSingleSplit;
     private int splitSize;
     private double splitEvenDistributionFactorUpperBound;
     private double splitEvenDistributionFactorLowerBound;
@@ -55,6 +56,7 @@ public class JdbcSourceConfig implements Serializable {
                 config.getOptional(JdbcOptions.QUERY).isPresent()
                         && config.getOptional(JdbcOptions.PARTITION_COLUMN).isPresent();
         builder.useDynamicSplitter(!isOldVersion);
+        builder.useSingleSplit(config.get(JdbcSourceOptions.USE_SINGLE_SPLIT));
 
         builder.splitSize(config.get(JdbcSourceOptions.SPLIT_SIZE));
         builder.splitEvenDistributionFactorUpperBound(
