@@ -130,7 +130,7 @@ For detailed information, please refer to [Tutorial.md](./Tutorial.md)
 ### Connectors
 VTS supports a variety of connectors to move data between different systems.
 
-Find Detailed documentation for each connector:
+Find Detailed config documentation for each connector:
  - [Milvus](docs/zilliz/Milvus.md)
  - [Elasitc Search](docs/zilliz/Elastic%20Search.md)
  - [Pinecone](docs/zilliz/Pinecone.md)
