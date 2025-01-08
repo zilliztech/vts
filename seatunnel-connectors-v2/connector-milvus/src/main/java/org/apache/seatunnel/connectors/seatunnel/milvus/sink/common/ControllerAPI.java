@@ -12,7 +12,7 @@ public enum ControllerAPI {
     GLOBAL("https://api.cloud.zilliz.com"),
     CHINA("https://api.cloud.zilliz.com.cn"),
     GLOBAL_UAT("https://api.cloud-uat3.zilliz.com"),
-    CHINA_UAT("https://api.cloud-uat3.zilliz.com.cn"),
+    CHINA_UAT("https://api.cloud-uat.zilliz.cn"),
     GLOBAL_SIT("https://api.cloud-sit.zilliz.com");
 
     private String url;
