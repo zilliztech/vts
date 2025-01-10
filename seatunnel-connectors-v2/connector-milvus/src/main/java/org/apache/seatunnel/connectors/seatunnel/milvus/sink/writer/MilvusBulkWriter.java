@@ -102,7 +102,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public void commit() throws InterruptedException {
-        //remoteBulkWriter.commit(true);
+        remoteBulkWriter.commit(true);
         writeCache.set(0);
         if(stageBucket.getAutoImport()) {
             milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
@@ -110,7 +110,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public boolean needCommit() {
-        return writeCache.get() >= 10000;
+        return writeCache.get() >= 1000000;
     }
 
     @Override

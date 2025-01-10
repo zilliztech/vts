@@ -86,6 +86,7 @@ public class PineconeUtils {
                 if (vector != null) {
                     String namespace = Objects.equals(entry.getKey(), "") ? "default" : entry.getKey();
                     namespaceVectorMap.put(namespace, vector);
+                    break;
                 }
             }
         }

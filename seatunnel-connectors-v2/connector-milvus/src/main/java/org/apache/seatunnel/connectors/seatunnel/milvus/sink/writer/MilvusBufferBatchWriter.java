@@ -81,6 +81,16 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
+        if(needCommit()){
+            try {
+                commit();
+            } catch (Exception e) {
+                throw new MilvusConnectorException(
+                        MilvusConnectionErrorCode.WRITE_DATA_FAIL,
+                        "write data failed",
+                        e);
+            }
+        }
     }
 
     @Override

@@ -142,21 +142,22 @@ public class MilvusSinkWriter
         } catch (Exception e) {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
         }
-
-        if (batchWriter.needCommit()) {
-            // Flush the batch writer
+        writeCount.incrementAndGet();
+        if(writeCount.get() % 10000 == 0){
+            // Print the number of records written every 10000 records
+            log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", this.writeCount.get());
+        }
+        if(writeCount.get() % 1000000 == 0){
+            // commit every 1000000 records
+            // This is to prevent the number of records in the batch writer from becoming too large
+            // flush all batch writers every 1000000 records
             try {
-                long commitNum = batchWriter.getWriteCache();
-                batchWriter.commit();
-                writeCount.addAndGet(commitNum);
-                log.info(
-                        "Successfully put {} records to Milvus. Total records written: {}",
-                        commitNum,
-                        this.writeCount.get());
+                for (MilvusWriter writer : batchWriters.values()){
+                    writer.commit();
+                }
             } catch (Exception e) {
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
             }
-
         }
 
     }
