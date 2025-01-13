@@ -124,7 +124,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                             Vector vector = entry.getValue();
                             SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(tableSchema, vector, namespace);
                             if(!config.get(MERGE_NAMESPACE)) {
-                                row.setPartitionName(tablePath.getFullName());
+                                row.setPartitionName(namespace);
                             }
                             row.setTableId(tablePath.getFullName());
                             output.collect(row);
