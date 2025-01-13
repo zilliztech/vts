@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class ConverterUtils {
-    public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Vector vector) {
+    public static SeaTunnelRow convertToSeatunnelRow(TableSchema tableSchema, Vector vector, String namespace) {
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         Object[] fields = new Object[typeInfo.getTotalFields()];
         List<String> fieldNames = Arrays.stream(typeInfo.getFieldNames()).collect(Collectors.toList());
@@ -54,7 +54,10 @@ public class ConverterUtils {
                     data.add(entry.getKey(), convertValueToJsonElement(entry.getValue()));
                 }
                 fields[fieldIndex] = data.toString();
-            } else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
+            }else if(fieldNames.get(fieldIndex).equals("namespace")){
+                fields[fieldIndex] = namespace;
+            }
+            else if (typeInfo.getFieldType(fieldIndex).equals(VECTOR_FLOAT_TYPE)) {
                 List<Float> floats = vector.getValuesList();
                 // Convert List<Float> to Float[]
                 Float[] floatArray = floats.toArray(new Float[0]);

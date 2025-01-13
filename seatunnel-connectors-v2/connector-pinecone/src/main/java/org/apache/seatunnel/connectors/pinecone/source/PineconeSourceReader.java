@@ -25,6 +25,7 @@ import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.Pagination;
 import io.pinecone.proto.Vector;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
@@ -34,8 +35,10 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.BATCH_SIZE;
+import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.MERGE_NAMESPACE;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectionErrorCode;
 import org.apache.seatunnel.connectors.pinecone.exception.PineconeConnectorException;
 import org.apache.seatunnel.connectors.pinecone.utils.ConverterUtils;
@@ -119,8 +122,10 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         Map<String, Vector> vectorMap = fetchResponse.getVectorsMap();
                         for (Map.Entry<String, Vector> entry : vectorMap.entrySet()) {
                             Vector vector = entry.getValue();
-                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(tableSchema, vector);
-                            row.setPartitionName(namespace);
+                            SeaTunnelRow row = ConverterUtils.convertToSeatunnelRow(tableSchema, vector, namespace);
+                            if(!config.get(MERGE_NAMESPACE)) {
+                                row.setPartitionName(tablePath.getFullName());
+                            }
                             row.setTableId(tablePath.getFullName());
                             output.collect(row);
                         }

@@ -28,6 +28,7 @@ public class PineconeSourceSplit implements SourceSplit {
     private TablePath tablePath;
     private String splitId;
     private String namespace;
+    private Boolean mergeNamespace;
     /**
      * Get the split id of this source split.
      *

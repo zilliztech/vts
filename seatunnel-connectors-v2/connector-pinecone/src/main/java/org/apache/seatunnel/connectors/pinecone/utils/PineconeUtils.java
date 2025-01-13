@@ -25,6 +25,7 @@ import io.pinecone.proto.ListItem;
 import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.NamespaceSummary;
 import io.pinecone.proto.Vector;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -37,6 +38,7 @@ import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
 import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;
 import org.openapitools.db_control.client.model.IndexModel;
@@ -134,6 +136,15 @@ public class PineconeUtils {
                     .build();
 
             columns.add(sparseVectorColumn);
+        }
+
+        if(config.get(PineconeSourceConfig.MERGE_NAMESPACE)) {
+            // add namespace column
+            PhysicalColumn namespaceColumn = PhysicalColumn.builder()
+                    .name("namespace")
+                    .dataType(STRING_TYPE)
+                    .build();
+            columns.add(namespaceColumn);
         }
 
         TableSchema tableSchema = TableSchema.builder()

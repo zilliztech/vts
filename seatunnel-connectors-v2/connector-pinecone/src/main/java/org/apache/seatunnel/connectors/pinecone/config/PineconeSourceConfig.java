@@ -40,4 +40,9 @@ public class PineconeSourceConfig {
                     .intType()
                     .defaultValue(100)
                     .withDescription("writer batch size");
+    public static final Option<Boolean> MERGE_NAMESPACE =
+            Options.key("merge_namespace")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("whether to merge namespace");
 }
