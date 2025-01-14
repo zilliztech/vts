@@ -216,7 +216,7 @@ public final class SeaTunnelRow implements Serializable {
             case INT:
                 return getArrayNotNullSize((Integer[]) v) * 4;
             case FLOAT:
-                return getArrayNotNullSize((Float[]) v) * 4;
+                return getArrayNotNullSize((Object[]) v) * 4;
             case BIGINT:
                 return getArrayNotNullSize((Long[]) v) * 8;
             case DOUBLE:

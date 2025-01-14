@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.iceberg.source;
 
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
 import org.apache.seatunnel.api.common.JobContext;
@@ -75,7 +76,7 @@ public class IcebergSource
     public IcebergSource(ReadonlyConfig config, CatalogTable catalogTable) {
         this.sourceConfig = SourceConfig.loadConfig(config);
         this.tableSchema = loadIcebergSchema(sourceConfig);
-        this.seaTunnelRowType = loadSeaTunnelRowType(tableSchema, config.toConfig());
+        this.seaTunnelRowType = catalogTable.getTableSchema().toPhysicalRowDataType();
         this.projectedSchema = tableSchema.select(seaTunnelRowType.getFieldNames());
         this.catalogTable = catalogTable;
     }
@@ -113,15 +114,18 @@ public class IcebergSource
 
         CheckResult checkResult =
                 CheckConfigUtil.checkAllExists(pluginConfig, TableSchemaOptions.SCHEMA.key());
+        SeaTunnelRowType projectedRowType =
+                CatalogTableUtil.buildWithConfig(pluginConfig).getSeaTunnelRowType();
         if (checkResult.isSuccess()) {
-            SeaTunnelRowType projectedRowType =
-                    CatalogTableUtil.buildWithConfig(pluginConfig).getSeaTunnelRowType();
             for (int i = 0; i < projectedRowType.getFieldNames().length; i++) {
                 String fieldName = projectedRowType.getFieldName(i);
                 SeaTunnelDataType<?> projectedFieldType = projectedRowType.getFieldType(i);
                 int originalFieldIndex = originalRowType.indexOf(fieldName);
                 SeaTunnelDataType<?> originalFieldType =
                         originalRowType.getFieldType(originalFieldIndex);
+                if(projectedFieldType.equals(VectorType.VECTOR_FLOAT_TYPE)){
+                    continue;
+                }
                 checkArgument(
                         projectedFieldType.equals(originalFieldType),
                         String.format(
@@ -130,7 +134,7 @@ public class IcebergSource
             }
             return projectedRowType;
         }
-        return originalRowType;
+        return projectedRowType;
     }
 
     @Override

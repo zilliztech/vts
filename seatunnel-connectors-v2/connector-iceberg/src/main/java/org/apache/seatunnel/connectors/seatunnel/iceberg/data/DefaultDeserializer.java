@@ -22,7 +22,9 @@ import org.apache.seatunnel.api.table.type.MapType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
+import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.exception.IcebergConnectorException;
 
 import org.apache.iceberg.Schema;
@@ -119,6 +121,13 @@ public class DefaultDeserializer implements Deserializer {
             case LIST:
                 List icebergList = List.class.cast(icebergValue);
                 Types.ListType icebergListType = (Types.ListType) icebergType;
+                if(seaTunnelType.equals( VectorType.VECTOR_FLOAT_TYPE)){
+                    Float[] arrays = new Float[icebergList.size()];
+                    for (int i = 0; i < icebergList.size(); i++) {
+                        arrays[i] = Float.parseFloat(icebergList.get(i).toString());
+                    }
+                    return BufferUtils.toByteBuffer(arrays);
+                }
                 List seatunnelList = new ArrayList(icebergList.size());
                 ArrayType seatunnelListType = (ArrayType) seaTunnelType;
                 for (int i = 0; i < icebergList.size(); i++) {
