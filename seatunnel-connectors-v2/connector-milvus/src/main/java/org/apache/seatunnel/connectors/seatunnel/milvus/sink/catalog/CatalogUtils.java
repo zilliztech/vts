@@ -2,7 +2,9 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.ConsistencyLevel;
+import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
+import io.milvus.v2.service.collection.request.AddFieldReq;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.index.request.CreateIndexReq;
 import lombok.extern.slf4j.Slf4j;

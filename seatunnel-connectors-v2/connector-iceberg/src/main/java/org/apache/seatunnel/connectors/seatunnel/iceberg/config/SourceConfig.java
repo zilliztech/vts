@@ -73,6 +73,11 @@ public class SourceConfig extends CommonConfig {
                     .enumType(IcebergStreamScanStrategy.class)
                     .defaultValue(FROM_LATEST_SNAPSHOT)
                     .withDescription(" the iceberg strategy of stream scanning");
+    public static final Option<String> PRIMARY_KEY =
+            Options.key("primary_key")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(" the iceberg primary key");
 
     private Long startSnapshotTimestamp;
     private Long startSnapshotId;
