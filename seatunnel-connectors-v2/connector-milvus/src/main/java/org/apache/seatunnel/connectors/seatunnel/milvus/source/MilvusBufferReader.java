@@ -29,6 +29,7 @@ public class MilvusBufferReader {
     private final Long offset;
     private final Long limit;
     private final TableSchema tableSchema;
+    private final MilvusSourceSplit split;
     private final CountDownLatch completionSignal = new CountDownLatch(1);
 
     public MilvusBufferReader(MilvusSourceSplit split, Collector<SeaTunnelRow> output,
@@ -36,6 +37,7 @@ public class MilvusBufferReader {
         this.output = output;
         this.milvusClient = client;
         this.tableSchema = tableSchema;
+        this.split = split;
         this.milvusSourceConverter = new MilvusSourceConverter(tableSchema);
         this.collectionName = split.getTablePath().getTableName();
         this.partitionName = split.getPartitionName();
@@ -97,6 +99,7 @@ public class MilvusBufferReader {
                 } else {
                     for (QueryResultsWrapper.RowRecord record : next) {
                         SeaTunnelRow seaTunnelRow = milvusSourceConverter.convertToSeaTunnelRow(record, tableSchema, collectionName, partitionName);
+                        seaTunnelRow.setTableId(split.getTablePath().toString());
                         output.collect(seaTunnelRow);
                     }
                 }

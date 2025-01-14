@@ -29,6 +29,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
+import org.apache.seatunnel.api.sink.SupportMultiTableSink;
+import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstant.DEFAULT_PARTITION;
@@ -57,7 +59,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /** MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus. */
 @Slf4j
 public class MilvusSinkWriter
-        implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> {
+        implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
 
     private final Map<String, MilvusWriter> batchWriters = new HashMap<>();
     private final CatalogTable catalogTable;
