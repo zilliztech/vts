@@ -73,7 +73,7 @@ public class MilvusSinkWriter
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
-    private final AtomicLong writeCount = new AtomicLong();
+    private final static AtomicLong writeCount = new AtomicLong();
 
     public MilvusSinkWriter(
             Context context,
