@@ -101,8 +101,8 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     }
     @Override
-    public void commit() throws InterruptedException {
-        remoteBulkWriter.commit(true);
+    public void commit(Boolean async) throws InterruptedException {
+        remoteBulkWriter.commit(async);
         writeCache.set(0);
         if(stageBucket.getAutoImport()) {
             milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
@@ -115,7 +115,6 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     @Override
     public void close() throws Exception {
-        remoteBulkWriter.commit(false);
         remoteBulkWriter.close();
         if(remoteBulkWriter.getBatchFiles().isEmpty()){
             log.info("No data uploaded to remote");

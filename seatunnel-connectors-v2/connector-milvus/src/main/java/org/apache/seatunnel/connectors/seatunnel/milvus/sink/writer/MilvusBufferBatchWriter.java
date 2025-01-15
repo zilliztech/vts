@@ -83,7 +83,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         writeCount.incrementAndGet();
         if(needCommit()){
             try {
-                commit();
+                commit(true);
             } catch (Exception e) {
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.WRITE_DATA_FAIL,
@@ -99,7 +99,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     }
 
     @Override
-    public void commit() throws Exception {
+    public void commit(Boolean async) throws Exception {
         // Flush the batch writer
         // Get the number of records completed
         if (this.milvusDataCache.isEmpty()) {
@@ -116,7 +116,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
 
     @Override
     public void close() throws Exception {
-        commit();
+        commit(true);
         this.milvusClient.close(10);
     }
 

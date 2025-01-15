@@ -49,12 +49,12 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWr
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus. */
@@ -63,6 +63,7 @@ public class MilvusSinkWriter
         implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
     //set this to static, then all thread will reuse this
     private final static Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
+    private final static AtomicBoolean closed = new AtomicBoolean(false);
     private final CatalogTable catalogTable;
     private final String collection;
     private final ReadonlyConfig config;
@@ -158,7 +159,7 @@ public class MilvusSinkWriter
             // flush all batch writers every 1000000 records
             try {
                 for (MilvusWriter writer : batchWriters.values()){
-                    writer.commit();
+                    writer.commit(true);
                 }
             } catch (Exception e) {
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
@@ -196,18 +197,28 @@ public class MilvusSinkWriter
      */
     @Override
     public void close() throws IOException {
-
-        log.info("Stopping Milvus Client");
-        for (MilvusWriter batchWriter : batchWriters.values()){
-            try {
-                writeCount.addAndGet(batchWriter.getWriteCache());
-                batchWriter.close();
-            } catch (Exception e) {
-                throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
+        if (closed.get()) {
+            log.info("BatchWriter already closed");
+            return;
+        }
+        synchronized (batchWriters) {
+            if (!closed.get()) {
+                log.info("Stopping Milvus Client");
+                for (MilvusWriter batchWriter : batchWriters.values()) {
+                    try {
+                        writeCount.addAndGet(batchWriter.getWriteCache());
+                        batchWriter.commit(false);
+                        batchWriter.close();
+                    } catch (Exception e) {
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
+                    }
+                }
+                log.info("Successfully put {} records to Milvus", this.writeCount.get());
+                log.info("Stop Milvus Client success");
+                closed.set(true); // Mark as closed
+            } else {
+                log.info("BatchWriter already closed");
             }
         }
-        log.info("Successfully put {} records to Milvus", this.writeCount.get());
-        log.info("Stop Milvus Client success");
-
     }
 }
