@@ -27,8 +27,8 @@ public class StageBucket {
     private String bucketName;
     @SerializedName("chunk_size")
     @Builder.Default
-    // 2000 MB in default
-    private Integer chunkSize = 2000;
+    // 512 MB in default
+    private Integer chunkSize = 512;
     @Builder.Default
     private String prefix = "";
 
