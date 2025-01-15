@@ -44,6 +44,7 @@ import org.apache.seatunnel.connectors.pinecone.utils.ConverterUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,7 +59,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
     private final Context context;
     private final Map<TablePath, CatalogTable> sourceTables;
     private Pinecone pinecone;
-    private Map<TablePath, Index> pathIndexMap;
+    private Map<TablePath, Index> pathIndexMap = new HashMap<>();
 
     private volatile boolean noMoreSplit;
     public PineconeSourceReader(Context readerContext, ReadonlyConfig config, Map<TablePath, CatalogTable> sourceTables) {
@@ -115,6 +116,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         index = pathIndexMap.get(tablePath);
                     }else {
                         index = pinecone.getIndexConnection(tablePath.getTableName());
+                        pathIndexMap.put(tablePath, index);
                     }
                     ListResponse listResponse;
                     while (!(Objects.equals(paginationToken, ""))) {
