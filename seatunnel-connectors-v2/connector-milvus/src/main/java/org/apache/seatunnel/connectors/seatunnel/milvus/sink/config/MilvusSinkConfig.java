@@ -90,5 +90,10 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .mapType()
                     .defaultValue(new HashMap<>())
                     .withDescription("bulk writer config");
+    public static final Option<Integer> WRITER_CACHE =
+            Options.key("writer_cache")
+                    .intType()
+                    .defaultValue(1000000)
+                    .withDescription("max cache allowed");
 
 }

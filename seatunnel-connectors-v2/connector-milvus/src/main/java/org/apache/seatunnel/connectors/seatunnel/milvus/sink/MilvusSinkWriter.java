@@ -39,6 +39,7 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusComm
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
@@ -149,7 +150,8 @@ public class MilvusSinkWriter
             // Print the number of records written every 10000 records
             log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", this.writeCount.get());
         }
-        if(writeCount.get() % 1000000 == 0){
+
+        if(writeCount.get() % config.get(MilvusSinkConfig.WRITER_CACHE) == 0){
             // commit every 1000000 records
             // This is to prevent the number of records in the batch writer from becoming too large
             // flush all batch writers every 1000000 records
