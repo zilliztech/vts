@@ -25,7 +25,6 @@ import io.pinecone.proto.ListResponse;
 import io.pinecone.proto.Pagination;
 import io.pinecone.proto.Vector;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
@@ -35,7 +34,6 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.BATCH_SIZE;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.MERGE_NAMESPACE;
@@ -50,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -59,6 +58,7 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
     private final Context context;
     private final Map<TablePath, CatalogTable> sourceTables;
     private Pinecone pinecone;
+    private Map<TablePath, Index> pathIndexMap;
 
     private volatile boolean noMoreSplit;
     public PineconeSourceReader(Context readerContext, ReadonlyConfig config, Map<TablePath, CatalogTable> sourceTables) {
@@ -72,7 +72,12 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
      */
     @Override
     public void open() throws Exception {
-        pinecone = new Pinecone.Builder(config.get(API_KEY)).build();
+        okhttp3.OkHttpClient httpClient = new okhttp3.OkHttpClient().newBuilder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(180, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build();
+        pinecone = new Pinecone.Builder(config.get(API_KEY)).withOkHttpClient(httpClient).build();
     }
 
     /**
@@ -105,7 +110,12 @@ public class PineconeSourceReader implements SourceReader<SeaTunnelRow, Pinecone
                         throw new PineconeConnectorException(
                                 PineconeConnectionErrorCode.SOURCE_TABLE_SCHEMA_IS_NULL);
                     }
-                    Index index = pinecone.getIndexConnection(tablePath.getTableName());
+                    Index index = null;
+                    if(pathIndexMap.containsKey(tablePath)){
+                        index = pathIndexMap.get(tablePath);
+                    }else {
+                        index = pinecone.getIndexConnection(tablePath.getTableName());
+                    }
                     ListResponse listResponse;
                     while (!(Objects.equals(paginationToken, ""))) {
                         if(paginationToken == null){
