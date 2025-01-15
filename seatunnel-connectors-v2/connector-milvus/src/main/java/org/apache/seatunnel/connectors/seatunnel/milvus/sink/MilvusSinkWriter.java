@@ -29,8 +29,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
-import org.apache.seatunnel.api.sink.SupportMultiTableSink;
-import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstant.DEFAULT_PARTITION;
@@ -55,14 +53,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus. */
 @Slf4j
 public class MilvusSinkWriter
-        implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
-
-    private final Map<String, MilvusWriter> batchWriters = new HashMap<>();
+        implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> {
+    //set this to static, then all thread will reuse this
+    private final static Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
     private final CatalogTable catalogTable;
     private final String collection;
     private final ReadonlyConfig config;
@@ -115,7 +114,8 @@ public class MilvusSinkWriter
             // Replace the '-' in the partition name with '_', milvus does not support '-'
             partition = partition.replace("-", "_");
         }
-        MilvusWriter batchWriter = batchWriters.get(partition);
+        String partitionId = catalogTable.getTablePath() + "." + partition;
+        MilvusWriter batchWriter = batchWriters.get(partitionId);
         if(batchWriter == null){
             // Check if the partition exists, if not, create it
             HasPartitionReq hasPartitionReq = HasPartitionReq.builder()
@@ -133,10 +133,10 @@ public class MilvusSinkWriter
             // Create a new batch writer
             if(useBulkWriter){
                 batchWriter = new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, partition);
-                batchWriters.put(partition, batchWriter);
+                batchWriters.put(partitionId, batchWriter);
             }else {
                 batchWriter = new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, partition);
-                batchWriters.put(partition, batchWriter);
+                batchWriters.put(partitionId, batchWriter);
             }
         }
 
