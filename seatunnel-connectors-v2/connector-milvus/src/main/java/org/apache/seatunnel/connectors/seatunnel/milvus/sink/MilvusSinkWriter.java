@@ -49,12 +49,12 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWr
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** MilvusSinkWriter is a sink writer that will write {@link SeaTunnelRow} to Milvus. */
@@ -63,6 +63,7 @@ public class MilvusSinkWriter
         implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
     //set this to static, then all thread will reuse this
     private final static Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
+    private final static AtomicBoolean closed = new AtomicBoolean(false);
     private final CatalogTable catalogTable;
     private final String collection;
     private final ReadonlyConfig config;
@@ -107,64 +108,56 @@ public class MilvusSinkWriter
     @Override
     public void write(SeaTunnelRow element) {
         String partition = StringUtils.isEmpty(element.getPartitionName()) ? DEFAULT_PARTITION : element.getPartitionName();
-        if(hasPartitionKey){
-            // If the collection has a partition key, just ignore the partition name in the element
+        if (hasPartitionKey) {
             partition = DEFAULT_PARTITION;
         }
-        if(partition.contains("-")){
-            // Replace the '-' in the partition name with '_', milvus does not support '-'
+        if (partition.contains("-")) {
             partition = partition.replace("-", "_");
         }
         String partitionId = catalogTable.getTablePath() + "." + partition;
-        MilvusWriter batchWriter = batchWriters.get(partitionId);
-        if(batchWriter == null){
-            // Check if the partition exists, if not, create it
-            HasPartitionReq hasPartitionReq = HasPartitionReq.builder()
-                    .collectionName(catalogTable.getTablePath().getTableName())
-                    .partitionName(partition)
-                    .build();
-            Boolean hasPartition = milvusClient.hasPartition(hasPartitionReq);
-            if (!hasPartition && !Objects.equals(partition, DEFAULT_PARTITION)) {
-                CreatePartitionReq createPartitionReq = CreatePartitionReq.builder()
+
+        // 获取或创建 MilvusWriter
+        String finalPartition = partition;
+        MilvusWriter batchWriter = batchWriters.computeIfAbsent(partitionId, id -> {
+            synchronized (batchWriters) {
+                if (!milvusClient.hasPartition(HasPartitionReq.builder()
                         .collectionName(catalogTable.getTablePath().getTableName())
-                        .partitionName(partition)
-                        .build();
-                milvusClient.createPartition(createPartitionReq);
-            }
-            // Create a new batch writer
-            if(useBulkWriter){
-                batchWriter = new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, partition);
-                batchWriters.put(partitionId, batchWriter);
-            }else {
-                batchWriter = new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, partition);
-                batchWriters.put(partitionId, batchWriter);
-            }
-        }
-
-        try {
-            batchWriter.write(element);
-        } catch (Exception e) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
-        }
-        writeCount.incrementAndGet();
-        if(writeCount.get() % 10000 == 0){
-            // Print the number of records written every 10000 records
-            log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", this.writeCount.get());
-        }
-
-        if(writeCount.get() % config.get(MilvusSinkConfig.WRITER_CACHE) == 0){
-            // commit every 1000000 records
-            // This is to prevent the number of records in the batch writer from becoming too large
-            // flush all batch writers every 1000000 records
-            try {
-                for (MilvusWriter writer : batchWriters.values()){
-                    writer.commit();
+                        .partitionName(finalPartition).build())) {
+                    milvusClient.createPartition(CreatePartitionReq.builder()
+                            .collectionName(catalogTable.getTablePath().getTableName())
+                            .partitionName(finalPartition).build());
                 }
+                return useBulkWriter
+                        ? new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, finalPartition)
+                        : new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, finalPartition);
+            }
+        });
+
+        // 写入数据
+        synchronized (batchWriter) {
+            try {
+                batchWriter.write(element);
             } catch (Exception e) {
-                throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
             }
         }
 
+        // 增加计数并定期提交
+        writeCount.incrementAndGet();
+        if (writeCount.get() % 10000 == 0) {
+            log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", writeCount.get());
+        }
+        if (writeCount.get() % config.get(MilvusSinkConfig.WRITER_CACHE) == 0) {
+            synchronized (batchWriters) {
+                try {
+                    for (MilvusWriter writer : batchWriters.values()) {
+                        writer.commit(true);
+                    }
+                } catch (Exception e) {
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
+                }
+            }
+        }
     }
 
     /**
@@ -196,18 +189,28 @@ public class MilvusSinkWriter
      */
     @Override
     public void close() throws IOException {
-
-        log.info("Stopping Milvus Client");
-        for (MilvusWriter batchWriter : batchWriters.values()){
-            try {
-                writeCount.addAndGet(batchWriter.getWriteCache());
-                batchWriter.close();
-            } catch (Exception e) {
-                throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
+        if (closed.get()) {
+            log.info("BatchWriter already closed");
+            return;
+        }
+        synchronized (batchWriters) {
+            if (!closed.get()) {
+                log.info("Stopping Milvus Client");
+                for (MilvusWriter batchWriter : batchWriters.values()) {
+                    try {
+                        writeCount.addAndGet(batchWriter.getWriteCache());
+                        batchWriter.commit(false);
+                        batchWriter.close();
+                    } catch (Exception e) {
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
+                    }
+                }
+                log.info("Successfully put {} records to Milvus", writeCount.get());
+                log.info("Stop Milvus Client success");
+                closed.set(true); // Mark as closed
+            } else {
+                log.info("BatchWriter already closed");
             }
         }
-        log.info("Successfully put {} records to Milvus", this.writeCount.get());
-        log.info("Stop Milvus Client success");
-
     }
 }
