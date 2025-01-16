@@ -5,6 +5,8 @@
 ## Overview
 **VTS** (short for Vector Transport Service) is an open-source tool for moving [vectors](https://zilliz.com/glossary/vector-embeddings) and [unstructured data](https://zilliz.com/learn/introduction-to-unstructured-data). It is developed **by** [Zilliz](https://zilliz.com/) based on **Apache Seatunnel**.
 
+![VTS Diagram](docs/zilliz/images/vts.png)
+
 ## Why do you need a vector and unstructured data moving tool?
 1. **Meeting the Growing Data Migration Needs:** VTS evolves from our Milvus Migration Service, which has successfully helped over 100 organizations migrate data between [Milvus](https://github.com/milvus-io/milvus) clusters. User demands have grown to include migrations from different [vector databases](https://zilliz.com/learn/what-is-vector-database), traditional search engines like [Elasticsearch](https://zilliz.com/comparison/milvus-vs-elastic) and Solr, [relational databases](https://zilliz.com/blog/relational-databases-vs-vector-databases), data warehouses, document databases, and even S3 and data lakes to Milvus.
 2. **Supporting Real-time Data Streaming and Offline Import:** As vector database capabilities expand, users require both real-time data streaming and offline batch import options.
@@ -18,8 +20,6 @@ Built on top of Apache Seatunnel, Vector-Transport-Service offers:
 3. Distributed snapshot support for data consistency
 4. High performance, low latency, and scalability
 5. Real-time monitoring and visual management
-
-![migration.png](docs/zilliz/images/vts.png)
 
 Additionally, Vector-Transport-Service introduces vector-specific capabilities such as multiple data source support, schema matching, and basic data validation. 
 
