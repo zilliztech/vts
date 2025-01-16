@@ -44,16 +44,16 @@ This guide will help you get started with how to use vts to transport vector dat
 - qdrant
 - tencent vectordb
 
-#### Step 1: Download and Extract VTS
-
-- Navigate to the VTS releases page: https://github.com/zilliztech/vts/releases
-- Download the latest binary package
-- Extract the package using:
+#### Step 1: Download VTS Image
 ```shell
-tar -xzvf "vector-transport-service-bin-xxx.tar.gz"
+docker pull zilliz/vector-transport-service:latest
+docker run -it zilliz/vector-transport-service:latest /bin/bash
 ```
 #### Step 2: Configure the Migration
 Create a configuration file named milvus_to_milvus.conf with the following structure:
+```shell
+vim milvus_to_milvus.conf
+```
 ```yaml
 env {
   parallelism = 1
