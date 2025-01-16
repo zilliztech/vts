@@ -255,7 +255,7 @@ public class MilvusSinkConverter {
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
-        Boolean autoId = config.get(ENABLE_AUTO_ID);
+        boolean autoId = config.get(ENABLE_AUTO_ID) != null && config.get(ENABLE_AUTO_ID);
 
         JsonObject data = new JsonObject();
         Gson gson = new Gson();

@@ -142,6 +142,9 @@ public class MilvusSourceConnectorUtils {
         // build options info
         Map<String, String> options = new HashMap<>();
         options.put(MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(describeCollectionResp.getEnableDynamicField()));
+        options.put(MilvusOptions.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
+        options.put(MilvusOptions.CONSISTENCY_LEVEL, String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
+        //options.put(MilvusOptions.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusOptions.PARTITION_KEY_FIELD, partitionKeyField);
         }else {

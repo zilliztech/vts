@@ -76,6 +76,13 @@ public class CatalogUtils {
 
             TableSchema tableSchema = catalogTable.getTableSchema();
             List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
+            Boolean enableAutoId = false;
+            if(options.containsKey(MilvusOptions.ENABLE_AUTO_ID)){
+                enableAutoId = Boolean.valueOf(options.get(MilvusOptions.ENABLE_AUTO_ID));
+            }
+            if(config.get(MilvusSinkConfig.ENABLE_AUTO_ID) != null){
+                enableAutoId = config.get(MilvusSinkConfig.ENABLE_AUTO_ID);
+            }
             for (Column column : tableSchema.getColumns()) {
                 if (column.getOptions() != null
                         && column.getOptions().containsKey(CommonOptions.METADATA.getName())
@@ -87,7 +94,7 @@ public class CatalogUtils {
                         column,
                         tableSchema.getPrimaryKey(),
                         partitionKeyField,
-                        config.get(MilvusSinkConfig.ENABLE_AUTO_ID));
+                        enableAutoId);
                 fieldSchemaList.add(fieldSchema);
             }
 
@@ -101,6 +108,14 @@ public class CatalogUtils {
                 enableDynamicField = config.get(ENABLE_DYNAMIC_FIELD);
             }
 
+            // consistency level
+            ConsistencyLevel consistencyLevel = ConsistencyLevel.BOUNDED;
+            if(options.containsKey(MilvusOptions.CONSISTENCY_LEVEL)){
+                consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusOptions.CONSISTENCY_LEVEL).toUpperCase());
+            }
+            if(config.get(MilvusSinkConfig.CONSISTENCY_LEVEL) != null){
+                consistencyLevel = config.get(MilvusSinkConfig.CONSISTENCY_LEVEL);
+            }
 
             String collectionDescription = "";
             if (config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION) != null
@@ -123,10 +138,13 @@ public class CatalogUtils {
                             .description(collectionDescription)
                             .collectionSchema(collectionSchema)
                             .enableDynamicField(enableDynamicField)
-                            .consistencyLevel(ConsistencyLevel.BOUNDED)
+                            .consistencyLevel(consistencyLevel)
                             .build();
             if (StringUtils.isNotEmpty(options.get(MilvusOptions.SHARDS_NUM))) {
                 createCollectionReq.setNumShards(Integer.parseInt(options.get(MilvusOptions.SHARDS_NUM)));
+            }
+            if(config.get(MilvusSinkConfig.SHARDS_NUM) != null){
+                createCollectionReq.setNumShards(config.get(MilvusSinkConfig.SHARDS_NUM));
             }
             int retry = 5;
             while (retry > 0){

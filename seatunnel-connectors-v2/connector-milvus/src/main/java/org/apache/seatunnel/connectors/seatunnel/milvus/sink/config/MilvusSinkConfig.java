@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.config;
 
+import io.milvus.v2.common.ConsistencyLevel;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 import org.apache.seatunnel.api.sink.DataSaveMode;
@@ -65,14 +66,29 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
     public static final Option<Boolean> ENABLE_AUTO_ID =
             Options.key("enable_auto_id")
                     .booleanType()
-                    .defaultValue(false)
+                    .noDefaultValue()
                     .withDescription("Enable Auto Id");
 
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
                     .booleanType()
-                    .defaultValue(true)
+                    .noDefaultValue()
                     .withDescription("Enable dynamic field");
+
+    public static final Option<ConsistencyLevel> CONSISTENCY_LEVEL =
+            Options.key("consistency_level")
+                    .singleChoice(
+                            ConsistencyLevel.class,
+                            Arrays.asList(ConsistencyLevel.STRONG, ConsistencyLevel.SESSION,
+                                    ConsistencyLevel.EVENTUALLY, ConsistencyLevel.BOUNDED))
+                    .noDefaultValue()
+                    .withDescription("consistency level");
+
+    public static final Option<Integer> SHARDS_NUM =
+            Options.key("consistency_level")
+                    .intType()
+                    .noDefaultValue()
+                    .withDescription("consistency level");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
