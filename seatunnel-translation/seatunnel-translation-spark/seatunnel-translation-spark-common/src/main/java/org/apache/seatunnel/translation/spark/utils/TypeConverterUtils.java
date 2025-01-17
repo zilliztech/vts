@@ -110,6 +110,12 @@ public class TypeConverterUtils {
                         decimalType.getPrecision(), decimalType.getScale());
             case ROW:
                 return convert((SeaTunnelRowType) dataType);
+            case FLOAT_VECTOR:
+            case BINARY_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+            case SPARSE_FLOAT_VECTOR:
+                return DataTypes.BinaryType;
             default:
         }
         throw new IllegalArgumentException("Unsupported SeaTunnel's data type: " + dataType);

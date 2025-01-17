@@ -55,6 +55,7 @@ import scala.collection.mutable.WrappedArray;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -126,6 +127,24 @@ public final class InternalRowConverter extends RowConverter<InternalRow> {
                     Array.set(array, i, ((Object[]) field)[i]);
                 }
                 return ArrayData.toArrayData(field);
+            case FLOAT_VECTOR:
+            case BINARY_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+            case SPARSE_FLOAT_VECTOR:
+                // 新增 FLOAT_VECTOR 处理逻辑
+                if (field instanceof ByteBuffer) {
+                    ByteBuffer buffer = (ByteBuffer) field;
+                    byte[] byteArray = new byte[buffer.remaining()];
+                    buffer.get(byteArray); // 将数据从 HeapByteBuffer 提取到 byte[]
+                    return byteArray;
+                } else if (field instanceof byte[]) {
+                    return field; // 如果已经是 byte[]，直接返回
+                } else {
+                    throw new IllegalArgumentException(
+                            "Unsupported FLOAT_VECTOR type: " + field.getClass());
+                }
+
             default:
                 if (field instanceof scala.Some) {
                     return ((scala.Some<?>) field).get();
@@ -328,6 +347,18 @@ public final class InternalRowConverter extends RowConverter<InternalRow> {
                             String.format(
                                     "SeaTunnel unsupported Spark internal Array type: %s ",
                                     field.getClass()));
+                }
+            case FLOAT_VECTOR:
+            case BINARY_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+            case SPARSE_FLOAT_VECTOR:
+                // 新增 VECTOR 处理逻辑
+                if (field instanceof byte[]) {
+                    return ByteBuffer.wrap((byte[]) field);
+                } else {
+                    throw new IllegalArgumentException(
+                            "Unsupported FLOAT_VECTOR type: " + field.getClass());
                 }
             default:
                 return field;
