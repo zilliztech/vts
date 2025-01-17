@@ -96,12 +96,15 @@ public class MilvusBulkWriter implements MilvusWriter {
                         catalogTable, config, jsonFieldNames, dynamicFieldName, element);
 
         remoteBulkWriter.appendRow(data);
-        writeCache.incrementAndGet();
+        writeCache.set(remoteBulkWriter.getBufferRowCount());
         writeCount.incrementAndGet();
 
     }
     @Override
     public void commit(Boolean async) throws InterruptedException {
+        if(writeCache.get() == 0){
+            return;
+        }
         remoteBulkWriter.commit(async);
         writeCache.set(0);
         if(stageBucket.getAutoImport()) {
@@ -110,7 +113,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public boolean needCommit() {
-        return writeCache.get() >= 1000000;
+        return remoteBulkWriter.getBufferRowCount() == 500000;
     }
 
     @Override

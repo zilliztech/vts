@@ -109,7 +109,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
     public static final Option<Integer> WRITER_CACHE =
             Options.key("writer_cache")
                     .intType()
-                    .defaultValue(1000000)
+                    .defaultValue(500000)
                     .withDescription("max cache allowed");
 
 }

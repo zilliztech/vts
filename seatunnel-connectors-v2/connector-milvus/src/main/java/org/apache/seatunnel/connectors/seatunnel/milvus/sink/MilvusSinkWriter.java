@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -75,6 +76,7 @@ public class MilvusSinkWriter
     private final Boolean hasPartitionKey;
 
     private final static AtomicLong writeCount = new AtomicLong();
+    private final static AtomicLong writeCache = new AtomicLong();
 
     public MilvusSinkWriter(
             Context context,
@@ -123,9 +125,26 @@ public class MilvusSinkWriter
                 if (!milvusClient.hasPartition(HasPartitionReq.builder()
                         .collectionName(catalogTable.getTablePath().getTableName())
                         .partitionName(finalPartition).build())) {
-                    milvusClient.createPartition(CreatePartitionReq.builder()
-                            .collectionName(catalogTable.getTablePath().getTableName())
-                            .partitionName(finalPartition).build());
+                    synchronized (milvusClient) {
+                        milvusClient.createPartition(CreatePartitionReq.builder()
+                                .collectionName(catalogTable.getTablePath().getTableName())
+                                .partitionName(finalPartition).build());
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(1000);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+                synchronized (batchWriters) {
+                    // flush all data before creating new writer
+                    try {
+                        for (MilvusWriter writer : batchWriters.values()) {
+                            writer.commit(true);
+                        }
+                    } catch (Exception e) {
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
+                    }
                 }
                 return useBulkWriter
                         ? new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, finalPartition)
@@ -147,7 +166,10 @@ public class MilvusSinkWriter
         if (writeCount.get() % 10000 == 0) {
             log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", writeCount.get());
         }
-        if (writeCount.get() % config.get(MilvusSinkConfig.WRITER_CACHE) == 0) {
+        writeCache.set(batchWriters.values().stream()
+                .mapToLong(MilvusWriter::getWriteCache)
+                .sum());
+        if (writeCache.get() >= config.get(MilvusSinkConfig.WRITER_CACHE)) {
             synchronized (batchWriters) {
                 try {
                     for (MilvusWriter writer : batchWriters.values()) {
