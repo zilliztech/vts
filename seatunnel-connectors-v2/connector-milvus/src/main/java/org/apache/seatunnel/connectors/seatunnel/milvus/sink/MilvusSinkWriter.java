@@ -75,8 +75,8 @@ public class MilvusSinkWriter
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
-    private final static AtomicLong writeCount = new AtomicLong();
-    private final static AtomicLong writeCache = new AtomicLong();
+    private final static AtomicLong writeCount = new AtomicLong(0);
+    private final static AtomicLong writeCache = new AtomicLong(0);
 
     public MilvusSinkWriter(
             Context context,

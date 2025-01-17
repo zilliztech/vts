@@ -31,7 +31,7 @@
 
     <properties>
         <spark.scope>compile</spark.scope>
-        <spark.2.4.0.jackson.version>2.6.7</spark.2.4.0.jackson.version>
+        <spark.2.4.0.jackson.version>2.13.5</spark.2.4.0.jackson.version>
     </properties>
 
     <dependencyManagement>
@@ -53,7 +53,7 @@
 
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-spark-2-starter</artifactId>
+            <artifactId>seatunnel-spark-3-starter</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -82,14 +82,14 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_${scala.binary.version}</artifactId>
-            <version>${spark.2.4.0.version}</version>
+            <version>${spark.3.3.0.version}</version>
             <scope>${spark.scope}</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.binary.version}</artifactId>
-            <version>${spark.2.4.0.version}</version>
+            <version>${spark.3.3.0.version}</version>
             <scope>${spark.scope}</scope>
             <exclusions>
                 <exclusion>
@@ -107,14 +107,14 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_${scala.binary.version}</artifactId>
-            <version>${spark.2.4.0.version}</version>
+            <version>${spark.3.3.0.version}</version>
             <scope>${spark.scope}</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-hive_${scala.binary.version}</artifactId>
-            <version>${spark.2.4.0.version}</version>
+            <version>${spark.3.3.0.version}</version>
             <scope>${spark.scope}</scope>
             <exclusions>
                 <exclusion>
@@ -134,6 +134,22 @@
             <artifactId>connector-milvus</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-iceberg</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.github.luben/zstd-jni -->
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <version>1.5.6-9</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-catalyst -->
+
+        <!-- Thanks for using https://jar-download.com -->
+
+
         <!-- https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
