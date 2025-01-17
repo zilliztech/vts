@@ -56,14 +56,21 @@
 
         <dependency>
             <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-spark-runtime-3.5_2.12</artifactId>
+            <artifactId>iceberg-spark-runtime-3.3_2.12</artifactId>
             <version>1.5.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.12</artifactId>
-            <version>3.5.4</version>
+            <version>3.3.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-catalyst_2.12</artifactId>
+            <version>3.3.0</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/s3 -->
@@ -284,6 +291,11 @@
                                     <pattern>shaded.parquet</pattern>
                                     <!--suppress UnresolvedMavenProperty -->
                                     <shadedPattern>${seatunnel.shade.package}.${connector.name}.shaded.parquet</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.spark</pattern>
+                                    <!--suppress UnresolvedMavenProperty -->
+                                    <shadedPattern>iceberg.org.apache.spark</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
