@@ -16,12 +16,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 public class MilvusImport {
@@ -33,7 +32,7 @@ public class MilvusImport {
     private final String partitionName;
     private final String apiKey;
     private final StageBucket stageBucket;
-    private HashMap<String, String> objectUrls = new HashMap<>();
+    private ConcurrentHashMap<String, String> objectUrlsMap = new ConcurrentHashMap<>();
     public MilvusImport(String url, String dbName, String collectionName, String partitionName, StageBucket stageBucket) {
         this.stageBucket = stageBucket;
         this.clusterId = stageBucket.getInstanceId();
@@ -60,7 +59,7 @@ public class MilvusImport {
     }
 
     public void importData(String objectUrl) {
-        if(objectUrls.containsKey(objectUrl)) {
+        if(objectUrlsMap.containsKey(objectUrl)) {
             return;
         }
         String objectUrlStr = processUrl(objectUrl);
@@ -86,7 +85,7 @@ public class MilvusImport {
 
         BulkImportResponse importResponse = importToCloud(baseUrl, importRequest);
 
-        objectUrls.put(objectUrl, importResponse.getJobId());
+        objectUrlsMap.put(objectUrl, importResponse.getJobId());
         log.info("import objectUrl: " + objectUrl + " success");
     }
 
@@ -101,7 +100,7 @@ public class MilvusImport {
         log.info("all import job finish");
     }
     public boolean checkImportFinish() {
-        HashSet<String> jobIds = new HashSet<>(objectUrls.values());
+        HashSet<String> jobIds = new HashSet<>(objectUrlsMap.values());
         for(String jobId : jobIds) {
             log.info("wait import job: " + jobId + " finish");
             CloudDescribeImportRequest importProgress = CloudDescribeImportRequest.builder()
