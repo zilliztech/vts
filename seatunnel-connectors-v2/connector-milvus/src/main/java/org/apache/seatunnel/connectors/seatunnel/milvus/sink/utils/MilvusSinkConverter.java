@@ -26,7 +26,6 @@ import io.milvus.param.collection.FieldType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
@@ -42,8 +41,6 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_AUTO_ID;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -249,14 +246,13 @@ public class MilvusSinkConverter {
 
     public JsonObject buildMilvusData(
             CatalogTable catalogTable,
-            ReadonlyConfig config,
+            Boolean autoId,
+            Boolean enableDynamicField,
             List<String> jsonFields,
             String dynamicField,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
-        boolean autoId = config.get(ENABLE_AUTO_ID) != null && config.get(ENABLE_AUTO_ID);
-
         JsonObject data = new JsonObject();
         Gson gson = new Gson();
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
@@ -276,7 +272,7 @@ public class MilvusSinkConverter {
             // if the field is dynamic field, then parse the dynamic field
             if (dynamicField != null
                     && dynamicField.equals(fieldName)
-                    && config.get(ENABLE_DYNAMIC_FIELD)) {
+                    && enableDynamicField) {
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
                 dynamicData
                         .entrySet()

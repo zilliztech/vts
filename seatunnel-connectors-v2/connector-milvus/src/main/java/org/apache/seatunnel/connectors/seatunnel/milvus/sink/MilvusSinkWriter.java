@@ -148,7 +148,7 @@ public class MilvusSinkWriter
                 }
                 return useBulkWriter
                         ? new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, finalPartition)
-                        : new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, finalPartition);
+                        : new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, describeCollectionResp, finalPartition);
             }
         });
 

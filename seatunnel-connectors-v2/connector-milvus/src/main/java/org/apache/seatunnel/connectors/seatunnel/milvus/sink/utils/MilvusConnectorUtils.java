@@ -32,11 +32,7 @@ import java.util.List;
 @Slf4j
 public class MilvusConnectorUtils {
 
-    public static Boolean hasPartitionKey(MilvusClientV2 milvusClient, String collectionName) {
-
-        DescribeCollectionResp describeCollectionResp =
-                milvusClient.describeCollection(
-                        DescribeCollectionReq.builder().collectionName(collectionName).build());
+    public static Boolean hasPartitionKey(DescribeCollectionResp describeCollectionResp) {
         return describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()
                 .anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
     }
@@ -67,5 +63,19 @@ public class MilvusConnectorUtils {
             }
         }
         return jsonColumn;
+    }
+
+    public static Boolean enableAutoId(MilvusClientV2 milvusClient, String collectionName) {
+        DescribeCollectionResp describeCollectionResp =
+                milvusClient.describeCollection(
+                        DescribeCollectionReq.builder().collectionName(collectionName).build());
+        return describeCollectionResp.getAutoID();
+    }
+
+    public static Boolean enableDynamicSchema(MilvusClientV2 milvusClient, String collectionName) {
+        DescribeCollectionResp describeCollectionResp =
+                milvusClient.describeCollection(
+                        DescribeCollectionReq.builder().collectionName(collectionName).build());
+        return describeCollectionResp.getEnableDynamicField();
     }
 }

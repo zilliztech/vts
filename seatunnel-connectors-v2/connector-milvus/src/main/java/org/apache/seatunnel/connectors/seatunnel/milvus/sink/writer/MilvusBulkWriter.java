@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class MilvusBulkWriter implements MilvusWriter {
+    private final DescribeCollectionResp describeCollectionResp;
     RemoteBulkWriter remoteBulkWriter;
     MilvusImport milvusImport;
 
@@ -53,6 +54,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.milvusSinkConverter = new MilvusSinkConverter();
         this.dynamicFieldName = MilvusConnectorUtils.getDynamicField(catalogTable);
         this.jsonFieldNames = MilvusConnectorUtils.getJsonField(catalogTable);
+        this.describeCollectionResp = describeCollectionResp;
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
         if(Objects.equals(stageBucket.getCloudId(), "az")){
@@ -93,7 +95,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, config, jsonFieldNames, dynamicFieldName, element);
+                        catalogTable, describeCollectionResp.getAutoID(), describeCollectionResp.getEnableDynamicField(), jsonFieldNames, dynamicFieldName, element);
 
         remoteBulkWriter.appendRow(data);
         writeCache.set(remoteBulkWriter.getBufferRowCount());
