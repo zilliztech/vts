@@ -122,17 +122,20 @@ public class MilvusSinkWriter
         String finalPartition = partition;
         MilvusWriter batchWriter = batchWriters.computeIfAbsent(partitionId, id -> {
             synchronized (batchWriters) {
-                if (!milvusClient.hasPartition(HasPartitionReq.builder()
-                        .collectionName(catalogTable.getTablePath().getTableName())
-                        .partitionName(finalPartition).build())) {
-                    synchronized (milvusClient) {
-                        milvusClient.createPartition(CreatePartitionReq.builder()
-                                .collectionName(catalogTable.getTablePath().getTableName())
-                                .partitionName(finalPartition).build());
-                        try {
-                            TimeUnit.MILLISECONDS.sleep(1000);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
+                if (!finalPartition.equals(DEFAULT_PARTITION)) {
+                    Boolean hasPartition = milvusClient.hasPartition(HasPartitionReq.builder()
+                            .collectionName(collection)
+                            .partitionName(finalPartition).build());
+                    if(!hasPartition) {
+                        synchronized (milvusClient) {
+                            milvusClient.createPartition(CreatePartitionReq.builder()
+                                    .collectionName(collection)
+                                    .partitionName(finalPartition).build());
+                            try {
+                                TimeUnit.MILLISECONDS.sleep(1000);
+                            } catch (InterruptedException e) {
+                                throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_PARTITION_ERROR, e);
+                            }
                         }
                     }
                 }
