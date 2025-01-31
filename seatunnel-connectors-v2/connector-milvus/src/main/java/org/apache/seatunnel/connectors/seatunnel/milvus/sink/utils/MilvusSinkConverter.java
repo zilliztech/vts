@@ -65,7 +65,6 @@ public class MilvusSinkConverter {
             case SMALLINT:
                 return Short.parseShort(value.toString());
             case STRING:
-            case DATE:
                 if (isJson) {
                     return gson.fromJson(value.toString(), JsonObject.class);
                 }
@@ -87,6 +86,10 @@ public class MilvusSinkConverter {
                 return Boolean.parseBoolean(value.toString());
             case DOUBLE:
                 return Double.parseDouble(value.toString());
+            case TIMESTAMP:
+            case TIME:
+            case DATE:
+                return value.toString();
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 switch (arrayType.getElementType().getSqlType()) {
@@ -143,7 +146,9 @@ public class MilvusSinkConverter {
                 fieldSchema.setMaxLength(65535);
                 break;
             case DATE:
-                fieldSchema.setMaxLength(20);
+            case TIME:
+            case TIMESTAMP:
+                fieldSchema.setMaxLength(50);
                 break;
             case STRING:
                 if (column.getOptions() != null
@@ -236,6 +241,8 @@ public class MilvusSinkConverter {
             case SPARSE_FLOAT_VECTOR:
                 return io.milvus.v2.common.DataType.SparseFloatVector;
             case DATE:
+            case TIME:
+            case TIMESTAMP:
                 return io.milvus.v2.common.DataType.VarChar;
             case ROW:
                 return io.milvus.v2.common.DataType.VarChar;
