@@ -26,7 +26,6 @@ import io.milvus.param.collection.FieldType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
@@ -42,8 +41,6 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_AUTO_ID;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -68,7 +65,6 @@ public class MilvusSinkConverter {
             case SMALLINT:
                 return Short.parseShort(value.toString());
             case STRING:
-            case DATE:
                 if (isJson) {
                     return gson.fromJson(value.toString(), JsonObject.class);
                 }
@@ -90,6 +86,10 @@ public class MilvusSinkConverter {
                 return Boolean.parseBoolean(value.toString());
             case DOUBLE:
                 return Double.parseDouble(value.toString());
+            case TIMESTAMP:
+            case TIME:
+            case DATE:
+                return value.toString();
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 switch (arrayType.getElementType().getSqlType()) {
@@ -146,7 +146,9 @@ public class MilvusSinkConverter {
                 fieldSchema.setMaxLength(65535);
                 break;
             case DATE:
-                fieldSchema.setMaxLength(20);
+            case TIME:
+            case TIMESTAMP:
+                fieldSchema.setMaxLength(50);
                 break;
             case STRING:
                 if (column.getOptions() != null
@@ -239,6 +241,8 @@ public class MilvusSinkConverter {
             case SPARSE_FLOAT_VECTOR:
                 return io.milvus.v2.common.DataType.SparseFloatVector;
             case DATE:
+            case TIME:
+            case TIMESTAMP:
                 return io.milvus.v2.common.DataType.VarChar;
             case ROW:
                 return io.milvus.v2.common.DataType.VarChar;
@@ -249,14 +253,13 @@ public class MilvusSinkConverter {
 
     public JsonObject buildMilvusData(
             CatalogTable catalogTable,
-            ReadonlyConfig config,
+            Boolean autoId,
+            Boolean enableDynamicField,
             List<String> jsonFields,
             String dynamicField,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
-        boolean autoId = config.get(ENABLE_AUTO_ID) != null && config.get(ENABLE_AUTO_ID);
-
         JsonObject data = new JsonObject();
         Gson gson = new Gson();
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
@@ -276,7 +279,7 @@ public class MilvusSinkConverter {
             // if the field is dynamic field, then parse the dynamic field
             if (dynamicField != null
                     && dynamicField.equals(fieldName)
-                    && config.get(ENABLE_DYNAMIC_FIELD)) {
+                    && enableDynamicField) {
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
                 dynamicData
                         .entrySet()

@@ -19,6 +19,8 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 
 import com.google.gson.JsonObject;
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.collection.request.DescribeCollectionReq;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import io.milvus.v2.service.vector.request.UpsertReq;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -45,8 +47,9 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     private final String partitionName;
     private final Boolean hasPartitionKey;
 
-    private final MilvusClientV2 milvusClient;
     private final MilvusSinkConverter milvusSinkConverter;
+    private final DescribeCollectionResp descriptionCollectionResp;
+    private final MilvusClientV2 milvusClient;
     private int batchSize;
     private volatile List<JsonObject> milvusDataCache;
     private final AtomicLong writeCache = new AtomicLong();
@@ -55,7 +58,9 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     private final List<String> jsonFieldNames;
     private final String dynamicFieldName;
 
-    public MilvusBufferBatchWriter (CatalogTable catalogTable, ReadonlyConfig config, MilvusClientV2 milvusClient, String partitionName)
+    public MilvusBufferBatchWriter (CatalogTable catalogTable, ReadonlyConfig config,
+                                    MilvusClientV2 milvusClient,
+                                    DescribeCollectionResp describeCollectionResp, String partitionName)
             throws SeaTunnelException {
         this.catalogTable = catalogTable;
         this.config = config;
@@ -65,11 +70,12 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
 
         this.milvusDataCache = new ArrayList<>();
         this.milvusSinkConverter = new MilvusSinkConverter();
+        this.milvusClient = milvusClient;
 
         this.dynamicFieldName = MilvusConnectorUtils.getDynamicField(catalogTable);
         this.jsonFieldNames = MilvusConnectorUtils.getJsonField(catalogTable);
-        this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(milvusClient, collectionName);
-        this.milvusClient = milvusClient;
+        this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(describeCollectionResp);
+        this.descriptionCollectionResp = describeCollectionResp;
     }
 
     @Override
@@ -77,7 +83,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         // put data to cache by partition
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
-                        catalogTable, config, jsonFieldNames, dynamicFieldName, element);
+                        catalogTable, descriptionCollectionResp.getAutoID(), descriptionCollectionResp.getEnableDynamicField(), jsonFieldNames, dynamicFieldName, element);
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
