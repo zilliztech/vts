@@ -22,12 +22,16 @@ import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.api.table.converter.TypeConverter;
 import org.apache.seatunnel.api.table.type.*;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonError;
 import org.apache.seatunnel.connectors.seatunnel.common.source.TypeDefineUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.DatabaseIdentifier;
 
 import com.google.auto.service.AutoService;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.HashMap;
+import java.util.Map;
 
 // reference http://www.postgres.cn/docs/13/datatype.html
 @Slf4j
@@ -214,11 +218,16 @@ public class PostgresTypeConverter implements TypeConverter<BasicTypeDefine> {
                 builder.sourceType(pgDataType);
                 builder.columnLength(128L);
                 break;
-            case PG_JSON:
-            case PG_JSONB:
             case PG_XML:
             case PG_GEOMETRY:
             case PG_GEOGRAPHY:
+                builder.dataType(BasicType.STRING_TYPE);
+                break;
+            case PG_JSON:
+            case PG_JSONB:
+                Map<String, Object> options = new HashMap<>();
+                options.put(CommonOptions.JSON.getName(), true);
+                builder.options(options);
                 builder.dataType(BasicType.STRING_TYPE);
                 break;
             case PG_CHAR_ARRAY:
