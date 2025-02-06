@@ -55,6 +55,7 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.IP_RANGE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.JOIN;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KEYWORD;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KNN_VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.LONG;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.LONG_RANGE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.MATCH_ONLY_TEXT;
@@ -107,8 +108,9 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
                 break;
             case DENSE_VECTOR:
             case VECTOR:
-                String elementType =
-                        typeDefine.getNativeType().getOptions().get("element_type").toString();
+            case KNN_VECTOR:
+                String elementType = typeDefine.getNativeType().getOptions().containsKey("element_type") ?
+                        String.valueOf(typeDefine.getNativeType().getOptions().get("element_type")) : "";
                 if (elementType.equals("byte")) {
                     builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
                 } else {

@@ -36,6 +36,7 @@ public class EsType {
     public static final String DATE_NANOS = "date_nanos";
     public static final String DENSE_VECTOR = "dense_vector";
     public static final String VECTOR = "vector";
+    public static final String KNN_VECTOR = "knn_vector";
     public static final String DOUBLE = "double";
     public static final String FLATTENED = "flattened";
     public static final String FLOAT = "float";
