@@ -61,7 +61,6 @@ public class MilvusSinkConverter {
             case TINYINT:
                 return Byte.parseByte(value.toString());
             case BIGINT:
-            case TIMESTAMP:
                 return Long.parseLong(value.toString());
             case SMALLINT:
                 return Short.parseShort(value.toString());
@@ -89,6 +88,7 @@ public class MilvusSinkConverter {
                 return Double.parseDouble(value.toString());
             case TIME:
             case DATE:
+            case TIMESTAMP:
                 return value.toString();
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
@@ -147,6 +147,7 @@ public class MilvusSinkConverter {
                 break;
             case DATE:
             case TIME:
+            case TIMESTAMP:
                 fieldSchema.setMaxLength(50);
                 break;
             case STRING:
@@ -158,7 +159,7 @@ public class MilvusSinkConverter {
                 } else if (column.getColumnLength() == null || column.getColumnLength() == 0) {
                     fieldSchema.setMaxLength(65535);
                 } else {
-                    fieldSchema.setMaxLength((int) (column.getColumnLength() / 4));
+                    fieldSchema.setMaxLength(column.getColumnLength().intValue());
                 }
                 break;
             case ARRAY:
@@ -241,9 +242,8 @@ public class MilvusSinkConverter {
                 return io.milvus.v2.common.DataType.SparseFloatVector;
             case DATE:
             case TIME:
-                return io.milvus.v2.common.DataType.VarChar;
             case TIMESTAMP:
-                return io.milvus.v2.common.DataType.Int64;
+                return io.milvus.v2.common.DataType.VarChar;
             case ROW:
                 return io.milvus.v2.common.DataType.VarChar;
         }
