@@ -209,7 +209,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("RocketMqSinkOptions");
         whiteList.add("ClickhouseFileSinkOptions");
         whiteList.add("IcebergSinkOptions");
-        whiteList.add("KafkaSourceOptions");
         whiteList.add("AssertSinkOptions");
         whiteList.add("MaxcomputeSourceOptions");
         whiteList.add("InfluxDBSourceOptions");
@@ -230,7 +229,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("TableStoreDBSourceOptions");
         whiteList.add("AmazonDynamoDBSinkOptions");
         whiteList.add("KuduSinkOptions");
-        whiteList.add("KafkaSinkOptions");
         whiteList.add("TDengineSinkOptions");
         whiteList.add("Neo4jSourceOptions");
         whiteList.add("HttpSourceOptions");
