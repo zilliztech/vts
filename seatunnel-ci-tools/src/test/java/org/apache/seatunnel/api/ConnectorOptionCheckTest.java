@@ -224,7 +224,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("RocketMqSourceOptions");
         whiteList.add("TablestoreSinkOptions");
         whiteList.add("TableStoreDBSourceOptions");
-        whiteList.add("AmazonDynamoDBSinkOptions");
         whiteList.add("KuduSinkOptions");
         whiteList.add("TDengineSinkOptions");
         whiteList.add("Neo4jSourceOptions");
