@@ -117,7 +117,15 @@ public class MilvusSinkConverter {
                 }
             case ROW:
                 SeaTunnelRow row = (SeaTunnelRow) value;
-                return JsonUtils.toJsonString(row.getFields());
+                SeaTunnelRowType rowType = (SeaTunnelRowType) fieldType;
+                JsonObject data = new JsonObject();
+                for (int i = 0; i < rowType.getFieldNames().length; i++) {
+                    SeaTunnelDataType<?> subFieldType = rowType.getFieldType(i);
+                    Object subValue = row.getField(i);
+                    Object subRow = convertBySeaTunnelType(subFieldType, false, subValue);
+                    data.add(rowType.getFieldNames()[i], gson.toJsonTree(subRow));
+                }
+                return data;
             case MAP:
                 return JsonUtils.toJsonString(value);
             default:
@@ -245,7 +253,7 @@ public class MilvusSinkConverter {
             case TIMESTAMP:
                 return io.milvus.v2.common.DataType.VarChar;
             case ROW:
-                return io.milvus.v2.common.DataType.VarChar;
+                return io.milvus.v2.common.DataType.JSON;
         }
         throw new CatalogException(
                 String.format("Not support convert to milvus type, sqlType is %s", sqlType));

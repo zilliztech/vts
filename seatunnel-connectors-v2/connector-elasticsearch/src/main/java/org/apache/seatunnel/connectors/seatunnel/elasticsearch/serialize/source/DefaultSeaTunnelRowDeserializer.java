@@ -98,6 +98,8 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                     put(
                             "yyyy-MM-dd HH:mm:ss.SSSSSSSSS".length(),
                             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSS"));
+                    put("2025-02-07 03:06:16.693985+00:00".length(),
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSSXXX"));
                 }
             };
 
@@ -249,6 +251,10 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
         if (fieldValue.length() == "yyyyMMdd".length()
                 || fieldValue.length() == "yyyy-MM-dd".length()) {
             formatDate = fieldValue + " 00:00:00";
+        }
+        if(fieldValue.length() == "2025-02-07 03:06:16.693985+00:00".length()){
+            // Remove the offset (+00:00)
+            formatDate = formatDate.substring(0, formatDate.lastIndexOf("+"));
         }
         DateTimeFormatter dateTimeFormatter = dateTimeFormatterMap.get(formatDate.length());
         if (dateTimeFormatter == null) {

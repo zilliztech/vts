@@ -23,6 +23,7 @@ import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.IAM;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.ScrollResult;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.DefaultSeaTunnelRowDeserializer;
@@ -33,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
@@ -77,19 +79,41 @@ public class ElasticsearchSourceReader
                 SeaTunnelRowDeserializer deserializer =
                         new DefaultSeaTunnelRowDeserializer(seaTunnelRowType);
                 SourceConfig sourceIndexInfo = split.getSourceConfig();
-                ScrollResult scrollResult =
-                        esRestClient.searchByScroll(
-                                sourceIndexInfo.getIndex(),
-                                sourceIndexInfo.getSource(),
-                                sourceIndexInfo.getQuery(),
-                                sourceIndexInfo.getScrollTime(),
-                                sourceIndexInfo.getScrollSize());
-                outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-                while (scrollResult.getDocs() != null && scrollResult.getDocs().size() > 0) {
+                ScrollResult scrollResult = null;
+                if(connConfig.get(IAM).get("service_name").equals("aoss")) {
                     scrollResult =
-                            esRestClient.searchWithScrollId(
-                                    scrollResult.getScrollId(), sourceIndexInfo.getScrollTime());
+                            esRestClient.search(
+                                    sourceIndexInfo.getIndex(),
+                                    sourceIndexInfo.getSource(),
+                                    sourceIndexInfo.getQuery(),
+                                    Collections.emptyList(),
+                                    sourceIndexInfo.getScrollSize());
                     outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    while (scrollResult.getDocs() != null && !scrollResult.getDocs().isEmpty()) {
+                        scrollResult =
+                                esRestClient.search(
+                                        sourceIndexInfo.getIndex(),
+                                        sourceIndexInfo.getSource(),
+                                        sourceIndexInfo.getQuery(),
+                                        scrollResult.getLastSort(),
+                                        sourceIndexInfo.getScrollSize());
+                        outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    }
+                }else {
+                    scrollResult =
+                            esRestClient.searchByScroll(
+                                    sourceIndexInfo.getIndex(),
+                                    sourceIndexInfo.getSource(),
+                                    sourceIndexInfo.getQuery(),
+                                    sourceIndexInfo.getScrollTime(),
+                                    sourceIndexInfo.getScrollSize());
+                    outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    while (scrollResult.getDocs() != null && scrollResult.getDocs().size() > 0) {
+                        scrollResult =
+                                esRestClient.searchWithScrollId(
+                                        scrollResult.getScrollId(), sourceIndexInfo.getScrollTime());
+                        outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                    }
                 }
             } else if (noMoreSplit) {
                 // signal to the source that we have reached the end of the data.
