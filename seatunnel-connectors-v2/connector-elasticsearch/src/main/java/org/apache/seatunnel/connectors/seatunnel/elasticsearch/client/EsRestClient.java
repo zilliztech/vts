@@ -17,11 +17,13 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.client;
 
+import io.github.acm19.aws.interceptor.http.AwsRequestSigningApacheInterceptor;
 import org.apache.http.Header;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.message.BasicHeader;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KNN_VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VECTOR;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.IAM;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ArrayNode;
@@ -80,6 +82,11 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DATE_NANOS;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DENSE_VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.OBJECT;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.auth.aws.signer.AwsV4HttpSigner;
+import software.amazon.awssdk.regions.Region;
 
 @Slf4j
 public class EsRestClient implements Closeable {
@@ -89,12 +96,14 @@ public class EsRestClient implements Closeable {
     private static final int SOCKET_TIMEOUT = 5 * 60 * 1000;
 
     private final RestClient restClient;
+    private static ReadonlyConfig connConfig;
 
     private EsRestClient(RestClient restClient) {
         this.restClient = restClient;
     }
 
     public static EsRestClient createInstance(ReadonlyConfig config) {
+        connConfig = config;
         List<String> hosts = config.get(EsClusterConnectionConfig.HOSTS);
         Optional<String> cloudId = config.getOptional(EsClusterConnectionConfig.CLOUD_ID);
         Optional<String> username = config.getOptional(EsClusterConnectionConfig.USERNAME);
@@ -200,6 +209,23 @@ public class EsRestClient implements Closeable {
                         httpClientBuilder.addInterceptorFirst((HttpRequestInterceptor) (request, context) -> {
                             request.addHeader(apiKeyHeader);
                         });
+                    }else{
+                        Map<String, String> iam = connConfig.get(IAM);
+                        AwsCredentialsProvider awsCredentials = StaticCredentialsProvider.create(
+                                AwsBasicCredentials.create(iam.get("access_key"), iam.get("secret_key"))
+                        );
+                        // AWS Region & Service
+                        String region = iam.get("region");  // Update to match your OpenSearch region
+                        String serviceName = iam.get("service_name"); // Use "es" for Managed OpenSearch, "aoss" for Serverless
+
+                        // OpenSearch Host (WITHOUT "https://")
+                        HttpRequestInterceptor awsSigV4Interceptor = new AwsRequestSigningApacheInterceptor(
+                                serviceName,
+                                AwsV4HttpSigner.create(),
+                                awsCredentials,
+                                region
+                        );
+                        httpClientBuilder.addInterceptorLast(awsSigV4Interceptor);
                     }
 
                     try {
@@ -328,6 +354,28 @@ public class EsRestClient implements Closeable {
         String endpoint = "/" + index + "/_search?scroll=" + scrollTime;
         return getDocsFromScrollRequest(endpoint, JsonUtils.toJsonString(param));
     }
+    public ScrollResult search(String index, List<String> source, Map<String, Object> query, List<Object> searchAfter, int pageSize) {
+        Map<String, Object> param = new HashMap<>();
+        param.put("query", query);
+        param.put("_source", source);
+        param.put("size", pageSize); // ✅ Use pageSize dynamically
+        param.put("sort", List.of(
+                Map.of("_id", "asc")
+        )); // ✅ Stable sorting
+
+        if (searchAfter != null && !searchAfter.isEmpty()) {
+            param.put("search_after", searchAfter); // ✅ Add `search_after` only if available
+        }
+
+        String endpoint = "/" + index + "/_search";
+
+        try {
+            return getDocsFromScrollRequest(endpoint, JsonUtils.toJsonString(param));
+        } catch (Exception e) {
+            System.err.println("Error during search_after request: " + e.getMessage());
+            return null;
+        }
+    }
 
     /**
      * scroll to get result call _search/scroll
@@ -383,7 +431,7 @@ public class EsRestClient implements Closeable {
 
     private ScrollResult getDocsFromScrollResponse(ObjectNode responseJson) {
         ScrollResult scrollResult = new ScrollResult();
-        String scrollId = responseJson.get("_scroll_id").asText();
+        String scrollId = responseJson.get("_scroll_id") == null ? null : responseJson.get("_scroll_id").asText();
         scrollResult.setScrollId(scrollId);
 
         JsonNode hitsNode = responseJson.get("hits").get("hits");
@@ -406,6 +454,23 @@ public class EsRestClient implements Closeable {
                 }
             }
             docs.add(doc);
+        }
+        if (hitsNode.isArray() && !hitsNode.isEmpty()) {
+            JsonNode lastSortNode = hitsNode.get(hitsNode.size() - 1).get("sort"); // Get last "sort"
+            // Convert to List<Object>
+            List<Object> lastSortList = new ArrayList<>();
+            if (lastSortNode != null && lastSortNode.isArray()) {
+                for (JsonNode valueNode : lastSortNode) {
+                    if (valueNode.isNumber()) {
+                        lastSortList.add(valueNode.numberValue()); // Add as Integer/Long/Double
+                    } else if (valueNode.isTextual()) {
+                        lastSortList.add(valueNode.textValue());  // Add as String
+                    } else {
+                        lastSortList.add(valueNode.toString());  // Fallback
+                    }
+                }
+            }
+            scrollResult.setLastSort(lastSortList);
         }
         return scrollResult;
     }

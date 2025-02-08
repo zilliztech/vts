@@ -21,6 +21,7 @@ import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 
 import java.util.List;
+import java.util.Map;
 
 public class EsClusterConnectionConfig {
 
@@ -35,6 +36,11 @@ public class EsClusterConnectionConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Elasticsearch cloud id");
+    public static final Option<Map<String, String>> IAM =
+            Options.key("iam")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("OpenSearch service name");
 
     public static final Option<String> USERNAME =
             Options.key("username")
