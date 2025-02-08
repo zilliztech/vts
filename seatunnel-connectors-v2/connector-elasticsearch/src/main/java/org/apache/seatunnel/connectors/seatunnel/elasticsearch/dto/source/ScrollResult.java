@@ -26,5 +26,6 @@ import java.util.Map;
 public class ScrollResult {
 
     private String scrollId;
+    private List<Object> lastSort;
     private List<Map<String, Object>> docs;
 }

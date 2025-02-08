@@ -68,5 +68,16 @@
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>auth</artifactId>
+            <version>2.29.47</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.acm19</groupId>
+            <artifactId>aws-request-signing-apache-interceptor</artifactId>
+            <version>3.0.0</version>
+        </dependency>
     </dependencies>
 </project>
