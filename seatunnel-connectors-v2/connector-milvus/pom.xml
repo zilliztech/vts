@@ -26,6 +26,12 @@
         <version>${revision}</version>
     </parent>
 
+    <properties>
+        <!-- Specify the gRPC version -->
+        <grpc.version>1.59.1</grpc.version>
+        <protobuf.version>3.25.1</protobuf.version>
+    </properties>
+
     <artifactId>connector-milvus</artifactId>
     <name>SeaTunnel : Connectors V2 : Milvus</name>
     <dependencyManagement>
@@ -48,6 +54,16 @@
                     <artifactId>slf4j-reload4j</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+            <version>${grpc.version}</version>
         </dependency>
 
     </dependencies>

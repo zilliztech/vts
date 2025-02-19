@@ -80,7 +80,7 @@ public class ElasticsearchSourceReader
                         new DefaultSeaTunnelRowDeserializer(seaTunnelRowType);
                 SourceConfig sourceIndexInfo = split.getSourceConfig();
                 ScrollResult scrollResult = null;
-                if(connConfig.get(IAM).get("service_name").equals("aoss")) {
+                if(connConfig.get(IAM) != null && connConfig.get(IAM).get("service_name").equals("aoss")) {
                     scrollResult =
                             esRestClient.search(
                                     sourceIndexInfo.getIndex(),
