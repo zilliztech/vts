@@ -46,7 +46,7 @@ public class BaseFileSinkConfig implements DelimiterConfig, Serializable {
     protected boolean singleFileMode = BaseSinkConfig.SINGLE_FILE_MODE.defaultValue();
     protected boolean createEmptyFileWhenNoData =
             BaseSinkConfig.CREATE_EMPTY_FILE_WHEN_NO_DATA.defaultValue();
-    protected FileFormat fileFormat = FileFormat.TEXT;
+    protected FileFormat fileFormat;
     protected String filenameExtension = BaseSinkConfig.FILENAME_EXTENSION.defaultValue();
     protected DateUtils.Formatter dateFormat = DateUtils.Formatter.YYYY_MM_DD;
     protected DateTimeUtils.Formatter datetimeFormat = DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS;
@@ -101,6 +101,9 @@ public class BaseFileSinkConfig implements DelimiterConfig, Serializable {
                     FileFormat.valueOf(
                             config.getString(BaseSinkConfig.FILE_FORMAT_TYPE.key())
                                     .toUpperCase(Locale.ROOT));
+        } else {
+            // fall back to the default
+            this.fileFormat = BaseSinkConfig.FILE_FORMAT_TYPE.defaultValue();
         }
 
         if (config.hasPath(BaseSinkConfig.FILENAME_EXTENSION.key())
