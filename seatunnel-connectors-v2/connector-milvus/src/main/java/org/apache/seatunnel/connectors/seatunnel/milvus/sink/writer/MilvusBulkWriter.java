@@ -71,6 +71,7 @@ public class MilvusBulkWriter implements MilvusWriter {
                     .withAccessKey(stageBucket.getAccessKey())
                     .withSecretKey(stageBucket.getSecretKey())
                     .withBucketName(stageBucket.getBucketName())
+                    .withCloudName(stageBucket.getCloudId())
                     .build();
         }
 
