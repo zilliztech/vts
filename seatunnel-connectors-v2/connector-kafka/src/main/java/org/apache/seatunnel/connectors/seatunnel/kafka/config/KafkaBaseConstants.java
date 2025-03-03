@@ -17,16 +17,13 @@
 
 package org.apache.seatunnel.connectors.seatunnel.kafka.config;
 
-public enum MessageFormat {
-    JSON,
-    TEXT,
-    CANAL_JSON,
-    DEBEZIUM_JSON,
-    COMPATIBLE_DEBEZIUM_JSON,
-    COMPATIBLE_KAFKA_CONNECT_JSON,
-    OGG_JSON,
-    AVRO,
-    MAXWELL_JSON,
-    PROTOBUF,
-    NATIVE
+public class KafkaBaseConstants {
+
+    public static final String HEADERS = "headers";
+    public static final String KEY = "key";
+    public static final String OFFSET = "offset";
+    public static final String PARTITION = "partition";
+    public static final String TIMESTAMP = "timestamp";
+    public static final String TIMESTAMP_TYPE = "timestampType";
+    public static final String VALUE = "value";
 }
