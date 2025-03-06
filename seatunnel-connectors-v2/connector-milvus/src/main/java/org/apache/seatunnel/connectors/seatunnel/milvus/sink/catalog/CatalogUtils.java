@@ -156,6 +156,9 @@ public class CatalogUtils {
                 } catch (Exception e) {
                     log.error("create collection failed, retry: {}", retry);
                     retry--;
+                    if(retry == 0){
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, e.getMessage());
+                    }
                     try {
                         TimeUnit.SECONDS.sleep(1);
                     } catch (InterruptedException interruptedException) {
