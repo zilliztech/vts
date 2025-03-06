@@ -284,7 +284,7 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                builder.columnLength((long)fieldSchema.getMaxLength() * 4);
+                builder.columnLength((long)fieldSchema.getMaxLength());
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
