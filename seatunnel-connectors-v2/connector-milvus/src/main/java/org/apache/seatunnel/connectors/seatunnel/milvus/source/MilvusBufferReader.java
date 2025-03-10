@@ -6,6 +6,7 @@ import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.GetLoadStateReq;
 import io.milvus.v2.service.vector.request.QueryIteratorReq;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.curator.shaded.com.google.common.collect.Lists;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
@@ -13,7 +14,6 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConverter;
-import org.codehaus.plexus.util.StringUtils;
 
 import java.util.Collections;
 import java.util.List;
