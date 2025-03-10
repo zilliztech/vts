@@ -192,7 +192,8 @@ public class MilvusSinkConverter {
         }
 
         // check is primaryKey
-        if (null != primaryKey && primaryKey.getColumnNames().contains(column.getName())) {
+        // only override primarykey when primary key num is 1
+        if (null != primaryKey && primaryKey.getColumnNames().size() == 1 && primaryKey.getColumnNames().contains(column.getName())) {
             fieldSchema.setIsPrimaryKey(true);
             List<SqlType> integerTypes = new ArrayList<>();
             integerTypes.add(SqlType.INT);
