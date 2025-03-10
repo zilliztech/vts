@@ -27,8 +27,10 @@ import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MilvusSinkConfig extends MilvusCommonConfig {
@@ -49,11 +51,23 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .noDefaultValue()
                     .withDescription("Milvus partition key field");
 
-    public static final Option<Map<String, String>> EXTRACT_DYNAMIC =
+    public static final Option<List<Object>> EXTRACT_DYNAMIC =
             Options.key("extract_dynamic")
-                    .mapType()
-                    .noDefaultValue()
+                    .listType(Object.class)
+                    .defaultValue(new ArrayList<>())
                     .withDescription("the fields extracted from dynamic field");
+
+    public static final Option<List<String>> IS_NULLABLE =
+            Options.key("is_nullable")
+                    .listType()
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("the fields that is nullable");
+
+    public static final Option<Map<String, Object>> DEFAULT_VALUE =
+            Options.key("default_value")
+                    .mapObjectType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("the fields default value");
 
     public static final Option<SchemaSaveMode> SCHEMA_SAVE_MODE =
             Options.key("schema_save_mode")

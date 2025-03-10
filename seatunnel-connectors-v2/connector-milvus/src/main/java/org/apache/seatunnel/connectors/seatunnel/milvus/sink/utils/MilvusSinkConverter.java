@@ -41,6 +41,7 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -266,6 +267,7 @@ public class MilvusSinkConverter {
             Boolean enableDynamicField,
             List<String> jsonFields,
             String dynamicField,
+            List<MilvusField> milvusFields,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
@@ -281,10 +283,10 @@ public class MilvusSinkConverter {
 
             SeaTunnelDataType<?> fieldType = seaTunnelRowType.getFieldType(i);
             Object value = element.getField(i);
-            if (null == value) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
-            }
+//            if (null == value) {
+//                throw new MilvusConnectorException(
+//                        MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
+//            }
             // if the field is dynamic field, then parse the dynamic field
             if (dynamicField != null
                     && dynamicField.equals(fieldName)
@@ -294,7 +296,16 @@ public class MilvusSinkConverter {
                         .entrySet()
                         .forEach(
                                 entry -> {
-                                    data.add(entry.getKey(), entry.getValue());
+                                    String entryKey = entry.getKey();
+                                    List<MilvusField> matches = milvusFields.stream().filter(a -> a.getFieldName().equals(entryKey)).collect(Collectors.toList());
+                                    if(!matches.isEmpty()) {
+                                        if (matches.get(0).getFieldName().equals(entryKey)) {
+                                            data.add(matches.get(0).getNewFieldName(), entry.getValue());
+                                        }
+
+                                    }else {
+                                        data.add(entry.getKey(), entry.getValue());
+                                    }
                                 });
                 continue;
             }

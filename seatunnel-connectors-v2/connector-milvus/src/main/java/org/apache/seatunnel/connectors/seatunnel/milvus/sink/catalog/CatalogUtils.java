@@ -1,5 +1,8 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
+import com.fasterxml.jackson.databind.deser.impl.FieldProperty;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.Gson;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.ConsistencyLevel;
 import io.milvus.v2.common.DataType;
@@ -20,11 +23,15 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DEFAULT_VALUE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.IS_NULLABLE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -92,12 +99,31 @@ public class CatalogUtils {
                             .build();
             fieldSchemaList.add(fieldSchema);
         }
-        for(Map.Entry<String, String> field : config.get(EXTRACT_DYNAMIC).entrySet()){
+        Gson gson = new Gson();
+        for(Object field : config.get(EXTRACT_DYNAMIC)){
+            Type type = new TypeToken<MilvusField>(){}.getType();
+            MilvusField milvusField = gson.fromJson(field.toString(), type);
+
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
-                    .name(field.getKey())
-                    .dataType(DataType.valueOf(field.getValue()))
+                    .name(milvusField.getNewFieldName() == null ? milvusField.getFieldName() : milvusField.getNewFieldName())
+                    .dataType(DataType.valueOf(milvusField.getDataType()))
                     .isNullable(true)
                     .build();
+            if(milvusField.getElementType() != null){
+                fieldSchema.setElementType(DataType.valueOf(milvusField.getElementType()));
+            }
+            if(milvusField.getMaxLength() != null){
+                fieldSchema.setMaxLength(milvusField.getMaxLength());
+            }
+            if(milvusField.getIsNullable() != null){
+                fieldSchema.setIsNullable(milvusField.getIsNullable());
+            }
+            if(milvusField.getDefaultValue() != null){
+                fieldSchema.setDefaultValue(milvusField.getDefaultValue());
+            }
+            if(fieldSchema.getName().equals(partitionKeyField)){
+                fieldSchema.setIsPartitionKey(true);
+            }
             fieldSchemaList.add(fieldSchema);
         }
         for (Column column : tableSchema.getColumns()) {
@@ -112,6 +138,7 @@ public class CatalogUtils {
                     tableSchema.getPrimaryKey(),
                     partitionKeyField,
                     enableAutoId);
+            setupFieldProperty(fieldSchema);
             fieldSchemaList.add(fieldSchema);
         }
 
@@ -180,6 +207,15 @@ public class CatalogUtils {
                     log.error("sleep failed", interruptedException);
                 }
             }
+        }
+    }
+
+    private void setupFieldProperty(CreateCollectionReq.FieldSchema fieldSchema) {
+        if(config.get(IS_NULLABLE).contains(fieldSchema.getName())){
+            fieldSchema.setIsNullable(true);
+        }
+        if(config.get(DEFAULT_VALUE).containsKey(fieldSchema.getName())){
+            fieldSchema.setDefaultValue(config.get(DEFAULT_VALUE).get(fieldSchema.getName()));
         }
     }
 }
