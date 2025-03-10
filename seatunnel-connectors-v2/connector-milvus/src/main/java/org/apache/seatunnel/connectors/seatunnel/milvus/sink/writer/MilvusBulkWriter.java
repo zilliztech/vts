@@ -99,35 +99,29 @@ public class MilvusBulkWriter implements MilvusWriter {
                         catalogTable, describeCollectionResp.getAutoID(), describeCollectionResp.getEnableDynamicField(), jsonFieldNames, dynamicFieldName, element);
 
         remoteBulkWriter.appendRow(data);
-        writeCache.set(remoteBulkWriter.getBufferRowCount());
+        writeCache.incrementAndGet();
         writeCount.incrementAndGet();
-
     }
     @Override
-    public void commit(Boolean async) throws InterruptedException {
-        if(writeCache.get() == 0){
-            return;
-        }
-        remoteBulkWriter.commit(async);
-        writeCache.set(0);
-        if(stageBucket.getAutoImport()) {
-            milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
-        }
+    public void commit(Boolean async) {
     }
     @Override
     public boolean needCommit() {
-        return remoteBulkWriter.getBufferRowCount() == 500000;
+        return false;
     }
 
     @Override
     public void close() throws Exception {
+        // trigger import after all data write done
         remoteBulkWriter.close();
         if(remoteBulkWriter.getBatchFiles().isEmpty()){
             log.info("No data uploaded to remote");
             throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR);
         }
         if(stageBucket.getAutoImport()) {
-            milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
+            String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
+            String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
+            milvusImport.importFolder(objectFolder);
             milvusImport.waitImportFinish();
         }
     }
