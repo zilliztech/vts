@@ -281,10 +281,10 @@ public class MilvusSinkConverter {
 
             SeaTunnelDataType<?> fieldType = seaTunnelRowType.getFieldType(i);
             Object value = element.getField(i);
-            if (null == value) {
-                throw new MilvusConnectorException(
-                        MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
-            }
+//            if (null == value) {
+//                throw new MilvusConnectorException(
+//                        MilvusConnectionErrorCode.FIELD_IS_NULL, fieldName);
+//            }
             // if the field is dynamic field, then parse the dynamic field
             if (dynamicField != null
                     && dynamicField.equals(fieldName)

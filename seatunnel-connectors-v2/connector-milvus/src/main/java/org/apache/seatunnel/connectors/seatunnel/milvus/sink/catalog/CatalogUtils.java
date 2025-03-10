@@ -20,8 +20,10 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DEFAULT_VALUE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.IS_NULLABLE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.util.ArrayList;
@@ -98,6 +100,7 @@ public class CatalogUtils {
                     .dataType(DataType.valueOf(field.getValue()))
                     .isNullable(true)
                     .build();
+            setupFieldProperty(fieldSchema);
             fieldSchemaList.add(fieldSchema);
         }
         for (Column column : tableSchema.getColumns()) {
@@ -112,6 +115,7 @@ public class CatalogUtils {
                     tableSchema.getPrimaryKey(),
                     partitionKeyField,
                     enableAutoId);
+            setupFieldProperty(fieldSchema);
             fieldSchemaList.add(fieldSchema);
         }
 
@@ -180,6 +184,15 @@ public class CatalogUtils {
                     log.error("sleep failed", interruptedException);
                 }
             }
+        }
+    }
+
+    private void setupFieldProperty(CreateCollectionReq.FieldSchema fieldSchema) {
+        if(config.get(IS_NULLABLE).contains(fieldSchema.getName())){
+            fieldSchema.setIsNullable(true);
+        }
+        if(config.get(DEFAULT_VALUE).containsKey(fieldSchema.getName())){
+            fieldSchema.setDefaultValue(config.get(DEFAULT_VALUE).get(fieldSchema.getName()));
         }
     }
 }
