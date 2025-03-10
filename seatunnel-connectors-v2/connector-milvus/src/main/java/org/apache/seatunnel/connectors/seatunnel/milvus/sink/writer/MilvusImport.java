@@ -47,6 +47,9 @@ public class MilvusImport {
             importData(objectUrl.get(0));
         }
     }
+    public void importFolder(String objectFolder) {
+        importData(objectFolder);
+    }
 
     private String processUrl(String path) {
         if(stageBucket.getCloudId().equals("gcp")){

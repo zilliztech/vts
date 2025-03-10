@@ -169,20 +169,6 @@ public class MilvusSinkWriter
         if (writeCount.get() % 10000 == 0) {
             log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", writeCount.get());
         }
-        writeCache.set(batchWriters.values().stream()
-                .mapToLong(MilvusWriter::getWriteCache)
-                .sum());
-        if (writeCache.get() >= config.get(MilvusSinkConfig.WRITER_CACHE)) {
-            synchronized (batchWriters) {
-                try {
-                    for (MilvusWriter writer : batchWriters.values()) {
-                        writer.commit(true);
-                    }
-                } catch (Exception e) {
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
-                }
-            }
-        }
     }
 
     /**
