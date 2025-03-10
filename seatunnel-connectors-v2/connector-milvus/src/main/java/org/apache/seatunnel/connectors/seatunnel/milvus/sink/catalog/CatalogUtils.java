@@ -4,7 +4,6 @@ import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.ConsistencyLevel;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
-import io.milvus.v2.service.collection.request.AddFieldReq;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.index.request.CreateIndexReq;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +20,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
@@ -90,6 +90,14 @@ public class CatalogUtils {
                             .isPrimaryKey(true)
                             .dataType(DataType.Int64)
                             .build();
+            fieldSchemaList.add(fieldSchema);
+        }
+        for(Map.Entry<String, String> field : config.get(EXTRACT_DYNAMIC).entrySet()){
+            CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
+                    .name(field.getKey())
+                    .dataType(DataType.valueOf(field.getValue()))
+                    .isNullable(true)
+                    .build();
             fieldSchemaList.add(fieldSchema);
         }
         for (Column column : tableSchema.getColumns()) {

@@ -49,6 +49,12 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .noDefaultValue()
                     .withDescription("Milvus partition key field");
 
+    public static final Option<Map<String, String>> EXTRACT_DYNAMIC =
+            Options.key("extract_dynamic")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("the fields extracted from dynamic field");
+
     public static final Option<SchemaSaveMode> SCHEMA_SAVE_MODE =
             Options.key("schema_save_mode")
                     .enumType(SchemaSaveMode.class)
