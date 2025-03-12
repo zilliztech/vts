@@ -73,6 +73,7 @@ The field data types currently supported by where conditions are as follows:
 * double
 * date
 * timestamp
+* time
 
 ### paimon.hadoop.conf [string]
 
