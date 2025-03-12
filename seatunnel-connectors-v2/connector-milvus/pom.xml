@@ -67,8 +67,8 @@
                         <configuration>
                             <relocations>
                                 <relocation>
-                                    <pattern>com.google.common</pattern>
-                                    <shadedPattern>milvus.com.google.common</shadedPattern>
+                                    <pattern>com.google</pattern>
+                                    <shadedPattern>milvus.com.google</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
