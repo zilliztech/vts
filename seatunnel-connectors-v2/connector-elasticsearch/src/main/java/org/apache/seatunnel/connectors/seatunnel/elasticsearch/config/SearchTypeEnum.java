@@ -15,19 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source;
+package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 
-import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
-
-import lombok.Data;
-
-import java.util.List;
-import java.util.Map;
-
-@Data
-public class ScrollResult {
-
-    private String scrollId;
-    private List<Map<String, Object>> docs;
-    private JsonNode columnNodes;
+public enum SearchTypeEnum {
+    DSL,
+    SQL
 }
