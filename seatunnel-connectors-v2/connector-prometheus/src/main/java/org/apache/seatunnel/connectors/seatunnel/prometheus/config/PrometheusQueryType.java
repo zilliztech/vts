@@ -15,29 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.http.config;
+package org.apache.seatunnel.connectors.seatunnel.prometheus.config;
 
-public class HttpConfig {
-    public static final String BASIC = "Basic";
-    public static final String CONNECTOR_IDENTITY = "Http";
-
-    public enum ResponseFormat {
-        JSON("json"),
-        TEXT("text");
-
-        private String format;
-
-        ResponseFormat(String format) {
-            this.format = format;
-        }
-
-        public String getFormat() {
-            return format;
-        }
-
-        @Override
-        public String toString() {
-            return format;
-        }
-    }
+public enum PrometheusQueryType {
+    Instant,
+    Range
 }

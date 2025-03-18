@@ -120,7 +120,15 @@ public class ConnectorOptionCheckTest {
                                                                         || extendedType
                                                                                 .getNameAsString()
                                                                                 .equals(
-                                                                                        "IncrementalSource")) {
+                                                                                        "IncrementalSource")
+                                                                        || extendedType
+                                                                                .getNameAsString()
+                                                                                .equals(
+                                                                                        "HttpSource")
+                                                                        || extendedType
+                                                                                .getNameAsString()
+                                                                                .equals(
+                                                                                        "HttpSink")) {
                                                                     connectorOptionFileNames.add(
                                                                             path.getFileName()
                                                                                     .toString()
@@ -173,7 +181,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("TypesenseSourceOptions");
         whiteList.add("TypesenseSinkOptions");
         whiteList.add("PulsarSinkOptions");
-        whiteList.add("HttpSinkOptions");
         whiteList.add("SlsSinkOptions");
         whiteList.add("Neo4jSinkOptions");
         whiteList.add("MaxcomputeSinkOptions");
@@ -193,7 +200,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("KuduSourceOptions");
         whiteList.add("SocketSinkOptions");
         whiteList.add("SelectDBSinkOptions");
-        whiteList.add("PrometheusSinkOptions");
         whiteList.add("MilvusSinkOptions");
         whiteList.add("RocketMqSourceOptions");
         whiteList.add("TablestoreSinkOptions");
@@ -201,7 +207,6 @@ public class ConnectorOptionCheckTest {
         whiteList.add("KuduSinkOptions");
         whiteList.add("TDengineSinkOptions");
         whiteList.add("Neo4jSourceOptions");
-        whiteList.add("HttpSourceOptions");
         whiteList.add("QdrantSourceOptions");
         whiteList.add("SocketSourceOptions");
         whiteList.add("OpenMldbSourceOptions");
