@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Fix] [Mongo-cdc] Fallback to timestamp startup mode when resume token has expired (#8754)|https://github.com/apache/seatunnel/commit/afc990d84|2.3.10|
 |[Improve][CDC] Filter ddl for snapshot phase (#8911)|https://github.com/apache/seatunnel/commit/641cc72f2|2.3.10|
 |[Improve][Oracle-CDC] Support ReadOnlyLogWriterFlushStrategy (#8912)|https://github.com/apache/seatunnel/commit/6aebdc038|2.3.10|

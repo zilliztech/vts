@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |Revert &quot; [improve] update localfile connector config&quot; (#9018)|https://github.com/apache/seatunnel/commit/cdc79e13a|2.3.10|
 | [improve] update localfile connector config (#8765)|https://github.com/apache/seatunnel/commit/def369a85|2.3.10|
 |[Fix][File]use common-csv to read csv file (#8919)|https://github.com/apache/seatunnel/commit/3e64a4283|2.3.10|

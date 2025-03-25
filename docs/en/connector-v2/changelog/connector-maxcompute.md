@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Fix][Connector-V2] Fix maxcompute read with partition spec (#8896)|https://github.com/apache/seatunnel/commit/e62bf6c65|2.3.10|
 |[Fix][Connector-V2] Fix MaxCompute cannot get project and tableName when use schema (#8865)|https://github.com/apache/seatunnel/commit/a24fa8fef|2.3.10|
 |[Improve] restruct connector common options (#8634)|https://github.com/apache/seatunnel/commit/f3499a6ee|2.3.10|

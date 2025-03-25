@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[improve] http connector options (#8969)|https://github.com/apache/seatunnel/commit/63ff9f910|2.3.10|
 |[Fix][connector-http] fix when post have param (#8434)|https://github.com/apache/seatunnel/commit/c1b2675ab|2.3.10|
 |[Improve][dist]add shade check rule (#8136)|https://github.com/apache/seatunnel/commit/51ef80001|2.3.9|

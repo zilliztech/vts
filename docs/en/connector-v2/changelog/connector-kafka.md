@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Feature][Kafka] Support native format read/write kafka record (#8724)|https://github.com/apache/seatunnel/commit/86e2d6fcf|2.3.10|
 |[improve] update kafka source default schema from content&lt;ROW&lt;content STRING&gt;&gt; to content&lt;STRING&gt; (#8642)|https://github.com/apache/seatunnel/commit/db6e2994d|2.3.10|
 |[Improve] restruct connector common options (#8634)|https://github.com/apache/seatunnel/commit/f3499a6ee|2.3.10|

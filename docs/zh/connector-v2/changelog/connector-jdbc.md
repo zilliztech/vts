@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Feature][Jdbc] Support sink ddl for sqlserver #8114 (#8936)|https://github.com/apache/seatunnel/commit/30aa485b3|2.3.10|
 |[Fix][Connector-V2] Fix parse SqlServer JDBC Url error (#8784)|https://github.com/apache/seatunnel/commit/373d2162d|2.3.10|
 |[Improve][Jdbc] Support upsert for opengauss (#8627)|https://github.com/apache/seatunnel/commit/56110bf39|2.3.10|

@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Fix][Connector-V2] Fix load state check in MilvusSourceReader to consider partition-level status (#8937)|https://github.com/apache/seatunnel/commit/bde235090|2.3.10|
 |[Improve][dist]add shade check rule (#8136)|https://github.com/apache/seatunnel/commit/51ef80001|2.3.9|
 |[Improve][Core] Refactor common options of column/row (#7911)|https://github.com/apache/seatunnel/commit/d1582afee|2.3.9|

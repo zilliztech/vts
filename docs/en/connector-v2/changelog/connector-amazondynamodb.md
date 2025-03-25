@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Fix] Fix error log name for SourceSplitEnumerator implements class (#8817)|https://github.com/apache/seatunnel/commit/55ed90eca|2.3.10|
 |[Improve] restruct connector common options (#8634)|https://github.com/apache/seatunnel/commit/f3499a6ee|2.3.10|
 |[improve] update amazondynamodb connector (#8601)|https://github.com/apache/seatunnel/commit/a69efca0f|2.3.10|

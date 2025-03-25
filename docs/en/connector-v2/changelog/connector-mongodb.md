@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Improve] sink mongodb schema is not required (#8887)|https://github.com/apache/seatunnel/commit/3cfe8c12b|2.3.10|
 |[Improve] restruct connector common options (#8634)|https://github.com/apache/seatunnel/commit/f3499a6ee|2.3.10|
 |[Fix][Connector-Mongodb] close MongodbClient when close MongodbReader (#8592)|https://github.com/apache/seatunnel/commit/06b2fc0e0|2.3.10|

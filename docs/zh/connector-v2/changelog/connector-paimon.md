@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Feature][Connector-V2] Support between predicate pushdown in paimon (#8962)|https://github.com/apache/seatunnel/commit/3b141cf62|2.3.10|
 |[Feature][Connector-V2] Suppor Time type in paimon connector (#8880)|https://github.com/apache/seatunnel/commit/9f1e59009|2.3.10|
 |[Feature][Paimon] Customize the hadoop user  (#8888)|https://github.com/apache/seatunnel/commit/2657626f9|2.3.10|

@@ -2,9 +2,6 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
-|fix code style|https://github.com/apache/seatunnel/commit/d62342aa5| dev |
-|[maven-release-plugin] prepare for next development iteration|https://github.com/apache/seatunnel/commit/dca66b78d| dev |
-|[maven-release-plugin] prepare release 2.3.10|https://github.com/apache/seatunnel/commit/5c8a4c03d|2.3.10|
 |[Fix] [Clickhouse] Parallelism makes data duplicate (#8916)|https://github.com/apache/seatunnel/commit/45345f273|2.3.10|
 |[Fix][Connector-V2]Fix Descriptions for CUSTOM_SQL in Connector (#8778)|https://github.com/apache/seatunnel/commit/96b610eb7|2.3.10|
 |[improve] update clickhouse connector config option (#8755)|https://github.com/apache/seatunnel/commit/b964189b7|2.3.10|
