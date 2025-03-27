@@ -19,9 +19,8 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 
 import com.google.gson.JsonObject;
 import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
-import io.milvus.v2.service.vector.request.UpsertReq;
+import io.milvus.v2.service.vector.request.InsertReq;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -113,7 +112,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         }
 
         // default to use upsertReq, but upsert only works when autoID is disabled
-        upsertWrite(partitionName, milvusDataCache);
+        insertWrite(partitionName, milvusDataCache);
 
         writeCount.addAndGet(this.writeCache.get());
         this.writeCache.set(0L);
@@ -131,24 +130,24 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         return writeCache.get();
     }
 
-    private void upsertWrite(String partitionName, List<JsonObject> data)
+    private void insertWrite(String partitionName, List<JsonObject> data)
             throws InterruptedException {
-        UpsertReq upsertReq = UpsertReq.builder()
+        InsertReq insertReq = InsertReq.builder()
                         .collectionName(this.collectionName)
                         .data(data)
                         .build();
 
         if (StringUtils.isNotEmpty(partitionName) && !partitionName.equals("_default") &&  !this.hasPartitionKey) {
-            upsertReq.setPartitionName(partitionName);
+            insertReq.setPartitionName(partitionName);
         }
 
         try {
-            milvusClient.upsert(upsertReq);
+            milvusClient.insert(insertReq);
         } catch (Exception e) {
             if (e.getMessage().contains("rate limit exceeded")
                     || e.getMessage().contains("received message larger than max")) {
                 if (data.size() > 2) {
-                    log.warn("upsert data failed, retry in smaller chunks: {} ", data.size() / 2);
+                    log.warn("insert data failed, retry in smaller chunks: {} ", data.size() / 2);
                     this.batchSize = this.batchSize / 2;
                     log.info("sleep 1 minute to avoid rate limit");
                     // sleep 1 minute to avoid rate limit
@@ -157,19 +156,19 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
                     // Split the data and retry in smaller chunks
                     List<JsonObject> firstHalf = data.subList(0, data.size() / 2);
                     List<JsonObject> secondHalf = data.subList(data.size() / 2, data.size());
-                    upsertWrite(partitionName, firstHalf);
-                    upsertWrite(partitionName, secondHalf);
+                    insertWrite(partitionName, firstHalf);
+                    insertWrite(partitionName, secondHalf);
                 } else {
                     // If the data size is 10, throw the exception to avoid infinite recursion
                     throw new MilvusConnectorException(
                             MilvusConnectionErrorCode.WRITE_DATA_FAIL,
-                            "upsert data failed," + " size down to 10, break",
+                            "insert data failed," + " size down to 10, break",
                             e);
                 }
             } else {
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.WRITE_DATA_FAIL,
-                        "upsert data failed with unknown exception",
+                        "insert data failed with unknown exception",
                         e);
             }
         }
