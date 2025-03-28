@@ -18,15 +18,20 @@
 package org.apache.seatunnel.engine.server;
 
 import org.apache.seatunnel.engine.common.Constant;
+import org.apache.seatunnel.engine.common.config.ConfigProvider;
+import org.apache.seatunnel.engine.common.config.SeaTunnelConfig;
 import org.apache.seatunnel.engine.common.exception.SeaTunnelEngineException;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalDag;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
 import org.apache.seatunnel.engine.core.job.JobStatus;
 import org.apache.seatunnel.engine.core.job.PipelineStatus;
+import org.apache.seatunnel.engine.server.operation.PrintMessageOperation;
+import org.apache.seatunnel.engine.server.utils.NodeEngineUtil;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junitpioneer.jupiter.SetEnvironmentVariable;
 
 import com.hazelcast.instance.impl.HazelcastInstanceImpl;
 import com.hazelcast.internal.serialization.Data;
@@ -80,6 +85,40 @@ public class CoordinatorServiceTest {
     }
 
     @Test
+    public void testInvocationFutureUseCompletableFutureExecutor() {
+        HazelcastInstanceImpl instance =
+                SeaTunnelServerStarter.createHazelcastInstance(
+                        TestUtils.getClusterName(
+                                "CoordinatorServiceTest_testInvocationFutureUseCompletableFutureExecutor"));
+
+        NodeEngineUtil.sendOperationToMemberNode(
+                        instance.node.getNodeEngine(),
+                        new PrintMessageOperation("hello"),
+                        instance.getCluster().getLocalMember().getAddress())
+                .whenComplete(
+                        (aVoid, error) -> {
+                            Assertions.assertTrue(
+                                    Thread.currentThread()
+                                            .getName()
+                                            .startsWith("SeaTunnel-CompletableFuture-Thread"));
+                        })
+                .join();
+
+        NodeEngineUtil.sendOperationToMasterNode(
+                        instance.node.getNodeEngine(), new PrintMessageOperation("hello"))
+                .whenCompleteAsync(
+                        (aVoid, error) -> {
+                            Assertions.assertTrue(
+                                    Thread.currentThread()
+                                            .getName()
+                                            .startsWith("SeaTunnel-CompletableFuture-Thread"));
+                        })
+                .join();
+
+        instance.shutdown();
+    }
+
+    @Test
     public void testClearCoordinatorService() {
         HazelcastInstanceImpl coordinatorServiceTest =
                 SeaTunnelServerStarter.createHazelcastInstance(
@@ -105,8 +144,8 @@ public class CoordinatorServiceTest {
                 new JobImmutableInformation(
                         jobId,
                         "Test",
-                        coordinatorServiceTest.getSerializationService().toData(testLogicalDag),
-                        testLogicalDag.getJobConfig(),
+                        coordinatorServiceTest.getSerializationService(),
+                        testLogicalDag,
                         Collections.emptyList(),
                         Collections.emptyList());
 
@@ -169,8 +208,8 @@ public class CoordinatorServiceTest {
                 new JobImmutableInformation(
                         jobId,
                         "Test",
-                        instance1.getSerializationService().toData(testLogicalDag),
-                        testLogicalDag.getJobConfig(),
+                        instance1.getSerializationService(),
+                        testLogicalDag,
                         Collections.emptyList(),
                         Collections.emptyList());
 
@@ -237,5 +276,29 @@ public class CoordinatorServiceTest {
                                         JobStatus.CANCELED,
                                         server2.getCoordinatorService().getJobStatus(jobId)));
         instance2.shutdown();
+    }
+
+    @Test
+    @SetEnvironmentVariable(
+            key = "ST_DOCKER_MEMBER_LIST",
+            value = "127.0.0.1,127.0.0.2,127.0.0.3,127.0.0.4")
+    public void testDockerEnvOverwrite() {
+        SeaTunnelConfig seaTunnelConfig = ConfigProvider.locateAndGetSeaTunnelConfig();
+        if (seaTunnelConfig
+                .getHazelcastConfig()
+                .getNetworkConfig()
+                .getJoin()
+                .getTcpIpConfig()
+                .isEnabled()) {
+            Assertions.assertEquals(
+                    4,
+                    seaTunnelConfig
+                            .getHazelcastConfig()
+                            .getNetworkConfig()
+                            .getJoin()
+                            .getTcpIpConfig()
+                            .getMembers()
+                            .size());
+        }
     }
 }

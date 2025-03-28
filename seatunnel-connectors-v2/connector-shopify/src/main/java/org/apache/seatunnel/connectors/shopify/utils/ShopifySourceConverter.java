@@ -22,7 +22,7 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.shopify.client.EmbeddingUtils;
 import org.apache.seatunnel.connectors.shopify.client.Product;

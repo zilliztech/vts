@@ -24,7 +24,7 @@ import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 
 import java.util.ArrayList;
 import java.util.List;

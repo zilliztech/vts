@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-file-cos.md';
+
 # CosFile
 
 > Cos file source connector
@@ -45,7 +47,7 @@ To use this connector you need put hadoop-cos-{hadoop.version}-{version}.jar and
 
 ## Options
 
-|           name            |  type   | required |    default value    |
+| name                      | type    | required | default value       |
 |---------------------------|---------|----------|---------------------|
 | path                      | string  | yes      | -                   |
 | file_format_type          | string  | yes      | -                   |
@@ -65,6 +67,7 @@ To use this connector you need put hadoop-cos-{hadoop.version}-{version}.jar and
 | xml_row_tag               | string  | no       | -                   |
 | xml_use_attr_format       | boolean | no       | -                   |
 | file_filter_pattern       | string  | no       | -                   |
+| filename_extension            | string  | no       | -                   |
 | compress_codec            | string  | no       | none                |
 | archive_compress_codec    | string  | no       | none                |
 | encoding                  | string  | no       | UTF-8               |
@@ -275,6 +278,59 @@ Specifies Whether to process data using the tag attribute format.
 
 Filter pattern, which used for filtering files.
 
+The pattern follows standard regular expressions. For details, please refer to https://en.wikipedia.org/wiki/Regular_expression.
+There are some examples.
+
+File Structure Example:
+```
+/data/seatunnel/20241001/report.txt
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+/data/seatunnel/20241005/old_data.csv
+/data/seatunnel/20241012/logo.png
+```
+Matching Rules Example:
+
+**Example 1**: *Match all .txt files*，Regular Expression:
+```
+/data/seatunnel/20241001/.*\.txt
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241001/report.txt
+```
+**Example 2**: *Match all file starting with abc*，Regular Expression:
+```
+/data/seatunnel/20241002/abc.*
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+```
+**Example 3**: *Match all file starting with abc，And the fourth character is either h or g*, the Regular Expression:
+```
+/data/seatunnel/20241007/abc[h,g].*
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+```
+**Example 4**: *Match third level folders starting with 202410 and files ending with .csv*, the Regular Expression:
+```
+/data/seatunnel/202410\d*/.*\.csv
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+/data/seatunnel/20241005/old_data.csv
+```
+
+### filename_extension [string]
+
+Filter filename extension, which used for filtering files with specific extension. Example: `csv` `.txt` `json` `.xml`.
+
 ### compress_codec [string]
 
 The compress codec of files and the details that supported as the following shown:
@@ -294,7 +350,10 @@ The compress codec of archive files and the details that supported as the follow
 | ZIP                    | txt,json,excel,xml | .zip                    |
 | TAR                    | txt,json,excel,xml | .tar                    |
 | TAR_GZ                 | txt,json,excel,xml | .tar.gz                 |
+| GZ                     | txt,json,excel,xml | .gz                     |
 | NONE                   | all                | .*                      |
+
+Note: gz compressed excel file needs to compress the original file or specify the file suffix, such as e2e.xls ->e2e_test.xls.gz
 
 ### encoding [string]
 
@@ -372,9 +431,34 @@ sink {
 
 ```
 
+### Filter File
+
+```hocon
+env {
+  parallelism = 1
+  job.mode = "BATCH"
+}
+
+source {
+  CosFile {
+    bucket = "cosn://seatunnel-test-1259587829"
+    secret_id = "xxxxxxxxxxxxxxxxxxx"
+    secret_key = "xxxxxxxxxxxxxxxxxxx"
+    region = "ap-chengdu"
+    path = "/seatunnel/read/binary/"
+    file_format_type = "binary"
+    // file example abcD2024.csv
+    file_filter_pattern = "abc[DX]*.*"
+  }
+}
+
+sink {
+  Console {
+  }
+}
+```
+
 ## Changelog
 
-### next version
-
-- Add file cos source connector ([4979](https://github.com/apache/seatunnel/pull/4979))
+<ChangeLog />
 

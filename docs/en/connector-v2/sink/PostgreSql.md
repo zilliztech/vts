@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-jdbc.md';
+
 # PostgreSql
 
 > JDBC PostgreSql Sink Connector
@@ -40,9 +42,9 @@ semantics (using XA transaction guarantee).
 
 ## Database Dependency
 
-> Please download the support list corresponding to 'Maven' and copy it to the '$SEATNUNNEL_HOME/plugins/jdbc/lib/' working directory<br/>
-> For example PostgreSQL datasource: cp postgresql-xxx.jar $SEATNUNNEL_HOME/plugins/jdbc/lib/<br/>
-> If you want to manipulate the GEOMETRY type in PostgreSQL, add postgresql-xxx.jar and postgis-jdbc-xxx.jar to $SEATNUNNEL_HOME/plugins/jdbc/lib/
+> Please download the support list corresponding to 'Maven' and copy it to the '$SEATUNNEL_HOME/plugins/jdbc/lib/' working directory<br/>
+> For example PostgreSQL datasource: cp postgresql-xxx.jar $SEATUNNEL_HOME/plugins/jdbc/lib/<br/>
+> If you want to manipulate the GEOMETRY type in PostgreSQL, add postgresql-xxx.jar and postgis-jdbc-xxx.jar to $SEATUNNEL_HOME/plugins/jdbc/lib/
 
 ## Data Type Mapping
 
@@ -154,7 +156,7 @@ env {
 source {
   FakeSource {
     parallelism = 1
-    result_table_name = "fake"
+    plugin_output = "fake"
     row.num = 16
     schema = {
       fields {
@@ -169,7 +171,7 @@ source {
 
 transform {
   # If you would like to get more information about how to configure seatunnel and see full list of transform plugins,
-    # please go to https://seatunnel.apache.org/docs/category/transform-v2
+    # please go to https://seatunnel.apache.org/docs/transform-v2
 }
 
 sink {
@@ -272,3 +274,6 @@ sink {
 }
 ```
 
+## Changelog
+
+<ChangeLog />

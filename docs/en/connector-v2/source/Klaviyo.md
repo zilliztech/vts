@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-http-klaviyo.md';
+
 # Klaviyo
 
 > Klaviyo source connector
@@ -45,7 +47,7 @@ http request url
 
 API private key for login, you can get more detail at this link:
 
-https://developers.klaviyo.com/en/docs/retrieve_api_credentials
+https://developers.klaviyo.com/en/docs/authenticate_#private-key-authentication
 
 ### revision [String]
 
@@ -305,8 +307,4 @@ Klaviyo {
 
 ## Changelog
 
-### next version
-
-- Add Klaviyo Source Connector
-- [Feature][Connector-V2][HTTP] Use json-path parsing ([3510](https://github.com/apache/seatunnel/pull/3510))
-
+<ChangeLog />

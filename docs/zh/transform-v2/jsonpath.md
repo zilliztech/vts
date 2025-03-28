@@ -83,7 +83,8 @@
     "c_decimal": 10.55,
     "c_date": "2023-10-29",
     "c_datetime": "16:12:43.459",
-    "c_array":["item1", "item2", "item3"]
+    "c_array":["item1", "item2", "item3"],
+    "c_map_array": [{"c_string_1":"c_string_1","c_string_2":"c_string_2","c_string_3":"c_string_3"},{"c_string_1":"c_string_1","c_string_2":"c_string_2","c_string_3":"c_string_3"}]
   }
 }
 ```
@@ -93,8 +94,8 @@
 ```json
 transform {
   JsonPath {
-    source_table_name = "fake"
-    result_table_name = "fake1"
+    plugin_input = "fake"
+    plugin_output = "fake1"
     columns = [
      {
         "src_field" = "data"
@@ -143,11 +144,17 @@ transform {
          "dest_field" = "c1_datetime"
          "dest_type" = "time"
       },
-			{
+	  {
          "src_field" = "data"
          "path" = "$.data.c_array"
          "dest_field" = "c1_array"
-         "dest_type" = "array<string>"        
+         "dest_type" = "array<string>"
+      },
+      {
+        "src_field" = "data"
+        "path" = "$.data.c_map_array"
+        "dest_field" = "c1_map_array"
+        "dest_type" = "array<map<string, string>>"
       }
     ]
   }
@@ -175,8 +182,8 @@ JsonPath 转换将 seatunnel 的值转换为一个数组。
 ```hocon
 transform {
   JsonPath {
-    source_table_name = "fake"
-    result_table_name = "fake1"
+    plugin_input = "fake"
+    plugin_output = "fake1"
 
     row_error_handle_way = FAIL
     columns = [

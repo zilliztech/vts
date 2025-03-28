@@ -19,7 +19,7 @@
     <parent>
         <groupId>org.apache.seatunnel</groupId>
         <artifactId>seatunnel</artifactId>
-        <version>${revision}</version>
+        <version>2.3.11-SNAPSHOT</version>
     </parent>
 
     <artifactId>seatunnel-formats</artifactId>
@@ -33,6 +33,7 @@
         <module>seatunnel-format-compatible-connect-json</module>
         <module>seatunnel-format-avro</module>
         <module>seatunnel-format-protobuf</module>
+        <module>seatunnel-format-csv</module>
     </modules>
 
 </project>

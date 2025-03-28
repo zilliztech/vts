@@ -91,7 +91,7 @@ public abstract class ChunkSplitter implements AutoCloseable, Serializable {
 
         Collection<JdbcSourceSplit> splits;
         Optional<SeaTunnelRowType> splitKeyOptional = findSplitKey(table);
-        if (!splitKeyOptional.isPresent() || config.isUseSingleSplit()) {
+        if (!splitKeyOptional.isPresent()) {
             JdbcSourceSplit split = createSingleSplit(table);
             splits = Collections.singletonList(split);
         } else {

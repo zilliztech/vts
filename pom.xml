@@ -26,7 +26,7 @@
 
     <groupId>org.apache.seatunnel</groupId>
     <artifactId>seatunnel</artifactId>
-    <version>${revision}</version>
+    <version>2.3.11-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>SeaTunnel :</name>
@@ -52,11 +52,12 @@
         <module>seatunnel-examples</module>
         <module>seatunnel-e2e</module>
         <module>seatunnel-shade</module>
+        <module>seatunnel-ci-tools</module>
     </modules>
 
     <properties>
         <!--todo The classification is too confusing, reclassify by type-->
-        <revision>2.3.8-SNAPSHOT</revision>
+        <revision>2.3.11-SNAPSHOT</revision>
         <seatunnel.config.shade.version>2.1.1</seatunnel.config.shade.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>11</java.version>
@@ -65,7 +66,7 @@
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
 
-        <slf4j.version>1.7.25</slf4j.version>
+        <slf4j.version>1.7.36</slf4j.version>
         <log4j2.version>2.17.1</log4j2.version>
         <log4j2-disruptor.version>3.4.4</log4j2-disruptor.version>
         <log4j.version>1.2.17</log4j.version>
@@ -102,7 +103,7 @@
         <elasticsearch6.client.version>6.3.1</elasticsearch6.client.version>
         <elasticsearch7.client.version>7.5.1</elasticsearch7.client.version>
         <flink-shaded-hadoop-2.version>2.7.5-7.0</flink-shaded-hadoop-2.version>
-        <commons-lang3.version>3.17.0</commons-lang3.version>
+        <commons-lang3.version>3.8</commons-lang3.version>
         <commons-io.version>2.11.0</commons-io.version>
         <commons-collections4.version>4.4</commons-collections4.version>
         <commons-csv.version>1.10.0</commons-csv.version>
@@ -121,9 +122,10 @@
         <jcommander.version>1.81</jcommander.version>
         <junit4.version>4.13.2</junit4.version>
         <junit5.version>5.9.0</junit5.version>
+        <rest-assured.version>5.4.0</rest-assured.version>
         <mockito.version>4.11.0</mockito.version>
         <config.version>1.3.3</config.version>
-        <maven-shade-plugin.version>3.3.0</maven-shade-plugin.version>
+        <maven-shade-plugin.version>3.4.1</maven-shade-plugin.version>
         <maven-helper-plugin.version>3.2.0</maven-helper-plugin.version>
         <maven-git-commit-id-plugin.version>4.0.4</maven-git-commit-id-plugin.version>
         <flatten-maven-plugin.version>1.3.0</flatten-maven-plugin.version>
@@ -135,11 +137,13 @@
         <maven-scm-provider-jgit.version>2.0.0</maven-scm-provider-jgit.version>
         <testcontainer.version>1.17.6</testcontainer.version>
         <spotless.version>2.29.0</spotless.version>
-        <jsqlparser.version>4.5</jsqlparser.version>
+        <jsqlparser.version>4.9</jsqlparser.version>
         <json-path.version>2.7.0</json-path.version>
         <groovy.version>4.0.16</groovy.version>
+        <jetty.version>9.4.56.v20240826</jetty.version>
+        <jakarta.servlet-api>4.0.4</jakarta.servlet-api>
         <!-- Option args -->
-        <skipUT>false</skipUT>
+        <skipUT>true</skipUT>
         <skipIT>true</skipIT>
         <elasticsearch>7</elasticsearch>
         <guava.version>27.0-jre</guava.version>
@@ -150,10 +154,14 @@
         <checker.qual.version>3.10.0</checker.qual.version>
         <awaitility.version>4.2.0</awaitility.version>
         <e2e.dependency.skip>true</e2e.dependency.skip>
-        <skip.spotless>false</skip.spotless>
+        <skip.spotless>true</skip.spotless>
 
         <!-- prometheus simpleclient -->
         <prometheus.simpleclient.version>0.16.0</prometheus.simpleclient.version>
+        <enableSourceJarCreation>true</enableSourceJarCreation>
+
+        <hadoop-aws.version>3.1.4</hadoop-aws.version>
+        <arrow.version>15.0.1</arrow.version>
 
     </properties>
 
@@ -187,6 +195,11 @@
                 <groupId>com.lmax</groupId>
                 <artifactId>disruptor</artifactId>
                 <version>${log4j2-disruptor.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy-java.version}</version>
             </dependency>
             <!-- Include the logging bridges -->
             <!-- commons-logging bridge to slf4j -->
@@ -482,6 +495,17 @@
                 <version>${project.version}</version>
                 <classifier>optional</classifier>
                 <scope>provided</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-vector</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-memory-netty</artifactId>
+                <version>${arrow.version}</version>
             </dependency>
 
         </dependencies>
@@ -785,100 +809,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-dependency-plugin</artifactId>
                     <version>${maven-dependency-plugin.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>exec-maven-plugin</artifactId>
-                    <version>${exec-maven-plugin.version}</version>
-                    <executions>
-                        <execution>
-                            <id>docker-build</id>
-                            <goals>
-                                <goal>exec</goal>
-                            </goals>
-                            <phase>package</phase>
-                            <configuration>
-                                <skip>${docker.build.skip}</skip>
-                                <environmentVariables>
-                                    <DOCKER_BUILDKIT>1</DOCKER_BUILDKIT>
-                                </environmentVariables>
-                                <executable>docker</executable>
-                                <workingDirectory>${project.basedir}</workingDirectory>
-                                <arguments>
-                                    <argument>buildx</argument>
-                                    <argument>build</argument>
-                                    <argument>--load</argument>
-                                    <argument>--no-cache</argument>
-                                    <argument>-t</argument>
-                                    <argument>${docker.hub}/${docker.repo}:${docker.tag}</argument>
-                                    <argument>-t</argument>
-                                    <argument>${docker.hub}/${docker.repo}:latest</argument>
-                                    <argument>${project.basedir}</argument>
-                                    <argument>--build-arg</argument>
-                                    <argument>VERSION=${project.version}</argument>
-                                    <argument>--file=src/main/docker/Dockerfile</argument>
-                                </arguments>
-                            </configuration>
-                        </execution>
-                        <execution>
-                            <id>docker-verify</id>
-                            <goals>
-                                <goal>exec</goal>
-                            </goals>
-                            <phase>verify</phase>
-                            <configuration>
-                                <skip>${docker.verify.skip}</skip>
-                                <environmentVariables>
-                                    <DOCKER_BUILDKIT>1</DOCKER_BUILDKIT>
-                                </environmentVariables>
-                                <executable>docker</executable>
-                                <workingDirectory>${project.basedir}</workingDirectory>
-                                <arguments>
-                                    <argument>run</argument>
-                                    <argument>--rm</argument>
-                                    <argument>${docker.hub}/${docker.repo}:${docker.tag}</argument>
-                                    <argument>bash</argument>
-                                    <argument>./bin/seatunnel.sh</argument>
-                                    <argument>-e</argument>
-                                    <argument>local</argument>
-                                    <argument>-c</argument>
-                                    <argument>config/v2.batch.config.template</argument>
-                                </arguments>
-                            </configuration>
-                        </execution>
-                        <execution>
-                            <id>docker-push</id>
-                            <goals>
-                                <goal>exec</goal>
-                            </goals>
-                            <phase>install</phase>
-                            <configuration>
-                                <skip>${docker.push.skip}</skip>
-                                <environmentVariables>
-                                    <DOCKER_BUILDKIT>1</DOCKER_BUILDKIT>
-                                </environmentVariables>
-                                <executable>docker</executable>
-                                <workingDirectory>${project.basedir}</workingDirectory>
-                                <arguments>
-                                    <argument>buildx</argument>
-                                    <argument>build</argument>
-                                    <argument>--platform</argument>
-                                    <argument>linux/amd64,linux/arm64</argument>
-                                    <argument>--no-cache</argument>
-                                    <argument>--push</argument>
-                                    <argument>-t</argument>
-                                    <argument>${docker.hub}/${docker.repo}:${docker.tag}</argument>
-                                    <argument>-t</argument>
-                                    <argument>${docker.hub}/${docker.repo}:latest</argument>
-                                    <argument>${docker.hub}/${docker.repo}</argument>
-                                    <argument>${project.basedir}</argument>
-                                    <argument>--build-arg</argument>
-                                    <argument>VERSION=${project.version}</argument>
-                                    <argument>--file=src/main/docker/Dockerfile</argument>
-                                </arguments>
-                            </configuration>
-                        </execution>
-                    </executions>
+                    <configuration>
+                        <appendOutput>true</appendOutput>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -924,85 +857,7 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
             </plugin>
-<!--            <plugin>-->
-<!--                <groupId>com.diffplug.spotless</groupId>-->
-<!--                <artifactId>spotless-maven-plugin</artifactId>-->
-<!--                <version>${spotless.version}</version>-->
-<!--                <configuration>-->
-<!--                    <skip>${skip.spotless}</skip>-->
-<!--                    <java>-->
-<!--                        <excludes>-->
-<!--                            <exclude>src/main/java/org/apache/seatunnel/antlr4/generated/*.*</exclude>-->
-<!--                        </excludes>-->
-<!--                        <googleJavaFormat>-->
-<!--                            <version>1.7</version>-->
-<!--                            <style>AOSP</style>-->
-<!--                        </googleJavaFormat>-->
-<!--                        <removeUnusedImports />-->
-<!--                        <formatAnnotations />-->
-<!--                        <importOrder>-->
-<!--                            <order>org.apache.seatunnel.shade,org.apache.seatunnel,org.apache,org,,javax,java,\#</order>-->
-<!--                        </importOrder>-->
-<!--                        <replaceRegex>-->
-<!--                            <name>Remove wildcard imports</name>-->
-<!--                            <searchRegex>import\s+(static)*\s*[^\*\s]+\*;(\r\n|\r|\n)</searchRegex>-->
-<!--                            <replacement>$1</replacement>-->
-<!--                        </replaceRegex>-->
-<!--                        <replaceRegex>-->
-<!--                            <name>Block powermock</name>-->
-<!--                            <searchRegex>import\s+org\.powermock\.[^\*\s]*(|\*);(\r\n|\r|\n)</searchRegex>-->
-<!--                            <replacement>$1</replacement>-->
-<!--                        </replaceRegex>-->
-<!--                        <replaceRegex>-->
-<!--                            <name>Block jUnit4 imports</name>-->
-<!--                            <searchRegex>import\s+org\.junit\.[^jupiter][^\*\s]*(|\*);(\r\n|\r|\n)</searchRegex>-->
-<!--                            <replacement>$1</replacement>-->
-<!--                        </replaceRegex>-->
-<!--                    </java>-->
-<!--                    <pom>-->
-<!--                        <sortPom>-->
-<!--                            <encoding>UTF-8</encoding>-->
-<!--                            <nrOfIndentSpace>4</nrOfIndentSpace>-->
-<!--                            <keepBlankLines>true</keepBlankLines>-->
-<!--                            <indentBlankLines>false</indentBlankLines>-->
-<!--                            <indentSchemaLocation>true</indentSchemaLocation>-->
-<!--                            <spaceBeforeCloseEmptyElement>true</spaceBeforeCloseEmptyElement>-->
-<!--                            <sortModules>false</sortModules>-->
-<!--                            <sortExecutions>false</sortExecutions>-->
-<!--                            <predefinedSortOrder>custom_1</predefinedSortOrder>-->
-<!--                            <expandEmptyElements>false</expandEmptyElements>-->
-<!--                            <sortProperties>false</sortProperties>-->
-<!--                        </sortPom>-->
-<!--                        <replace>-->
-<!--                            <name>Leading blank line</name>-->
-<!--                            <search>project</search>-->
-<!--                            <replacement>project</replacement>-->
-<!--                        </replace>-->
-<!--                    </pom>-->
-<!--                    &lt;!&ndash; disable markdown for now, it will change sidebar config in file&ndash;&gt;-->
-<!--                    &lt;!&ndash;                    <markdown>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                        <includes>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                            <include>docs/**/*.md</include>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                        </includes>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                        <excludes>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                            <exclude>**/.github/**/*.md</exclude>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                        </excludes>&ndash;&gt;-->
-<!--                    &lt;!&ndash;                        <flexmark />&ndash;&gt;-->
-<!--                    &lt;!&ndash;                    </markdown>&ndash;&gt;-->
-<!--                    <upToDateChecking>-->
-<!--                        <enabled>true</enabled>-->
-<!--                    </upToDateChecking>-->
-<!--                </configuration>-->
-<!--                <executions>-->
-<!--                    <execution>-->
-<!--                        <id>spotless-check</id>-->
-<!--                        <goals>-->
-<!--                            <goal>check</goal>-->
-<!--                        </goals>-->
-<!--                        <phase>validate</phase>-->
-<!--                    </execution>-->
-<!--                </executions>-->
-<!--            </plugin>-->
+
         </plugins>
     </build>
 

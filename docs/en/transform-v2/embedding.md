@@ -10,20 +10,21 @@ different API endpoints.
 
 ## Options
 
-| Name                           | Type   | Required | Default Value | Description                                                                                                 |
-|--------------------------------|--------|----------|---------------|-------------------------------------------------------------------------------------------------------------|
-| model_provider                 | enum   | yes      | -             | The model provider for embedding. Options may include `QIANFAN`, `OPENAI`, etc.                             |
-| api_key                        | string | yes      | -             | The API key required to authenticate with the embedding service.                                            |
-| secret_key                     | string | yes      | -             | The secret key required for additional authentication with the embedding service.                           |
-| single_vectorized_input_number | int    | no       | 1             | The number of inputs vectorized in one request. Default is 1.                                               |
-| vectorization_fields           | map    | yes      | -             | A mapping between input fields and their corresponding output vector fields.                                |
-| model                          | string | yes      | -             | The specific model to use for embedding (e.g: `text-embedding-3-small` for OPENAI).                         |
-| api_path                       | string | no       | -             | The API endpoint for the embedding service. Typically provided by the model provider.                       |
-| oauth_path                     | string | no       | -             | The API endpoint for the oauth service.                                                                     |
-| custom_config                  | map    | no       |               | Custom configurations for the model.                                                                        |
-| custom_response_parse          | string | no       |               | Specifies how to parse the response from the model using JsonPath. Example: `$.choices[*].message.content`. |
-| custom_request_headers         | map    | no       |               | Custom headers for the request to the model.                                                                |
-| custom_request_body            | map    | no       |               | Custom body for the request. Supports placeholders like `${model}`, `${input}`.                             |
+| Name                             | Type   | Required | Default Value | Description                                                                                                                                                             |
+|----------------------------------|--------|----------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| model_provider                   | enum   | yes      | -             | The model provider for embedding. Options may include `QIANFAN`, `OPENAI`, etc.                                                                                         |
+| api_key                          | string | yes      | -             | The API key required to authenticate with the embedding service.                                                                                                        |
+| secret_key                       | string | yes      | -             | The secret key required for additional authentication with the embedding service.                                                                                       |
+| single_vectorized_input_number   | int    | no       | 1             | The number of inputs vectorized in one request. Default is 1.                                                                                                           |
+| vectorization_fields             | map    | yes      | -             | A mapping between input fields and their corresponding output vector fields.                                                                                            |
+| model                            | string | yes      | -             | The specific model to use for embedding (e.g: `text-embedding-3-small` for OPENAI).                                                                                     |
+| api_path                         | string | no       | -             | The API endpoint for the embedding service. Typically provided by the model provider.                                                                                   |
+| dimension                        | int    | no       | -             | TThe vector dimension defaults to 2048. The Embedding-3 model supports custom vector dimensions, and it is recommended to choose dimensions of 256, 512, 1024, or 2048. |
+| oauth_path                       | string | no       | -             | The API endpoint for the oauth service.                                                                                                                                 |
+| custom_config                    | map    | no       |               | Custom configurations for the model.                                                                                                                                    |
+| custom_response_parse            | string | no       |               | Specifies how to parse the response from the model using JsonPath. Example: `$.choices[*].message.content`.                                                             |
+| custom_request_headers           | map    | no       |               | Custom headers for the request to the model.                                                                                                                            |
+| custom_request_body              | map    | no       |               | Custom body for the request. Supports placeholders like `${model}`, `${input}`.                                                                                         |
 
 ### model_provider
 
@@ -166,13 +167,13 @@ source {
       "Herman Melville (1819–1891) was an American novelist, short story writer, and poet of the American Renaissance period. Born in New York City, Melville gained initial fame with novels such as Typee and Omoo, but it was Moby-Dick, published in 1851, that would later be recognized as his masterpiece. Melville’s work is known for its complexity, symbolism, and exploration of themes such as man’s place in the universe, the nature of evil, and the quest for meaning. Despite facing financial difficulties and critical neglect during his lifetime, Melville’s reputation soared posthumously, and he is now considered one of the great American authors."
       ], kind = INSERT}
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
 transform {
   Embedding {
-    source_table_name = "fake"
+    plugin_input = "fake"
     embedding_model_provider = QIANFAN
     model = bge_large_en
     api_key = xxxxxxxxxx
@@ -182,13 +183,13 @@ transform {
         book_intro_vector = book_intro
         author_biography_vector  = author_biography
     }
-    result_table_name = "embedding_output"
+    plugin_output = "embedding_output"
   }
 }
 
 sink {
   Assert {
-      source_table_name = "embedding_output"
+      plugin_input = "embedding_output"
       rules =
         {
           field_rules = [
@@ -293,13 +294,13 @@ source {
       "Herman Melville (1819–1891) was an American novelist, short story writer, and poet of the American Renaissance period. Born in New York City, Melville gained initial fame with novels such as Typee and Omoo, but it was Moby-Dick, published in 1851, that would later be recognized as his masterpiece. Melville’s work is known for its complexity, symbolism, and exploration of themes such as man’s place in the universe, the nature of evil, and the quest for meaning. Despite facing financial difficulties and critical neglect during his lifetime, Melville’s reputation soared posthumously, and he is now considered one of the great American authors."
       ], kind = INSERT}
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
 transform {
  Embedding {
-    source_table_name = "fake"
+    plugin_input = "fake"
     model_provider = CUSTOM
     model = text-embedding-3-small
     api_key = xxxxxxxx
@@ -320,13 +321,13 @@ transform {
             inputx = ["${input}"]
         }
     }
-    result_table_name = "embedding_output_1"
+    plugin_output = "embedding_output_1"
   }
 }
 
 sink {
   Assert {
-      source_table_name = "embedding_output_1"
+      plugin_input = "embedding_output_1"
       rules =
         {
           field_rules = [

@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-jdbc.md';
+
 # Snowflake
 
 > JDBC Snowflake Sink Connector
@@ -25,8 +27,8 @@ Write data through jdbc. Support Batch mode and Streaming mode, support concurre
 
 ## Database dependency
 
-> Please download the support list corresponding to 'Maven' and copy it to the '$SEATNUNNEL_HOME/plugins/jdbc/lib/' working directory<br/>
-> For example Snowflake datasource: cp snowflake-connector-java-xxx.jar $SEATNUNNEL_HOME/plugins/jdbc/lib/
+> Please download the support list corresponding to 'Maven' and copy it to the '$SEATUNNEL_HOME/plugins/jdbc/lib/' working directory<br/>
+> For example Snowflake datasource: cp snowflake-connector-java-xxx.jar $SEATUNNEL_HOME/plugins/jdbc/lib/
 
 ## Data Type Mapping
 
@@ -89,7 +91,7 @@ source {
     # This is a example source plugin **only for test and demonstrate the feature source plugin**
     FakeSource {
         parallelism = 1
-        result_table_name = "fake"
+        plugin_output = "fake"
         row.num = 16
         schema = {
             fields {
@@ -103,7 +105,7 @@ source {
 }
 transform {
     # If you would like to get more information about how to configure seatunnel and see full list of transform plugins,
-    # please go to https://seatunnel.apache.org/docs/category/transform-v2
+    # please go to https://seatunnel.apache.org/docs/transform-v2
 }
 sink {
     jdbc {
@@ -140,3 +142,6 @@ sink {
 }
 ```
 
+## Changelog
+
+<ChangeLog />

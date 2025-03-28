@@ -40,7 +40,7 @@ You can download the source code from the [download page](https://seatunnel.apac
 ```shell
 cd seatunnel
 # Use already sett maven profile
-sh ./mvnw -B clean install -Dmaven.test.skip=true -Dmaven.javadoc.skip=true -Dlicense.skipAddThirdParty=true -D"docker.build.skip"=false -D"docker.verify.skip"=false -D"docker.push.skip"=true -D"docker.tag"=2.3.8 -Dmaven.deploy.skip --no-snapshot-updates -Pdocker,seatunnel
+sh ./mvnw -B clean install -Dmaven.test.skip=true -Dmaven.javadoc.skip=true -Dlicense.skipAddThirdParty=true -D"docker.build.skip"=false -D"docker.verify.skip"=false -D"docker.push.skip"=true -D"docker.tag"=2.3.10 -Dmaven.deploy.skip -D"skip.spotless"=true --no-snapshot-updates -Pdocker,seatunnel
 
 # Check the docker image
 docker images | grep apache/seatunnel
@@ -53,10 +53,10 @@ sh ./mvnw clean package -DskipTests -Dskip.spotless=true
 
 # Build docker image
 cd seatunnel-dist
-docker build -f src/main/docker/Dockerfile --build-arg VERSION=2.3.8 -t apache/seatunnel:2.3.8 .
+docker build -f src/main/docker/Dockerfile --build-arg VERSION=2.3.10 -t apache/seatunnel:2.3.10 .
 
 # If you build from dev branch, you should add SNAPSHOT suffix to the version
-docker build -f src/main/docker/Dockerfile --build-arg VERSION=2.3.8-SNAPSHOT -t apache/seatunnel:2.3.8-SNAPSHOT .
+docker build -f src/main/docker/Dockerfile --build-arg VERSION=2.3.10-SNAPSHOT -t apache/seatunnel:2.3.10-SNAPSHOT .
 
 # Check the docker image
 docker images | grep apache/seatunnel
@@ -72,13 +72,15 @@ COPY ./target/apache-seatunnel-${VERSION}-bin.tar.gz /opt/
 
 # Download From Internet
 # Please Note this file only include fake/console connector, You'll need to download the other connectors manually
-# wget -P /opt https://dlcdn.apache.org/seatunnel/2.3.6/apache-seatunnel-${VERSION}-bin.tar.gz
+# wget -P /opt https://dlcdn.apache.org/seatunnel/${VERSION}/apache-seatunnel-${VERSION}-bin.tar.gz
 
 RUN cd /opt && \
     tar -zxvf apache-seatunnel-${VERSION}-bin.tar.gz && \
     mv apache-seatunnel-${VERSION} seatunnel && \
     rm apache-seatunnel-${VERSION}-bin.tar.gz && \
-    cp seatunnel/config/log4j2_client.properties seatunnel/config/log4j2.properties && \
+    sed -i 's/#rootLogger.appenderRef.consoleStdout.ref/rootLogger.appenderRef.consoleStdout.ref/' seatunnel/config/log4j2.properties && \
+    sed -i 's/#rootLogger.appenderRef.consoleStderr.ref/rootLogger.appenderRef.consoleStderr.ref/' seatunnel/config/log4j2.properties && \
+    sed -i 's/rootLogger.appenderRef.file.ref/#rootLogger.appenderRef.file.ref/' seatunnel/config/log4j2.properties && \    
     cp seatunnel/config/hazelcast-master.yaml seatunnel/config/hazelcast-worker.yaml
 
 WORKDIR /opt/seatunnel
@@ -167,24 +169,26 @@ docker run -d --name seatunnel_master \
 
 - get created container ip
 ```shell
-docker inspect master-1
+docker inspect seatunnel_master
 ```
 run this command to get the pod ip.
 
 - start worker node
 ```shell
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
 docker run -d --name seatunnel_worker_1 \
     --network seatunnel-network \
     --rm \
-    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \ # set master container ip to here
+    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     apache/seatunnel \
     ./bin/seatunnel-cluster.sh -r worker
 
 ## start worker2
-docker run -d --name seatunnel_worker_2 \ 
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
+docker run -d --name seatunnel_worker_2 \
     --network seatunnel-network \
     --rm \
-     -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \    # set master container ip to here
+     -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     apache/seatunnel \
     ./bin/seatunnel-cluster.sh -r worker    
 
@@ -194,20 +198,22 @@ docker run -d --name seatunnel_worker_2 \
 
 run this command to start master node.
 ```shell
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
 docker run -d --name seatunnel_master \
     --network seatunnel-network \
     --rm \
-    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \ # set exist master container ip to here
+    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     apache/seatunnel \
     ./bin/seatunnel-cluster.sh -r master
 ```
 
 run this command to start worker node.
 ```shell
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
 docker run -d --name seatunnel_worker_1 \
     --network seatunnel-network \
     --rm \
-    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \ # set master container ip to here
+    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     apache/seatunnel \
     ./bin/seatunnel-cluster.sh -r worker
 ```
@@ -279,7 +285,7 @@ networks:
 run `docker-compose up -d` command to start the cluster.
 
 
-You can use `docker logs -f seatunne_master`, `docker logs -f seatunnel_worker_1` to check the node log.
+You can run `docker logs -f seatunne_master`, `docker logs -f seatunnel_worker_1` to check the node log.
 And when you call `http://localhost:5801/hazelcast/rest/maps/system-monitoring-information`, you will see there are 2 nodes as we excepted.
 
 After that, you can use client or restapi to submit job to this cluster.
@@ -371,21 +377,23 @@ and run `docker-compose up -d` command, the new worker node will start, and the 
 #### use docker as a client
 - submit job :
 ```shell
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
 docker run --name seatunnel_client \
     --network seatunnel-network \
+    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     --rm \
     apache/seatunnel \
-    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \ # set it as master node container ip
-    ./bin/seatunnel.sh  -c config/v2.batch.config.template # this is an default config, if you need submit your self config, you can mount config file.
+    ./bin/seatunnel.sh  -c config/v2.batch.config.template
 ```
 
 - list job
 ```shell
+# you need update yourself master container ip to `ST_DOCKER_MEMBER_LIST`
 docker run --name seatunnel_client \
     --network seatunnel-network \
+    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \
     --rm \
     apache/seatunnel \
-    -e ST_DOCKER_MEMBER_LIST=172.18.0.2:5801 \ # set it as master node container ip
     ./bin/seatunnel.sh  -l
 ```
 
@@ -395,5 +403,5 @@ more command please refer [user-command](../../seatunnel-engine/user-command.md)
 
 #### use rest api
 
-please refer [Submit A Job](../../seatunnel-engine/rest-api.md#submit-a-job)
+please refer [Submit A Job](../../seatunnel-engine/rest-api-v2.md#submit-a-job)
 

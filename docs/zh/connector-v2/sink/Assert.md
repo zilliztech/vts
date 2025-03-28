@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-assert.md';
+
 # Assert
 
 > Assert 数据接收器
@@ -268,13 +270,13 @@ source {
         ]
       }
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
 sink{
   Assert {
-    source_table_name = "fake"
+    plugin_input = "fake"
     rules =
       {
         row_rules = [
@@ -608,3 +610,6 @@ sink {
 
 ```
 
+## 变更日志
+
+<ChangeLog />

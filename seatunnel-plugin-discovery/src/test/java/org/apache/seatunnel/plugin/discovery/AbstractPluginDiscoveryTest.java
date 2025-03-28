@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.plugin.discovery;
 
+import org.apache.seatunnel.api.common.PluginIdentifier;
 import org.apache.seatunnel.common.config.Common;
 import org.apache.seatunnel.common.config.DeployMode;
 import org.apache.seatunnel.common.constants.PluginType;
@@ -50,11 +51,11 @@ public class AbstractPluginDiscoveryTest {
     public void testGetAllPlugins() {
         Map<PluginIdentifier, String> sourcePlugins =
                 AbstractPluginDiscovery.getAllSupportedPlugins(PluginType.SOURCE);
-        Assertions.assertEquals(28, sourcePlugins.size());
+        Assertions.assertEquals(29, sourcePlugins.size());
 
         Map<PluginIdentifier, String> sinkPlugins =
                 AbstractPluginDiscovery.getAllSupportedPlugins(PluginType.SINK);
-        Assertions.assertEquals(32, sinkPlugins.size());
+        Assertions.assertEquals(33, sinkPlugins.size());
     }
 
     @AfterEach
