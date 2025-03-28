@@ -19,13 +19,14 @@
 
 package org.apache.seatunnel.connectors.seatunnel.iceberg.data;
 
+import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.seatunnel.shade.com.google.common.base.Preconditions;
 import org.apache.seatunnel.shade.com.google.common.collect.Maps;
 
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.connectors.seatunnel.iceberg.config.SinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.iceberg.config.IcebergSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.sink.schema.SchemaChangeWrapper;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.utils.SchemaUtils;
 
@@ -40,8 +41,6 @@ import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.DateTimeUtil;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -78,10 +77,10 @@ public class RowConverter {
 
     private final Schema tableSchema;
     private final NameMapping nameMapping;
-    private final SinkConfig config;
+    private final IcebergSinkConfig config;
     private final Map<Integer, Map<String, Types.NestedField>> structNames = Maps.newHashMap();
 
-    public RowConverter(Table table, SinkConfig config) {
+    public RowConverter(Table table, IcebergSinkConfig config) {
         this.tableSchema = table.schema();
         this.nameMapping = createNameMapping(table);
         this.config = config;

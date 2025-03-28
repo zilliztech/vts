@@ -31,6 +31,7 @@ import org.apache.seatunnel.engine.common.Constant;
 import org.apache.seatunnel.engine.common.config.ConfigProvider;
 import org.apache.seatunnel.engine.common.config.JobConfig;
 import org.apache.seatunnel.engine.common.config.SeaTunnelConfig;
+import org.apache.seatunnel.engine.common.utils.concurrent.CompletableFuture;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalDag;
 import org.apache.seatunnel.engine.core.job.JobDAGInfo;
 import org.apache.seatunnel.engine.core.job.JobStatus;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junitpioneer.jupiter.SetEnvironmentVariable;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.core.HazelcastInstance;
@@ -56,7 +58,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Spliterators;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -434,8 +435,11 @@ public class SeaTunnelClientTest {
             CompletableFuture.supplyAsync(clientJobProxy::waitForJobComplete);
             long jobId = clientJobProxy.getJobId();
 
-            // Running
-            Assertions.assertNotNull(jobClient.getJobInfo(jobId));
+            await().atMost(10, TimeUnit.SECONDS)
+                    .untilAsserted(
+                            () -> {
+                                Assertions.assertNotNull(jobClient.getJobInfo(jobId));
+                            });
 
             await().atMost(180000, TimeUnit.MILLISECONDS)
                     .untilAsserted(
@@ -743,6 +747,15 @@ public class SeaTunnelClientTest {
         } finally {
             seaTunnelClient.close();
         }
+    }
+
+    @Test
+    @SetEnvironmentVariable(
+            key = "ST_DOCKER_MEMBER_LIST",
+            value = "127.0.0.1,127.0.0.2,127.0.0.3,127.0.0.4")
+    public void testDockerEnvOverwrite() {
+        ClientConfig clientConfig = ConfigProvider.locateAndGetClientConfig();
+        Assertions.assertEquals(4, clientConfig.getNetworkConfig().getAddresses().size());
     }
 
     @AfterAll

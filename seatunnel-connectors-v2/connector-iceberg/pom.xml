@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.seatunnel</groupId>
         <artifactId>seatunnel-connectors-v2</artifactId>
-        <version>${revision}</version>
+        <version>2.3.11-SNAPSHOT</version>
     </parent>
 
     <artifactId>connector-iceberg</artifactId>
@@ -53,53 +53,10 @@
             <artifactId>connector-common</artifactId>
             <version>${project.version}</version>
         </dependency>
-
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-spark-runtime-3.3_2.12</artifactId>
-            <version>1.5.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-sql -->
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.12</artifactId>
-            <version>3.3.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-catalyst_2.12</artifactId>
-            <version>3.3.0</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/s3 -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-            <version>2.29.46</version>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/sts -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sts</artifactId>
-            <version>2.29.46</version>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>kms</artifactId>
-            <version>2.29.46</version>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>dynamodb</artifactId>
-            <version>2.29.46</version>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>glue</artifactId>
-            <version>2.29.46</version>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>${jsqlparser.version}</version>
         </dependency>
 
         <dependency>
@@ -293,9 +250,9 @@
                                     <shadedPattern>${seatunnel.shade.package}.${connector.name}.shaded.parquet</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>org.apache.spark</pattern>
+                                    <pattern>net.sf.jsqlparser</pattern>
                                     <!--suppress UnresolvedMavenProperty -->
-                                    <shadedPattern>iceberg.org.apache.spark</shadedPattern>
+                                    <shadedPattern>${seatunnel.shade.package}.${connector.name}.net.sf.jsqlparser</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>

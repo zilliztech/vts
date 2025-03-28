@@ -18,11 +18,14 @@
 package org.apache.seatunnel.api.connector;
 
 import org.apache.seatunnel.api.configuration.util.OptionRule;
+import org.apache.seatunnel.api.options.SinkConnectorCommonOptions;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
-import org.apache.seatunnel.api.sink.SinkCommonOptions;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSink;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
+import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSink;
+import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
+import org.apache.seatunnel.api.sink.multitablesink.MultiTableSink;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.table.factory.FactoryUtil;
 import org.apache.seatunnel.api.table.factory.TableSinkFactory;
@@ -142,6 +145,8 @@ public class ConnectorSpecificationCheckTest {
                                 sinkClass, "setTypeInfo", SeaTunnelRowType.class);
                 Optional<Method> getConsumedType =
                         ReflectionUtils.getDeclaredMethod(sinkClass, "getConsumedType");
+                Optional<Method> getWriteCatalogTable =
+                        ReflectionUtils.getDeclaredMethod(sinkClass, "getWriteCatalogTable");
                 Assertions.assertFalse(
                         prepare.isPresent(),
                         "Please remove `prepare` method in " + sinkClass.getSimpleName());
@@ -151,10 +156,21 @@ public class ConnectorSpecificationCheckTest {
                 Assertions.assertFalse(
                         getConsumedType.isPresent(),
                         "Please remove `getConsumedType` method in " + sinkClass.getSimpleName());
+                Assertions.assertTrue(
+                        getWriteCatalogTable.isPresent(),
+                        "Please implement `getWriteCatalogTable` method in "
+                                + sinkClass.getSimpleName());
+                Assertions.assertEquals(
+                        Optional.class,
+                        getWriteCatalogTable.get().getReturnType(),
+                        "The `getWriteCatalogTable` method should return Optional<CatalogTable> in "
+                                + sinkClass.getSimpleName());
+
                 log.info(
                         "Check sink connector {} successfully", factory.getClass().getSimpleName());
 
                 checkSupportMultiTableSink(factory, sinkClass);
+                checkSupportSchemaEvolutionSink(sinkClass);
             }
         }
     }
@@ -169,7 +185,7 @@ public class ConnectorSpecificationCheckTest {
         Assertions.assertTrue(
                 sinkOptionRule
                         .getOptionalOptions()
-                        .contains(SinkCommonOptions.MULTI_TABLE_SINK_REPLICA),
+                        .contains(SinkConnectorCommonOptions.MULTI_TABLE_SINK_REPLICA),
                 "Please add `SinkCommonOptions.MULTI_TABLE_SINK_REPLICA` optional into the `optionRule` method optional of `"
                         + sinkFactory.getClass().getSimpleName()
                         + "`");
@@ -188,6 +204,31 @@ public class ConnectorSpecificationCheckTest {
                 String.format(
                         "Please update the `createWriter` method return type to the subclass of `SupportMultiTableSinkWriter`, "
                                 + "because `%s` implements `SupportMultiTableSink` interface",
+                        sinkClass.getSimpleName()));
+    }
+
+    private void checkSupportSchemaEvolutionSink(Class<? extends SeaTunnelSink> sinkClass) {
+        if (!SupportSchemaEvolutionSink.class.isAssignableFrom(sinkClass)) {
+            return;
+        }
+        if (MultiTableSink.class.equals(sinkClass)) {
+            return;
+        }
+
+        // Validate the `createWriter` method return type
+        Optional<Method> createWriter =
+                ReflectionUtils.getDeclaredMethod(
+                        sinkClass, "createWriter", SinkWriter.Context.class);
+        Assertions.assertTrue(
+                createWriter.isPresent(),
+                "Please add `createWriter` method in " + sinkClass.getSimpleName());
+        Class<? extends SinkWriter> createWriterClass =
+                (Class<? extends SinkWriter>) createWriter.get().getReturnType();
+        Assertions.assertTrue(
+                SupportSchemaEvolutionSinkWriter.class.isAssignableFrom(createWriterClass),
+                String.format(
+                        "Please update the `createWriter` method return type to the subclass of `SupportSchemaEvolutionSinkWriter`, "
+                                + "because `%s` implements `SupportSchemaEvolutionSink` interface",
                         sinkClass.getSimpleName()));
     }
 }

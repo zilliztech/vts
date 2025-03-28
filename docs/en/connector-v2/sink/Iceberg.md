@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-iceberg.md';
+
 # Apache Iceberg
 
 > Apache Iceberg sink connector
@@ -59,7 +61,7 @@ libfb303-xxx.jar
 
 ## Sink Options
 
-|                  Name                  |  Type   | Required |           Default            |                                                                                                                                                        Description                                                                                                                                                        |
+| Name                                   | Type    | Required | Default                      | Description                                                                                                                                                                                                                                                                                                               |
 |----------------------------------------|---------|----------|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | catalog_name                           | string  | yes      | default                      | User-specified catalog name. default is `default`                                                                                                                                                                                                                                                                         |
 | namespace                              | string  | yes      | default                      | The iceberg database name in the backend catalog. default is `default`                                                                                                                                                                                                                                                    |
@@ -76,6 +78,7 @@ libfb303-xxx.jar
 | iceberg.table.upsert-mode-enabled      | boolean | no       | false                        | Set to `true` to enable upsert mode, default is `false`                                                                                                                                                                                                                                                                   |
 | schema_save_mode                       | Enum    | no       | CREATE_SCHEMA_WHEN_NOT_EXIST | the schema save mode, please refer to `schema_save_mode` below                                                                                                                                                                                                                                                            |
 | data_save_mode                         | Enum    | no       | APPEND_DATA                  | the data save mode, please refer to `data_save_mode` below                                                                                                                                                                                                                                                                |
+| custom_sql                             | string  | no       | -                            | Custom `delete` data sql for data save mode. e.g: `delete from ... where ...`                                                                                                                                                                                                                                             |
 | iceberg.table.commit-branch            | string  | no       | -                            | Default branch for commits                                                                                                                                                                                                                                                                                                |
 
 ## Task Example
@@ -91,7 +94,7 @@ env {
 
 source {
   MySQL-CDC {
-    result_table_name = "customers_mysql_cdc_iceberg"
+    plugin_output = "customers_mysql_cdc_iceberg"
     server-id = 5652
     username = "st_user"
     password = "seatunnel"
@@ -250,9 +253,4 @@ sink {
 
 ## Changelog
 
-### 2.3.4-SNAPSHOT 2024-01-18
-
-- Add Iceberg Sink Connector
-
-### next version
-
+<ChangeLog />

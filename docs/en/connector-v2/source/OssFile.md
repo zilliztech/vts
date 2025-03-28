@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-file-oss.md';
+
 # OssFile
 
 > Oss file source connector
@@ -91,25 +93,11 @@ connector will generate data as the following:
 
 ### Text Or CSV File Type
 
-If you assign file type to `text` `csv`, you can choose to specify the schema information or not.
+If you set the `file_format_type` to `text`,`excel`,`csv`,`xml`. Then it's required to set the `schema` field to tell connector how to parse data to the row.
 
-For example, upstream data is the following:
+If you set the `schema` field, you should also set the option `field_delimiter`, except the `file_format_type` is `csv`, `xml`, `excel`
 
-```text
-
-tyrantlucifer#26#male
-
-```
-
-If you do not assign data schema connector will treat the upstream data as the following:
-
-|        content        |
-|-----------------------|
-| tyrantlucifer#26#male |
-
-If you assign data schema, you should also assign the option `field_delimiter` too except CSV file type
-
-you should assign schema and delimiter as the following:
+you can set schema and delimiter as the following:
 
 ```hocon
 
@@ -163,7 +151,7 @@ If you assign file type to `parquet` `orc`, schema option not required, connecto
 
 If you assign file type to `parquet` `orc`, schema option not required, connector can find the schema of upstream data automatically.
 
-|    Orc Data type     |                      SeaTunnel Data type                       |
+| Parquet Data type    | SeaTunnel Data type                                            |
 |----------------------|----------------------------------------------------------------|
 | INT_8                | BYTE                                                           |
 | INT_16               | SHORT                                                          |
@@ -190,7 +178,7 @@ If you assign file type to `parquet` `orc`, schema option not required, connecto
 
 ## Options
 
-|           name            |  type   | required |    default value    |                                                                                                                                                             Description                                                                                                                                                             |
+| name                      | type    | required | default value       | Description                                                                                                                                                                                                                                                                                                                         |
 |---------------------------|---------|----------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | path                      | string  | yes      | -                   | The Oss path that needs to be read can have sub paths, but the sub paths need to meet certain format requirements. Specific requirements can be referred to "parse_partition_from_path" option                                                                                                                                      |
 | file_format_type          | string  | yes      | -                   | File type, supported as the following file types: `text` `csv` `parquet` `orc` `json` `excel` `xml` `binary`                                                                                                                                                                                                                        |
@@ -204,6 +192,7 @@ If you assign file type to `parquet` `orc`, schema option not required, connecto
 | date_format               | string  | no       | yyyy-MM-dd          | Date type format, used to tell connector how to convert string to date, supported as the following formats:`yyyy-MM-dd` `yyyy.MM.dd` `yyyy/MM/dd`. default `yyyy-MM-dd`                                                                                                                                                             |
 | datetime_format           | string  | no       | yyyy-MM-dd HH:mm:ss | Datetime type format, used to tell connector how to convert string to datetime, supported as the following formats:`yyyy-MM-dd HH:mm:ss` `yyyy.MM.dd HH:mm:ss` `yyyy/MM/dd HH:mm:ss` `yyyyMMddHHmmss`                                                                                                                               |
 | time_format               | string  | no       | HH:mm:ss            | Time type format, used to tell connector how to convert string to time, supported as the following formats:`HH:mm:ss` `HH:mm:ss.SSS`                                                                                                                                                                                                |
+| filename_extension        | string  | no       | -                   | Filter filename extension, which used for filtering files with specific extension. Example: `csv` `.txt` `json` `.xml`.                                                                                                                                                                                                             |
 | skip_header_row_number    | long    | no       | 0                   | Skip the first few lines, but only for the txt and csv. For example, set like following:`skip_header_row_number = 2`. Then SeaTunnel will skip the first 2 lines from source files                                                                                                                                                  |
 | schema                    | config  | no       | -                   | The schema of upstream data.                                                                                                                                                                                                                                                                                                        |
 | sheet_name                | string  | no       | -                   | Reader the sheet of the workbook,Only used when file_format is excel.                                                                                                                                                                                                                                                               |
@@ -211,7 +200,8 @@ If you assign file type to `parquet` `orc`, schema option not required, connecto
 | xml_use_attr_format       | boolean | no       | -                   | Specifies whether to process data using the tag attribute format, only used when file_format is xml.                                                                                                                                                                                                                                |
 | compress_codec            | string  | no       | none                | Which compress codec the files used.                                                                                                                                                                                                                                                                                                |
 | encoding                  | string  | no       | UTF-8               |
-| file_filter_pattern       | string  | no       |                     | `*.txt` means you only need read the files end with `.txt`                                                                                                                                                                                                                                                                          |
+| null_format               | string  | no       | -                   | Only used when file_format_type is text. null_format to define which strings can be represented as null. e.g: `\N`                                                                                                                                                                                                                  |
+| file_filter_pattern       | string  | no       |                     | Filter pattern, which used for filtering files.                                                                                                                                                                                                                                                                                     |
 | common-options            | config  | no       | -                   | Source plugin common parameters, please refer to [Source Common Options](../source-common-options.md) for details.                                                                                                                                                                                                                  |
 
 ### compress_codec [string]
@@ -232,6 +222,55 @@ The encoding of the file to read. This param will be parsed by `Charset.forName(
 ### file_filter_pattern [string]
 
 Filter pattern, which used for filtering files.
+
+The pattern follows standard regular expressions. For details, please refer to https://en.wikipedia.org/wiki/Regular_expression.
+There are some examples.
+
+File Structure Example:
+```
+/data/seatunnel/20241001/report.txt
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+/data/seatunnel/20241005/old_data.csv
+/data/seatunnel/20241012/logo.png
+```
+Matching Rules Example:
+
+**Example 1**: *Match all .txt files*，Regular Expression:
+```
+/data/seatunnel/20241001/.*\.txt
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241001/report.txt
+```
+**Example 2**: *Match all file starting with abc*，Regular Expression:
+```
+/data/seatunnel/20241002/abc.*
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+```
+**Example 3**: *Match all file starting with abc，And the fourth character is either h or g*, the Regular Expression:
+```
+/data/seatunnel/20241007/abc[h,g].*
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+```
+**Example 4**: *Match third level folders starting with 202410 and files ending with .csv*, the Regular Expression:
+```
+/data/seatunnel/202410\d*/.*\.csv
+```
+The result of this example matching is:
+```
+/data/seatunnel/20241007/abch202410.csv
+/data/seatunnel/20241002/abcg202410.csv
+/data/seatunnel/20241005/old_data.csv
+```
 
 ### schema [config]
 
@@ -344,7 +383,7 @@ source {
           file_format_type = "orc"
       }
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
@@ -461,7 +500,7 @@ source {
           }
       }
     ]
-    result_table_name = "fake"
+    plugin_output = "fake"
   }
 }
 
@@ -474,19 +513,33 @@ sink {
 }
 ```
 
+### Filter File
+
+```hocon
+env {
+  parallelism = 1
+  job.mode = "BATCH"
+}
+
+source {
+  OssFile {
+    path = "/seatunnel/orc"
+    bucket = "oss://tyrantlucifer-image-bed"
+    access_key = "xxxxxxxxxxxxxxxxx"
+    access_secret = "xxxxxxxxxxxxxxxxxxxxxx"
+    endpoint = "oss-cn-beijing.aliyuncs.com"
+    file_format_type = "orc"
+    // file example abcD2024.csv
+    file_filter_pattern = "abc[DX]*.*"
+  }
+}
+
+sink {
+  Console {
+  }
+}
+```
+
 ## Changelog
 
-### 2.2.0-beta 2022-09-26
-
-- Add OSS File Source Connector
-
-### 2.3.0-beta 2022-10-20
-
-- [BugFix] Fix the bug of incorrect path in windows environment ([2980](https://github.com/apache/seatunnel/pull/2980))
-- [Improve] Support extract partition from SeaTunnelRow fields ([3085](https://github.com/apache/seatunnel/pull/3085))
-- [Improve] Support parse field from file path ([2985](https://github.com/apache/seatunnel/pull/2985))
-
-### Tips
-
-> 1.[SeaTunnel Deployment Document](../../start-v2/locally/deployment.md).
-
+<ChangeLog />

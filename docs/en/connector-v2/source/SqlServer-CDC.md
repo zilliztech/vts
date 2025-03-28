@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-cdc-sqlserver.md';
+
 # SQL Server CDC
 
 > Sql Server CDC source connector
@@ -63,13 +65,13 @@ describes how to setup the Sql Server CDC connector to run SQL queries against S
 
 ## Source Options
 
-|                      Name                      |   Type   | Required | Default |                                                                                                                                                                                                                                                                                                     Description                                                                                                                                                                                                                                                                                                      |
+|                      Name                      |   Type   | Required | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 |------------------------------------------------|----------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | username                                       | String   | Yes      | -       | Name of the database to use when connecting to the database server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | password                                       | String   | Yes      | -       | Password to use when connecting to the database server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | database-names                                 | List     | Yes      | -       | Database name of the database to monitor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | table-names                                    | List     | Yes      | -       | Table name is a combination of schema name and table name (databaseName.schemaName.tableName).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| table-names-config                             | List     | No       | -       | Table config list. for example: [{"table": "db1.schema1.table1","primaryKeys":["key1"]}]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| table-names-config                             | List     | No       | -       | Table config list. for example: [{"table": "db1.schema1.table1","primaryKeys": ["key1"],"snapshotSplitColumn": "key2"}]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | base-url                                       | String   | Yes      | -       | URL has to be with database, like "jdbc:sqlserver://localhost:1433;databaseName=test".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | startup.mode                                   | Enum     | No       | INITIAL | Optional startup mode for SqlServer CDC consumer, valid enumerations are "initial", "earliest", "latest" and "specific".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | startup.timestamp                              | Long     | No       | -       | Start from the specified epoch timestamp (in milliseconds).<br/> **Note, This option is required when** the **"startup.mode" option used `'timestamp'`.**                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -141,7 +143,7 @@ env {
 source {
   # This is a example source plugin **only for test and demonstrate the feature source plugin**
   SqlServer-CDC {
-    result_table_name = "customers"
+    plugin_output = "customers"
     username = "sa"
     password = "Y.sa123456"
     startup.mode="initial"
@@ -156,7 +158,7 @@ transform {
 
 sink {
   console {
-    source_table_name = "customers"
+    plugin_input = "customers"
   }
 ```
 
@@ -177,7 +179,7 @@ source {
   SqlServer-CDC {
    # Set up accurate one read
     exactly_once=true 
-    result_table_name = "customers"
+    plugin_output = "customers"
     username = "sa"
     password = "Y.sa123456"
     startup.mode="latest"
@@ -192,7 +194,7 @@ transform {
 
 sink {
   console {
-    source_table_name = "customers"
+    plugin_input = "customers"
   }
 ```
 
@@ -227,3 +229,6 @@ sink {
   }
 ```
 
+## Changelog
+
+<ChangeLog />

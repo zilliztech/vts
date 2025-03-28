@@ -20,13 +20,14 @@ package org.apache.seatunnel.engine.server.master;
 import org.apache.seatunnel.api.common.metrics.JobMetrics;
 import org.apache.seatunnel.api.common.metrics.RawJobMetrics;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.env.EnvCommonOptions;
+import org.apache.seatunnel.api.options.EnvCommonOptions;
 import org.apache.seatunnel.api.sink.SaveModeExecuteLocation;
 import org.apache.seatunnel.api.sink.SaveModeExecuteWrapper;
 import org.apache.seatunnel.api.sink.SaveModeHandler;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
 import org.apache.seatunnel.api.sink.SupportSaveMode;
 import org.apache.seatunnel.api.sink.multitablesink.MultiTableSink;
+import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.common.exception.SeaTunnelRuntimeException;
 import org.apache.seatunnel.common.utils.ExceptionUtils;
 import org.apache.seatunnel.common.utils.RetryUtils;
@@ -40,10 +41,12 @@ import org.apache.seatunnel.engine.common.config.server.CheckpointStorageConfig;
 import org.apache.seatunnel.engine.common.exception.SeaTunnelEngineException;
 import org.apache.seatunnel.engine.common.utils.ExceptionUtil;
 import org.apache.seatunnel.engine.common.utils.PassiveCompletableFuture;
+import org.apache.seatunnel.engine.common.utils.concurrent.CompletableFuture;
 import org.apache.seatunnel.engine.core.dag.actions.SinkAction;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalDag;
 import org.apache.seatunnel.engine.core.dag.logical.LogicalVertex;
 import org.apache.seatunnel.engine.core.job.ConnectorJarIdentifier;
+import org.apache.seatunnel.engine.core.job.ExecutionAddress;
 import org.apache.seatunnel.engine.core.job.JobDAGInfo;
 import org.apache.seatunnel.engine.core.job.JobImmutableInformation;
 import org.apache.seatunnel.engine.core.job.JobInfo;
@@ -58,13 +61,18 @@ import org.apache.seatunnel.engine.server.dag.DAGUtils;
 import org.apache.seatunnel.engine.server.dag.physical.PhysicalPlan;
 import org.apache.seatunnel.engine.server.dag.physical.PipelineLocation;
 import org.apache.seatunnel.engine.server.dag.physical.PlanUtils;
+import org.apache.seatunnel.engine.server.dag.physical.ResourceUtils;
 import org.apache.seatunnel.engine.server.dag.physical.SubPlan;
 import org.apache.seatunnel.engine.server.execution.TaskExecutionState;
 import org.apache.seatunnel.engine.server.execution.TaskGroupLocation;
 import org.apache.seatunnel.engine.server.execution.TaskLocation;
 import org.apache.seatunnel.engine.server.metrics.JobMetricsUtil;
 import org.apache.seatunnel.engine.server.metrics.SeaTunnelMetricsContext;
+import org.apache.seatunnel.engine.server.resourcemanager.AbstractResourceManager;
 import org.apache.seatunnel.engine.server.resourcemanager.ResourceManager;
+import org.apache.seatunnel.engine.server.resourcemanager.allocation.strategy.SlotAllocationStrategy;
+import org.apache.seatunnel.engine.server.resourcemanager.allocation.strategy.SlotRatioStrategy;
+import org.apache.seatunnel.engine.server.resourcemanager.allocation.strategy.SystemLoadStrategy;
 import org.apache.seatunnel.engine.server.resourcemanager.resource.SlotProfile;
 import org.apache.seatunnel.engine.server.task.operation.CleanTaskGroupContextOperation;
 import org.apache.seatunnel.engine.server.task.operation.GetTaskGroupMetricsOperation;
@@ -76,7 +84,6 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.flakeidgen.FlakeIdGenerator;
 import com.hazelcast.internal.serialization.Data;
 import com.hazelcast.jet.datamodel.Tuple2;
-import com.hazelcast.jet.impl.execution.init.CustomClassLoadedObject;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.map.IMap;
@@ -84,14 +91,18 @@ import com.hazelcast.spi.impl.NodeEngine;
 import lombok.Getter;
 import lombok.NonNull;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -106,6 +117,7 @@ public class JobMaster {
     private static final ILogger LOGGER = Logger.getLogger(JobMaster.class);
 
     private PhysicalPlan physicalPlan;
+
     private final Data jobImmutableInformationData;
 
     private final NodeEngine nodeEngine;
@@ -153,12 +165,16 @@ public class JobMaster {
 
     private final IMap<Long, JobInfo> runningJobInfoIMap;
 
+    @Getter private final Set<ExecutionAddress> historyExecutionAddress = new HashSet<>();
+
     private final IMap<Long, HashMap<TaskLocation, SeaTunnelMetricsContext>> metricsImap;
 
     /** If the job or pipeline cancel by user, needRestore will be false */
     @Getter private volatile boolean needRestore = true;
 
     private CheckpointConfig jobCheckpointConfig;
+
+    @Getter private Long jobId;
 
     public String getErrorMessage() {
         return errorMessage;
@@ -167,6 +183,7 @@ public class JobMaster {
     private String errorMessage;
 
     public JobMaster(
+            @NonNull Long jobId,
             @NonNull Data jobImmutableInformationData,
             @NonNull NodeEngine nodeEngine,
             @NonNull ExecutorService executorService,
@@ -179,6 +196,7 @@ public class JobMaster {
             @NonNull IMap<Long, HashMap<TaskLocation, SeaTunnelMetricsContext>> metricsImap,
             EngineConfig engineConfig,
             SeaTunnelServer seaTunnelServer) {
+        this.jobId = jobId;
         this.jobImmutableInformationData = jobImmutableInformationData;
         this.nodeEngine = nodeEngine;
         this.executorService = executorService;
@@ -217,19 +235,27 @@ public class JobMaster {
                         jobImmutableInformation.getJobId(),
                         jobImmutableInformation.getPluginJarsUrls()));
         ClassLoader appClassLoader = Thread.currentThread().getContextClassLoader();
-        ClassLoader classLoader =
-                seaTunnelServer
-                        .getClassLoaderService()
-                        .getClassLoader(
-                                jobImmutableInformation.getJobId(),
-                                jobImmutableInformation.getPluginJarsUrls());
+
+        List<Set<URL>> logicalVertexJarsList = jobImmutableInformation.getLogicalVertexJarsList();
+        List<ClassLoader> logicalVertexClassLoaders = new ArrayList<>();
+        for (Set<URL> urls : logicalVertexJarsList) {
+            logicalVertexClassLoaders.add(
+                    seaTunnelServer
+                            .getClassLoaderService()
+                            .getClassLoader(jobImmutableInformation.getJobId(), urls));
+        }
         logicalDag =
-                CustomClassLoadedObject.deserializeWithCustomClassLoader(
+                DAGUtils.restoreLogicalDag(
+                        jobImmutableInformation,
                         nodeEngine.getSerializationService(),
-                        classLoader,
-                        jobImmutableInformation.getLogicalDag());
+                        logicalVertexClassLoaders);
+
+        Map<Long, ClassLoader> logicalVertexIdClassLoaderMap = new HashMap<>();
+        int i = 0;
+        for (Long id : logicalDag.getLogicalVertexMap().keySet()) {
+            logicalVertexIdClassLoaderMap.put(id, logicalVertexClassLoaders.get(i++));
+        }
         try {
-            Thread.currentThread().setContextClassLoader(classLoader);
             if (!restart
                     && !logicalDag.isStartWithSavePoint()
                     && ReadonlyConfig.fromMap(logicalDag.getJobConfig().getEnvOptions())
@@ -238,8 +264,16 @@ public class JobMaster {
                 logicalDag.getLogicalVertexMap().values().stream()
                         .map(LogicalVertex::getAction)
                         .filter(action -> action instanceof SinkAction)
-                        .map(sink -> ((SinkAction<?, ?, ?, ?>) sink).getSink())
-                        .forEach(JobMaster::handleSaveMode);
+                        .forEach(
+                                sink -> {
+                                    Thread.currentThread()
+                                            .setContextClassLoader(
+                                                    logicalVertexIdClassLoaderMap.get(
+                                                            sink.getId()));
+                                    JobMaster.handleSaveMode(
+                                            ((SinkAction<?, ?, ?, ?>) sink).getSink());
+                                });
+                Thread.currentThread().setContextClassLoader(appClassLoader);
             }
 
             final Tuple2<PhysicalPlan, Map<Integer, CheckpointPlan>> planTuple =
@@ -249,6 +283,7 @@ public class JobMaster {
                             jobImmutableInformation,
                             initializationTimestamp,
                             executorService,
+                            seaTunnelServer.getClassLoaderService(),
                             flakeIdGenerator,
                             runningJobStateIMap,
                             runningJobStateTimestampsIMap,
@@ -260,11 +295,11 @@ public class JobMaster {
         } finally {
             // revert to app class loader, it may be changed by PlanUtils.fromLogicalDAG
             Thread.currentThread().setContextClassLoader(appClassLoader);
-            seaTunnelServer
-                    .getClassLoaderService()
-                    .releaseClassLoader(
-                            jobImmutableInformation.getJobId(),
-                            jobImmutableInformation.getPluginJarsUrls());
+            for (Set<URL> urls : logicalVertexJarsList) {
+                seaTunnelServer
+                        .getClassLoaderService()
+                        .releaseClassLoader(jobImmutableInformation.getJobId(), urls);
+            }
         }
         Exception initException = null;
         try {
@@ -343,6 +378,161 @@ public class JobMaster {
                         }));
     }
 
+    /**
+     * Apply for all resources
+     *
+     * @return true if apply resources successfully, otherwise false
+     */
+    public boolean preApplyResources() {
+        return preApplyResources(null);
+    }
+
+    /**
+     * Apply for resources
+     *
+     * @return true if apply resources successfully, otherwise false
+     */
+    public boolean preApplyResources(SubPlan subPlan) {
+
+        // When starting to apply for task resources, reset the worker's slot allocation information
+        // Mainly used in two scenarios:
+        // 1. When based on the SYSTEM_LOAD strategy, the system load cannot change dynamically, and
+        // the resources used by each slot need to be calculated and inferred
+        // 2. When based on the SLOT_RATIO strategy, registerWorker is not updated in real time, and
+        // is used to record the slot application status
+        //        ((AbstractResourceManager) resourceManager)
+        //                .setWorkerAssignedSlots(new ConcurrentHashMap<>());
+        SlotAllocationStrategy slotAllocationStrategy =
+                ((AbstractResourceManager) resourceManager).getSlotAllocationStrategy();
+        if (slotAllocationStrategy instanceof SlotRatioStrategy) {
+            ((SlotRatioStrategy) slotAllocationStrategy)
+                    .setWorkerAssignedSlots(new ConcurrentHashMap<>());
+        } else if (slotAllocationStrategy instanceof SystemLoadStrategy) {
+            ((SystemLoadStrategy) slotAllocationStrategy)
+                    .setWorkerAssignedSlots(new ConcurrentHashMap<>());
+        }
+
+        Map<TaskGroupLocation, CompletableFuture<SlotProfile>> preApplyResourceFutures =
+                new HashMap<>();
+
+        boolean isSubPlan = Objects.nonNull(subPlan);
+
+        if (isSubPlan) {
+            preApplyResourcesForSubPlan(subPlan, preApplyResourceFutures);
+        } else {
+            preApplyResourcesForAll(preApplyResourceFutures);
+        }
+
+        boolean enoughResource =
+                preApplyResourceFutures.values().stream()
+                                .filter(
+                                        value -> {
+                                            try {
+                                                return value != null && value.join() != null;
+                                            } catch (CompletionException e) {
+                                                LOGGER.warning(
+                                                        "Pre resource application failed, resources may be not enough");
+                                                return false;
+                                            }
+                                        })
+                                .count()
+                        == preApplyResourceFutures.size();
+
+        if (enoughResource) {
+            for (Map.Entry<TaskGroupLocation, CompletableFuture<SlotProfile>> entry :
+                    preApplyResourceFutures.entrySet()) {
+                try {
+                    Address worker = entry.getValue().get().getWorker();
+                    historyExecutionAddress.add(
+                            new ExecutionAddress(worker.getHost(), worker.getPort()));
+
+                } catch (Exception e) {
+                    LOGGER.warning("history execution plan add worker failed", e);
+                }
+            }
+            if (isSubPlan) {
+                // SubPlan applies for resources separately and needs to be merged into the entire
+                // job's resources
+                physicalPlan.getPreApplyResourceFutures().putAll(preApplyResourceFutures);
+            } else {
+                // Adequate resources, pass on resources to the plan
+                physicalPlan.setPreApplyResourceFutures(preApplyResourceFutures);
+            }
+        } else {
+            // Release the resource that has been applied
+            try {
+                RetryUtils.retryWithException(
+                        () -> {
+                            resourceManager
+                                    .releaseResources(
+                                            jobImmutableInformation.getJobId(),
+                                            preApplyResourceFutures.values().stream()
+                                                    .filter(
+                                                            value -> {
+                                                                try {
+                                                                    return value != null
+                                                                            && value.join() != null;
+                                                                } catch (CompletionException e) {
+                                                                    LOGGER.warning(
+                                                                            "Pre resource application failed, resources may be not enough");
+                                                                    return false;
+                                                                }
+                                                            })
+                                                    .map(CompletableFuture::join)
+                                                    .collect(Collectors.toList()))
+                                    .join();
+                            return null;
+                        },
+                        new RetryUtils.RetryMaterial(
+                                Constant.OPERATION_RETRY_TIME,
+                                true,
+                                ExceptionUtil::isOperationNeedRetryException,
+                                Constant.OPERATION_RETRY_SLEEP));
+            } catch (Exception e) {
+                LOGGER.warning(
+                        String.format(
+                                "Pre resource application failed %s",
+                                ExceptionUtils.getMessage(e)));
+            }
+        }
+        return enoughResource;
+    }
+
+    private Map<TaskGroupLocation, CompletableFuture<SlotProfile>> preApplyResourcesForAll(
+            Map<TaskGroupLocation, CompletableFuture<SlotProfile>> preApplyResourceFutures) {
+        for (SubPlan subPlan : physicalPlan.getPipelineList()) {
+            preApplyResourcesForSubPlan(subPlan, preApplyResourceFutures);
+        }
+        return preApplyResourceFutures;
+    }
+
+    private void preApplyResourcesForSubPlan(
+            SubPlan subPlan,
+            Map<TaskGroupLocation, CompletableFuture<SlotProfile>> preApplyResourceFutures) {
+
+        Map<TaskGroupLocation, CompletableFuture<SlotProfile>> coordinatorFutures = new HashMap<>();
+        subPlan.getCoordinatorVertexList()
+                .forEach(
+                        coordinator ->
+                                coordinatorFutures.put(
+                                        coordinator.getTaskGroupLocation(),
+                                        ResourceUtils.applyResourceForTask(
+                                                resourceManager, coordinator, subPlan.getTags())));
+
+        Map<TaskGroupLocation, CompletableFuture<SlotProfile>> taskFutures = new HashMap<>();
+        subPlan.getPhysicalVertexList()
+                .forEach(
+                        task ->
+                                taskFutures.put(
+                                        task.getTaskGroupLocation(),
+                                        ResourceUtils.applyResourceForTask(
+                                                resourceManager, task, subPlan.getTags())));
+
+        preApplyResourceFutures.putAll(coordinatorFutures);
+        preApplyResourceFutures.putAll(taskFutures);
+        LOGGER.fine("preApplyResourceFutures size: " + preApplyResourceFutures.size());
+    }
+
     public void run() {
         try {
             physicalPlan.startJob();
@@ -379,7 +569,7 @@ public class JobMaster {
                 }
             }
         } else if (sink instanceof MultiTableSink) {
-            Map<String, SeaTunnelSink> sinks = ((MultiTableSink) sink).getSinks();
+            Map<TablePath, SeaTunnelSink> sinks = ((MultiTableSink) sink).getSinks();
             for (SeaTunnelSink seaTunnelSink : sinks.values()) {
                 handleSaveMode(seaTunnelSink);
             }
@@ -437,7 +627,14 @@ public class JobMaster {
         if (jobDAGInfo == null) {
             jobDAGInfo =
                     DAGUtils.getJobDAGInfo(
-                            logicalDag, jobImmutableInformation, engineConfig, isPhysicalDAGIInfo);
+                            logicalDag,
+                            jobImmutableInformation,
+                            engineConfig,
+                            isPhysicalDAGIInfo,
+                            new ExecutionAddress(
+                                    this.nodeEngine.getThisAddress().getHost(),
+                                    this.nodeEngine.getThisAddress().getPort()),
+                            historyExecutionAddress);
         }
         return jobDAGInfo;
     }

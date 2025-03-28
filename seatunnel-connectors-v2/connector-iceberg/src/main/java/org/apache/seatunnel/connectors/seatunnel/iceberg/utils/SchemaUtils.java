@@ -19,6 +19,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.iceberg.utils;
 
+import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
+
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -28,7 +30,9 @@ import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.catalog.exception.DatabaseNotExistException;
 import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistException;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
-import org.apache.seatunnel.connectors.seatunnel.iceberg.config.SinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.iceberg.catalog.IcebergCatalog;
+import org.apache.seatunnel.connectors.seatunnel.iceberg.config.IcebergSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.iceberg.config.IcebergSinkOptions;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.data.IcebergTypeMapper;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.sink.schema.SchemaAddColumn;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.sink.schema.SchemaChangeColumn;
@@ -49,7 +53,6 @@ import org.apache.iceberg.util.Tasks;
 
 import org.jetbrains.annotations.NotNull;
 
-import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -91,7 +94,7 @@ public class SchemaUtils {
             return;
         }
         Tasks.range(1)
-                .retry(SinkConfig.SCHEMA_UPDATE_RETRIES)
+                .retry(IcebergSinkConfig.SCHEMA_UPDATE_RETRIES)
                 .run(notUsed -> commitSchemaUpdates(table, wrapper));
     }
 
@@ -102,9 +105,11 @@ public class SchemaUtils {
         // Convert to iceberg schema
         Schema schema = toIcebergSchema(tableSchema, readonlyConfig);
         // Convert sink config
-        SinkConfig config = new SinkConfig(readonlyConfig);
+        IcebergSinkConfig config = new IcebergSinkConfig(readonlyConfig);
         // build auto create table
         Map<String, String> options = new HashMap<>(table.getOptions());
+        Optional.ofNullable(table.getComment())
+                .map(e -> options.put(IcebergCatalog.PROPS_TABLE_COMMENT, e));
         // override
         options.putAll(config.getAutoCreateProps());
         return createTable(catalog, toIcebergTableIdentifier(tablePath), config, schema, options);
@@ -113,7 +118,7 @@ public class SchemaUtils {
     public static Table autoCreateTable(
             Catalog catalog,
             TableIdentifier tableIdentifier,
-            SinkConfig config,
+            IcebergSinkConfig config,
             TableSchema tableSchema) {
         // Generate struct type
         Schema schema = toIcebergSchema(tableSchema, config.getReadonlyConfig());
@@ -123,7 +128,7 @@ public class SchemaUtils {
     private static Table createTable(
             Catalog catalog,
             TableIdentifier tableIdentifier,
-            SinkConfig config,
+            IcebergSinkConfig config,
             Schema schema,
             Map<String, String> autoCreateProps) {
 
@@ -142,7 +147,7 @@ public class SchemaUtils {
         PartitionSpec partitionSpec = spec;
         AtomicReference<Table> result = new AtomicReference<>();
         Tasks.range(1)
-                .retry(SinkConfig.CREATE_TABLE_RETRIES)
+                .retry(IcebergSinkConfig.CREATE_TABLE_RETRIES)
                 .run(
                         notUsed -> {
                             Table table =
@@ -161,8 +166,8 @@ public class SchemaUtils {
             TableSchema tableSchema, ReadonlyConfig readonlyConfig) {
         Types.StructType structType = SchemaUtils.toIcebergType(tableSchema);
         Set<Integer> identifierFieldIds =
-                readonlyConfig.getOptional(SinkConfig.TABLE_PRIMARY_KEYS)
-                        .map(e -> SinkConfig.stringToList(e, ","))
+                readonlyConfig.getOptional(IcebergSinkOptions.TABLE_PRIMARY_KEYS)
+                        .map(e -> IcebergSinkConfig.stringToList(e, ","))
                         .orElseGet(
                                 () ->
                                         Optional.ofNullable(tableSchema.getPrimaryKey())

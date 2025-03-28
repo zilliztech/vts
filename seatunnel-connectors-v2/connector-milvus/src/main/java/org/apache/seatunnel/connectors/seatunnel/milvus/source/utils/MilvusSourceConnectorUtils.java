@@ -40,7 +40,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
-import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 import org.jetbrains.annotations.NotNull;
