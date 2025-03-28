@@ -33,7 +33,7 @@
         <module>connector-common</module>
         <module>connector-console</module>
         <module>connector-fake</module>
-        <module>connector-file</module>
+<!--        <module>connector-file</module>-->
         <module>connector-milvus</module>
         <module>connector-jdbc</module>
         <module>connector-elasticsearch</module>

@@ -55,3 +55,5 @@ seatunnel-examples
 
 /lib/*
 version.properties
+seatunnel-examples/seatunnel-engine-examples/src/main/java/org/apache/seatunnel/example/engine/SeaTunnelEngineExample.java
+seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/milvus_to_milvus.conf
