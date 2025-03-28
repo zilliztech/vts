@@ -16,6 +16,7 @@
  */
 package org.apache.seatunnel.engine.common.exception;
 
+import lombok.Getter;
 import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
 
 public enum ClassLoaderErrorCode implements SeaTunnelErrorCode {
@@ -27,15 +28,5 @@ public enum ClassLoaderErrorCode implements SeaTunnelErrorCode {
     ClassLoaderErrorCode(String code, String description) {
         this.code = code;
         this.description = description;
-    }
-
-    @Override
-    public String getCode() {
-        return code;
-    }
-
-    @Override
-    public String getDescription() {
-        return description;
     }
 }

@@ -57,6 +57,7 @@ public class VectorIndex extends ConstraintKey.ConstraintKeyColumn implements Se
     }
 
     public enum IndexType {
+        NONE,
         FLAT,
         IVF_FLAT,
         IVF_SQ8,
@@ -81,6 +82,8 @@ public class VectorIndex extends ConstraintKey.ConstraintKeyColumn implements Se
         // Only for scalar type field
         STL_SORT, // only for numeric type field
         INVERTED, // works for all scalar fields except JSON type field
+
+        BITMAP,
 
         // Only for sparse vectors
         SPARSE_INVERTED_INDEX,

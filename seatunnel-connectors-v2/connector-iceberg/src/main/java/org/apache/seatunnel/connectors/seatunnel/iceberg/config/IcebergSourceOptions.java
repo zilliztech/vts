@@ -64,6 +64,11 @@ public class IcebergSourceOptions extends IcebergCommonOptions {
                     .enumType(IcebergStreamScanStrategy.class)
                     .defaultValue(FROM_LATEST_SNAPSHOT)
                     .withDescription(" the iceberg strategy of stream scanning");
+    public static final Option<String> PRIMARY_KEY =
+            Options.key("primary_key")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(" the iceberg primary key");
 
     public static final Option<List<SourceTableConfig>> KEY_TABLE_LIST =
             Options.key("table_list")

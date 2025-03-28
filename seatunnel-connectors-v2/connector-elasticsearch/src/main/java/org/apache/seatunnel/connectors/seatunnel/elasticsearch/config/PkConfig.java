@@ -20,6 +20,7 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import org.apache.seatunnel.api.table.catalog.TablePath;
 
 /** es source pk config */
 @Data

@@ -210,6 +210,7 @@ public class PhysicalColumn extends Column {
             String name,
             SeaTunnelDataType<?> dataType,
             Long columnLength,
+            Integer scale,
             boolean nullable,
             Object defaultValue,
             String comment,

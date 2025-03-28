@@ -17,6 +17,11 @@
 
 package org.apache.seatunnel.connectors.seatunnel.iceberg.catalog;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.iceberg.data.IcebergGenerics;
+import org.apache.iceberg.data.Record;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.Catalog;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -31,7 +36,9 @@ import org.apache.seatunnel.api.table.catalog.exception.DatabaseAlreadyExistExce
 import org.apache.seatunnel.api.table.catalog.exception.DatabaseNotExistException;
 import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistException;
 import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.IcebergCatalogLoader;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.config.IcebergCommonConfig;
 import org.apache.seatunnel.connectors.seatunnel.iceberg.utils.ExpressionUtils;
@@ -56,6 +63,7 @@ import net.sf.jsqlparser.statement.delete.Delete;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -270,16 +278,23 @@ public class IcebergCatalog implements Catalog {
         Schema schema = icebergTable.schema();
         List<Types.NestedField> columns = schema.columns();
         TableSchema.Builder builder = TableSchema.builder();
+
         columns.forEach(
                 nestedField -> {
                     String name = nestedField.name();
                     SeaTunnelDataType<?> seaTunnelType =
                             SchemaUtils.toSeaTunnelType(name, nestedField.type());
+                    Integer scale = null;
+                    if(seaTunnelType.equals(ArrayType.FLOAT_ARRAY_TYPE)){
+                        seaTunnelType = VectorType.VECTOR_FLOAT_TYPE;
+                        scale = getScale(icebergTable, name);
+                    }
                     PhysicalColumn physicalColumn =
                             PhysicalColumn.of(
                                     name,
                                     seaTunnelType,
                                     (Long) null,
+                                    scale,
                                     nestedField.isOptional(),
                                     null,
                                     nestedField.doc());
@@ -310,6 +325,17 @@ public class IcebergCatalog implements Catalog {
                 partitionKeys,
                 comment,
                 catalogName);
+    }
+
+    private Integer getScale(Table icebergTable, String name) {
+        CloseableIterable<Record> result = IcebergGenerics.read(icebergTable)
+                .build();
+        if (result.iterator().hasNext()) {
+            Record record = result.iterator().next();
+            List<Object> vector = (List<Object>) record.getField(name);
+            return vector.size();
+        }
+        return null;
     }
 
     @Override
