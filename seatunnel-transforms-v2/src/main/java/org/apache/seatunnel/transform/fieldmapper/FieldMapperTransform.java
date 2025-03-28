@@ -87,6 +87,7 @@ public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
         outputRow.setRowKind(inputRow.getRowKind());
         outputRow.setTableId(inputRow.getTableId());
         outputRow.setOptions(inputRow.getOptions());
+        outputRow.setPartitionName(inputRow.getPartitionName());
         return outputRow;
     }
 
