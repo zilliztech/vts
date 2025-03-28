@@ -17,8 +17,9 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 
+import com.google.auto.service.AutoService;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
-import org.apache.seatunnel.api.options.ConnectorCommonOptions;
+import org.apache.seatunnel.api.options.table.TableSchemaOptions;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.connector.TableSource;
@@ -26,8 +27,6 @@ import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
-
-import com.google.auto.service.AutoService;
 
 import java.io.Serializable;
 
@@ -47,12 +46,13 @@ public class QdrantSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .required(QdrantConfig.COLLECTION_NAME, ConnectorCommonOptions.SCHEMA)
+                .required(QdrantConfig.COLLECTION_NAME)
                 .optional(
                         QdrantConfig.HOST,
                         QdrantConfig.PORT,
                         QdrantConfig.API_KEY,
-                        QdrantConfig.USE_TLS)
+                        QdrantConfig.USE_TLS,
+                        TableSchemaOptions.SCHEMA)
                 .build();
     }
 

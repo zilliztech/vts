@@ -17,8 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source;
 
-import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
-
 import lombok.Data;
 
 import java.util.List;
@@ -29,5 +27,4 @@ public class ScrollResult {
 
     private String scrollId;
     private List<Map<String, Object>> docs;
-    private JsonNode columnNodes;
 }

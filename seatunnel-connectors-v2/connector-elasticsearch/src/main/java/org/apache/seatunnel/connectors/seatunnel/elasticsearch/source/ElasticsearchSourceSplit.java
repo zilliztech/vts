@@ -19,7 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.source;
 
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchConfig;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -33,10 +33,10 @@ public class ElasticsearchSourceSplit implements SourceSplit {
 
     private String splitId;
 
-    @Getter private ElasticsearchConfig elasticsearchConfig;
+    @Getter private SourceConfig sourceConfig;
 
     public SeaTunnelRowType getSeaTunnelRowType() {
-        return elasticsearchConfig.getCatalogTable().getSeaTunnelRowType();
+        return sourceConfig.getCatalogTable().getSeaTunnelRowType();
     }
 
     @Override

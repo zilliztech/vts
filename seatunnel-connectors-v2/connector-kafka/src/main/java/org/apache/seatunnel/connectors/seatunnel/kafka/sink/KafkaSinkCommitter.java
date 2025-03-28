@@ -48,7 +48,7 @@ public class KafkaSinkCommitter implements SinkCommitter<KafkaCommitInfo> {
         for (KafkaCommitInfo commitInfo : commitInfos) {
             String transactionId = commitInfo.getTransactionId();
             if (log.isDebugEnabled()) {
-                log.debug("Committing transaction {}, commitInfo {}", transactionId, commitInfo);
+                log.debug("Committing transaction {}", transactionId);
             }
             KafkaProducer<?, ?> producer = getProducer(commitInfo);
             producer.commitTransaction();
@@ -87,8 +87,7 @@ public class KafkaSinkCommitter implements SinkCommitter<KafkaCommitInfo> {
                     new KafkaInternalProducer<>(
                             commitInfo.getKafkaProperties(), commitInfo.getTransactionId());
         }
-        kafkaProducer.resumeTransaction(
-                commitInfo.getProducerId(), commitInfo.getEpoch(), commitInfo.isTxnStarted());
+        kafkaProducer.resumeTransaction(commitInfo.getProducerId(), commitInfo.getEpoch());
         return kafkaProducer;
     }
 }

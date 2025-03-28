@@ -17,11 +17,10 @@
 
 package org.apache.seatunnel.connectors.seatunnel.qdrant.config;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import lombok.Data;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 
 import java.io.Serializable;
 
@@ -42,6 +41,6 @@ public class QdrantParameters implements Serializable {
     }
 
     public QdrantClient buildQdrantClient() {
-        return new QdrantClient(QdrantGrpcClient.newBuilder(host, port, useTls).build());
+        return new QdrantClient(QdrantGrpcClient.newBuilder(host, port, useTls).withApiKey(this.apiKey).build());
     }
 }

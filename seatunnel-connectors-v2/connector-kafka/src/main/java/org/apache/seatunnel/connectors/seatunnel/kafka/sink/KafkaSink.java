@@ -23,10 +23,8 @@ import org.apache.seatunnel.api.serialization.Serializer;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.connectors.seatunnel.kafka.config.KafkaBaseOptions;
 import org.apache.seatunnel.connectors.seatunnel.kafka.state.KafkaAggregatedCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.kafka.state.KafkaCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.kafka.state.KafkaSinkState;
@@ -45,12 +43,10 @@ public class KafkaSink
 
     private final ReadonlyConfig pluginConfig;
     private final SeaTunnelRowType seaTunnelRowType;
-    private final CatalogTable catalogTable;
 
-    public KafkaSink(ReadonlyConfig pluginConfig, CatalogTable catalogTable) {
+    public KafkaSink(ReadonlyConfig pluginConfig, SeaTunnelRowType rowType) {
         this.pluginConfig = pluginConfig;
-        this.catalogTable = catalogTable;
-        this.seaTunnelRowType = catalogTable.getTableSchema().toPhysicalRowDataType();
+        this.seaTunnelRowType = rowType;
     }
 
     @Override
@@ -83,11 +79,6 @@ public class KafkaSink
 
     @Override
     public String getPluginName() {
-        return KafkaBaseOptions.CONNECTOR_IDENTITY;
-    }
-
-    @Override
-    public Optional<CatalogTable> getWriteCatalogTable() {
-        return Optional.ofNullable(catalogTable);
+        return org.apache.seatunnel.connectors.seatunnel.kafka.config.Config.CONNECTOR_IDENTITY;
     }
 }

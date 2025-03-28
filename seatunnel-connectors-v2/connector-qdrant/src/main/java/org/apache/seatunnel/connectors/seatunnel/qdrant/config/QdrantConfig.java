@@ -45,6 +45,6 @@ public class QdrantConfig {
     public static final Option<Boolean> USE_TLS =
             Options.key("use_tls")
                     .booleanType()
-                    .defaultValue(false)
+                    .defaultValue(true)
                     .withDescription("Whether to use TLS");
 }

@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.api.table.type;
 
+import lombok.Data;
+
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -37,6 +39,8 @@ public final class SeaTunnelRow implements Serializable {
     private Map<String, Object> options;
 
     private volatile int size;
+
+    private String partitionName;
 
     public SeaTunnelRow(int arity) {
         this.fields = new Object[arity];
@@ -61,6 +65,8 @@ public final class SeaTunnelRow implements Serializable {
     public void setOptions(Map<String, Object> options) {
         this.options = options;
     }
+
+    public void setPartitionName(String partitionName) {this.partitionName = partitionName;}
 
     public int getArity() {
         return fields.length;
@@ -88,6 +94,8 @@ public final class SeaTunnelRow implements Serializable {
     public Object getField(int pos) {
         return this.fields[pos];
     }
+
+    public String getPartitionName() {return this.partitionName;}
 
     public SeaTunnelRow copy() {
         Object[] newFields = new Object[this.getArity()];

@@ -24,7 +24,7 @@ import org.apache.seatunnel.api.table.connector.TableSource;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactory;
 import org.apache.seatunnel.api.table.factory.TableSourceFactoryContext;
-import org.apache.seatunnel.connectors.seatunnel.kafka.config.KafkaSourceOptions;
+import org.apache.seatunnel.connectors.seatunnel.kafka.config.Config;
 import org.apache.seatunnel.connectors.seatunnel.kafka.config.StartMode;
 
 import com.google.auto.service.AutoService;
@@ -42,30 +42,21 @@ public class KafkaSourceFactory implements TableSourceFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .required(KafkaSourceOptions.BOOTSTRAP_SERVERS)
-                .exclusive(
-                        KafkaSourceOptions.TOPIC,
-                        KafkaSourceOptions.TABLE_CONFIGS,
-                        KafkaSourceOptions.TABLE_LIST)
+                .required(Config.BOOTSTRAP_SERVERS)
+                .exclusive(Config.TOPIC, Config.TABLE_LIST)
                 .optional(
-                        KafkaSourceOptions.START_MODE,
-                        KafkaSourceOptions.PATTERN,
-                        KafkaSourceOptions.CONSUMER_GROUP,
-                        KafkaSourceOptions.COMMIT_ON_CHECKPOINT,
-                        KafkaSourceOptions.KAFKA_CONFIG,
-                        KafkaSourceOptions.SCHEMA,
-                        KafkaSourceOptions.FORMAT,
-                        KafkaSourceOptions.DEBEZIUM_RECORD_INCLUDE_SCHEMA,
-                        KafkaSourceOptions.DEBEZIUM_RECORD_TABLE_FILTER,
-                        KafkaSourceOptions.KEY_PARTITION_DISCOVERY_INTERVAL_MILLIS)
+                        Config.START_MODE,
+                        Config.PATTERN,
+                        Config.CONSUMER_GROUP,
+                        Config.COMMIT_ON_CHECKPOINT,
+                        Config.KAFKA_CONFIG,
+                        Config.SCHEMA,
+                        Config.FORMAT,
+                        Config.DEBEZIUM_RECORD_INCLUDE_SCHEMA,
+                        Config.KEY_PARTITION_DISCOVERY_INTERVAL_MILLIS)
+                .conditional(Config.START_MODE, StartMode.TIMESTAMP, Config.START_MODE_TIMESTAMP)
                 .conditional(
-                        KafkaSourceOptions.START_MODE,
-                        StartMode.TIMESTAMP,
-                        KafkaSourceOptions.START_MODE_TIMESTAMP)
-                .conditional(
-                        KafkaSourceOptions.START_MODE,
-                        StartMode.SPECIFIC_OFFSETS,
-                        KafkaSourceOptions.START_MODE_OFFSETS)
+                        Config.START_MODE, StartMode.SPECIFIC_OFFSETS, Config.START_MODE_OFFSETS)
                 .build();
     }
 

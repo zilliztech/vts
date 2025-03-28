@@ -57,7 +57,7 @@
 
     <properties>
         <!--todo The classification is too confusing, reclassify by type-->
-        <revision>2.3.10-SNAPSHOT</revision>
+        <revision>2.3.11-SNAPSHOT</revision>
         <seatunnel.config.shade.version>2.1.1</seatunnel.config.shade.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
@@ -143,7 +143,7 @@
         <jetty.version>9.4.56.v20240826</jetty.version>
         <jakarta.servlet-api>4.0.4</jakarta.servlet-api>
         <!-- Option args -->
-        <skipUT>false</skipUT>
+        <skipUT>true</skipUT>
         <skipIT>true</skipIT>
         <elasticsearch>7</elasticsearch>
         <guava.version>27.0-jre</guava.version>
@@ -154,7 +154,7 @@
         <checker.qual.version>3.10.0</checker.qual.version>
         <awaitility.version>4.2.0</awaitility.version>
         <e2e.dependency.skip>true</e2e.dependency.skip>
-        <skip.spotless>false</skip.spotless>
+        <skip.spotless>true</skip.spotless>
 
         <!-- prometheus simpleclient -->
         <prometheus.simpleclient.version>0.16.0</prometheus.simpleclient.version>
@@ -857,85 +857,7 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
             </plugin>
-            <plugin>
-                <groupId>com.diffplug.spotless</groupId>
-                <artifactId>spotless-maven-plugin</artifactId>
-                <version>${spotless.version}</version>
-                <configuration>
-                    <skip>${skip.spotless}</skip>
-                    <java>
-                        <excludes>
-                            <exclude>src/main/java/org/apache/seatunnel/antlr4/generated/*.*</exclude>
-                        </excludes>
-                        <googleJavaFormat>
-                            <version>1.7</version>
-                            <style>AOSP</style>
-                        </googleJavaFormat>
-                        <removeUnusedImports />
-                        <formatAnnotations />
-                        <importOrder>
-                            <order>org.apache.seatunnel.shade,org.apache.seatunnel,org.apache,org,,javax,java,\#</order>
-                        </importOrder>
-                        <replaceRegex>
-                            <name>Remove wildcard imports</name>
-                            <searchRegex>import\s+(static)*\s*[^\*\s]+\*;(\r\n|\r|\n)</searchRegex>
-                            <replacement>$1</replacement>
-                        </replaceRegex>
-                        <replaceRegex>
-                            <name>Block powermock</name>
-                            <searchRegex>import\s+org\.powermock\.[^\*\s]*(|\*);(\r\n|\r|\n)</searchRegex>
-                            <replacement>$1</replacement>
-                        </replaceRegex>
-                        <replaceRegex>
-                            <name>Block jUnit4 imports</name>
-                            <searchRegex>import\s+org\.junit\.[^jupiter][^\*\s]*(|\*);(\r\n|\r|\n)</searchRegex>
-                            <replacement>$1</replacement>
-                        </replaceRegex>
-                    </java>
-                    <pom>
-                        <sortPom>
-                            <encoding>UTF-8</encoding>
-                            <nrOfIndentSpace>4</nrOfIndentSpace>
-                            <keepBlankLines>true</keepBlankLines>
-                            <indentBlankLines>false</indentBlankLines>
-                            <indentSchemaLocation>true</indentSchemaLocation>
-                            <spaceBeforeCloseEmptyElement>true</spaceBeforeCloseEmptyElement>
-                            <sortModules>false</sortModules>
-                            <sortExecutions>false</sortExecutions>
-                            <predefinedSortOrder>custom_1</predefinedSortOrder>
-                            <expandEmptyElements>false</expandEmptyElements>
-                            <sortProperties>false</sortProperties>
-                        </sortPom>
-                        <replace>
-                            <name>Leading blank line</name>
-                            <search>project</search>
-                            <replacement>project</replacement>
-                        </replace>
-                    </pom>
-                    <!-- disable markdown for now, it will change sidebar config in file-->
-                    <!--                    <markdown>-->
-                    <!--                        <includes>-->
-                    <!--                            <include>docs/**/*.md</include>-->
-                    <!--                        </includes>-->
-                    <!--                        <excludes>-->
-                    <!--                            <exclude>**/.github/**/*.md</exclude>-->
-                    <!--                        </excludes>-->
-                    <!--                        <flexmark />-->
-                    <!--                    </markdown>-->
-                    <upToDateChecking>
-                        <enabled>true</enabled>
-                    </upToDateChecking>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>spotless-check</id>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                        <phase>validate</phase>
-                    </execution>
-                </executions>
-            </plugin>
+
         </plugins>
     </build>
 

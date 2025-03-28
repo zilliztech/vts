@@ -17,6 +17,11 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.client;
 
+import org.apache.http.Header;
+import org.apache.http.HttpRequestInterceptor;
+import org.apache.http.message.BasicHeader;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KNN_VECTOR;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VECTOR;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ArrayNode;
@@ -26,7 +31,7 @@ import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.common.utils.JsonUtils;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchBaseOptions;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.BulkResponse;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.ElasticsearchClusterInfo;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.IndexDocsCount;
@@ -63,13 +68,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.AGGREGATE_METRIC_DOUBLE;
@@ -88,34 +90,36 @@ public class EsRestClient implements Closeable {
 
     private final RestClient restClient;
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private EsRestClient(RestClient restClient) {
         this.restClient = restClient;
     }
 
     public static EsRestClient createInstance(ReadonlyConfig config) {
-        List<String> hosts = config.get(ElasticsearchBaseOptions.HOSTS);
-        Optional<String> username = config.getOptional(ElasticsearchBaseOptions.USERNAME);
-        Optional<String> password = config.getOptional(ElasticsearchBaseOptions.PASSWORD);
+        List<String> hosts = config.get(EsClusterConnectionConfig.HOSTS);
+        Optional<String> cloudId = config.getOptional(EsClusterConnectionConfig.CLOUD_ID);
+        Optional<String> username = config.getOptional(EsClusterConnectionConfig.USERNAME);
+        Optional<String> password = config.getOptional(EsClusterConnectionConfig.PASSWORD);
+        Optional<String> apiKey = config.getOptional(EsClusterConnectionConfig.API_KEY);
         Optional<String> keystorePath = Optional.empty();
         Optional<String> keystorePassword = Optional.empty();
         Optional<String> truststorePath = Optional.empty();
         Optional<String> truststorePassword = Optional.empty();
-        boolean tlsVerifyCertificate = config.get(ElasticsearchBaseOptions.TLS_VERIFY_CERTIFICATE);
+        boolean tlsVerifyCertificate = config.get(EsClusterConnectionConfig.TLS_VERIFY_CERTIFICATE);
         if (tlsVerifyCertificate) {
-            keystorePath = config.getOptional(ElasticsearchBaseOptions.TLS_KEY_STORE_PATH);
-            keystorePassword = config.getOptional(ElasticsearchBaseOptions.TLS_KEY_STORE_PASSWORD);
-            truststorePath = config.getOptional(ElasticsearchBaseOptions.TLS_TRUST_STORE_PATH);
+            keystorePath = config.getOptional(EsClusterConnectionConfig.TLS_KEY_STORE_PATH);
+            keystorePassword = config.getOptional(EsClusterConnectionConfig.TLS_KEY_STORE_PASSWORD);
+            truststorePath = config.getOptional(EsClusterConnectionConfig.TLS_TRUST_STORE_PATH);
             truststorePassword =
-                    config.getOptional(ElasticsearchBaseOptions.TLS_TRUST_STORE_PASSWORD);
+                    config.getOptional(EsClusterConnectionConfig.TLS_TRUST_STORE_PASSWORD);
         }
 
-        boolean tlsVerifyHostnames = config.get(ElasticsearchBaseOptions.TLS_VERIFY_HOSTNAME);
+        boolean tlsVerifyHostnames = config.get(EsClusterConnectionConfig.TLS_VERIFY_HOSTNAME);
         return createInstance(
                 hosts,
+                cloudId,
                 username,
                 password,
+                apiKey,
                 tlsVerifyCertificate,
                 tlsVerifyHostnames,
                 keystorePath,
@@ -126,8 +130,10 @@ public class EsRestClient implements Closeable {
 
     public static EsRestClient createInstance(
             List<String> hosts,
+            Optional<String> cloudId,
             Optional<String> username,
             Optional<String> password,
+            Optional<String> apiKey,
             boolean tlsVerifyCertificate,
             boolean tlsVerifyHostnames,
             Optional<String> keystorePath,
@@ -137,8 +143,10 @@ public class EsRestClient implements Closeable {
         RestClientBuilder restClientBuilder =
                 getRestClientBuilder(
                         hosts,
+                        cloudId,
                         username,
                         password,
+                        apiKey,
                         tlsVerifyCertificate,
                         tlsVerifyHostnames,
                         keystorePath,
@@ -150,27 +158,34 @@ public class EsRestClient implements Closeable {
 
     private static RestClientBuilder getRestClientBuilder(
             List<String> hosts,
+            Optional<String> cloudId,
             Optional<String> username,
             Optional<String> password,
+            Optional<String> apiKey,
             boolean tlsVerifyCertificate,
             boolean tlsVerifyHostnames,
             Optional<String> keystorePath,
             Optional<String> keystorePassword,
             Optional<String> truststorePath,
             Optional<String> truststorePassword) {
-        HttpHost[] httpHosts = new HttpHost[hosts.size()];
-        for (int i = 0; i < hosts.size(); i++) {
-            httpHosts[i] = HttpHost.create(hosts.get(i));
+        RestClientBuilder restClientBuilder;
+        if (StringUtils.isNotEmpty(cloudId.orElse(null))) {
+            restClientBuilder = RestClient.builder(cloudId.get())
+                    .setRequestConfigCallback(
+                            requestConfigBuilder ->
+                                    requestConfigBuilder
+                                            .setConnectionRequestTimeout(
+                                                    CONNECTION_REQUEST_TIMEOUT)
+                                            .setSocketTimeout(SOCKET_TIMEOUT));
+        } else {
+            restClientBuilder = RestClient.builder(buildHttpHosts(hosts))
+                    .setRequestConfigCallback(
+                            requestConfigBuilder ->
+                                    requestConfigBuilder
+                                            .setConnectionRequestTimeout(
+                                                    CONNECTION_REQUEST_TIMEOUT)
+                                            .setSocketTimeout(SOCKET_TIMEOUT));
         }
-
-        RestClientBuilder restClientBuilder =
-                RestClient.builder(httpHosts)
-                        .setRequestConfigCallback(
-                                requestConfigBuilder ->
-                                        requestConfigBuilder
-                                                .setConnectionRequestTimeout(
-                                                        CONNECTION_REQUEST_TIMEOUT)
-                                                .setSocketTimeout(SOCKET_TIMEOUT));
 
         restClientBuilder.setHttpClientConfigCallback(
                 httpClientBuilder -> {
@@ -180,6 +195,11 @@ public class EsRestClient implements Closeable {
                                 AuthScope.ANY,
                                 new UsernamePasswordCredentials(username.get(), password.get()));
                         httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+                    } else if (apiKey.isPresent()) {
+                        Header apiKeyHeader = new BasicHeader("Authorization", "ApiKey " + apiKey.get());
+                        httpClientBuilder.addInterceptorFirst((HttpRequestInterceptor) (request, context) -> {
+                            request.addHeader(apiKeyHeader);
+                        });
                     }
 
                     try {
@@ -209,6 +229,19 @@ public class EsRestClient implements Closeable {
         return restClientBuilder;
     }
 
+    private static HttpHost[] buildHttpHosts(List<String> hosts) {
+        if(hosts == null || hosts.isEmpty()){
+            throw new ElasticsearchConnectorException(
+                    ElasticsearchConnectorErrorCode.FAILED_CONNECT_ES,
+                    "es hosts is empty");
+        }
+        HttpHost[] httpHosts = new HttpHost[hosts.size()];
+        for (int i = 0; i < hosts.size(); i++) {
+            httpHosts[i] = HttpHost.create(hosts.get(i));
+        }
+        return httpHosts;
+    }
+
     public BulkResponse bulk(String requestBody) {
         Request request = new Request("POST", "/_bulk");
         request.setJsonEntity(requestBody);
@@ -220,8 +253,9 @@ public class EsRestClient implements Closeable {
                         "bulk es Response is null");
             }
             if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+                ObjectMapper objectMapper = new ObjectMapper();
                 String entity = EntityUtils.toString(response.getEntity());
-                JsonNode json = OBJECT_MAPPER.readTree(entity);
+                JsonNode json = objectMapper.readTree(entity);
                 int took = json.get("took").asInt();
                 boolean errors = json.get("errors").asBoolean();
                 return new BulkResponse(errors, took, entity);
@@ -229,16 +263,13 @@ public class EsRestClient implements Closeable {
                 throw new ElasticsearchConnectorException(
                         ElasticsearchConnectorErrorCode.BULK_RESPONSE_ERROR,
                         String.format(
-                                "bulk es response status=%s,request body(truncate)=%s",
-                                response,
-                                requestBody.substring(0, Math.min(1000, requestBody.length()))));
+                                "bulk es response status code=%d,request boy=%s",
+                                response.getStatusLine().getStatusCode(), requestBody));
             }
         } catch (IOException e) {
             throw new ElasticsearchConnectorException(
                     ElasticsearchConnectorErrorCode.BULK_RESPONSE_ERROR,
-                    String.format(
-                            "bulk es error,request body(truncate)=%s",
-                            requestBody.substring(0, Math.min(1000, requestBody.length()))),
+                    String.format("bulk es error,request boy=%s", requestBody),
                     e);
         }
     }
@@ -248,7 +279,8 @@ public class EsRestClient implements Closeable {
         try {
             Response response = restClient.performRequest(request);
             String result = EntityUtils.toString(response.getEntity());
-            JsonNode jsonNode = OBJECT_MAPPER.readTree(result);
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode jsonNode = objectMapper.readTree(result);
             JsonNode versionNode = jsonNode.get("version");
             return ElasticsearchClusterInfo.builder()
                     .clusterVersion(versionNode.get("number").asText())
@@ -298,43 +330,6 @@ public class EsRestClient implements Closeable {
     }
 
     /**
-     * first time to request search documents by scroll call /_sql?format=json
-     *
-     * @param scrollSize fetch documents count in one request
-     */
-    public ScrollResult searchBySql(String query, int scrollSize) {
-        Map<String, Object> param = new HashMap<>();
-        param.put("query", query);
-        param.put("fetch_size", scrollSize);
-        String endpoint = "/_sql?format=json";
-        return getDocsFromSqlResult(endpoint, JsonUtils.toJsonString(param), null);
-    }
-
-    /** first time to request search documents by scroll call /_sql?format=json */
-    public Map<String, BasicTypeDefine<EsType>> getSqlMapping(String query, List<String> source) {
-        Map<String, Object> param = new HashMap<>();
-        String limitRegex = "(?i)\\s+LIMIT\\s+\\d+";
-        Pattern pattern = Pattern.compile(limitRegex);
-        Matcher matcher = pattern.matcher(query);
-        if (matcher.find()) {
-            query = matcher.replaceAll(" LIMIT 0");
-        } else {
-            query = query.trim() + " LIMIT 0";
-        }
-        param.put("query", query);
-        String endpoint = "/_sql?format=json";
-        ScrollResult scrollResult =
-                getDocsFromSqlResult(endpoint, JsonUtils.toJsonString(param), null);
-        JsonNode columnNodes = scrollResult.getColumnNodes();
-        Map<String, Object> columnMap = new LinkedHashMap<>();
-        for (JsonNode columnNode : columnNodes) {
-            String fieldName = columnNode.get("name").asText();
-            columnMap.put(fieldName, columnNode);
-        }
-        return getFieldTypeMappingFromProperties(JsonUtils.toJsonNode(columnMap), source);
-    }
-
-    /**
      * scroll to get result call _search/scroll
      *
      * @param scrollId the scroll id of the last request
@@ -345,43 +340,6 @@ public class EsRestClient implements Closeable {
         param.put("scroll_id", scrollId);
         param.put("scroll", scrollTime);
         return getDocsFromScrollRequest("/_search/scroll", JsonUtils.toJsonString(param));
-    }
-
-    public ScrollResult searchWithSql(String scrollId, JsonNode columnNodes) {
-        Map<String, String> param = new HashMap<>();
-        param.put("cursor", scrollId);
-        String endpoint = "/_sql?format=json";
-        return getDocsFromSqlResult(endpoint, JsonUtils.toJsonString(param), columnNodes);
-    }
-
-    private ScrollResult getDocsFromSqlResult(
-            String endpoint, String requestBody, JsonNode columnNodes) {
-        Request request = new Request("POST", endpoint);
-        request.setJsonEntity(requestBody);
-        try {
-            Response response = restClient.performRequest(request);
-            if (response == null) {
-                throw new ElasticsearchConnectorException(
-                        ElasticsearchConnectorErrorCode.SCROLL_REQUEST_ERROR,
-                        "POST " + endpoint + " response null");
-            }
-            if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
-                String entity = EntityUtils.toString(response.getEntity());
-                ObjectNode responseJson = JsonUtils.parseObject(entity);
-                return getDocsFromSqlResponse(responseJson, columnNodes);
-            } else {
-                throw new ElasticsearchConnectorException(
-                        ElasticsearchConnectorErrorCode.SCROLL_REQUEST_ERROR,
-                        String.format(
-                                "POST %s response status code=%d,request body=%s",
-                                endpoint, response.getStatusLine().getStatusCode(), requestBody));
-            }
-        } catch (IOException e) {
-            throw new ElasticsearchConnectorException(
-                    ElasticsearchConnectorErrorCode.SCROLL_REQUEST_ERROR,
-                    String.format("POST %s error,request body=%s", endpoint, requestBody),
-                    e);
-        }
     }
 
     private ScrollResult getDocsFromScrollRequest(String endpoint, String requestBody) {
@@ -412,47 +370,15 @@ public class EsRestClient implements Closeable {
                 throw new ElasticsearchConnectorException(
                         ElasticsearchConnectorErrorCode.SCROLL_REQUEST_ERROR,
                         String.format(
-                                "POST %s response status code=%d,request body=%s",
+                                "POST %s response status code=%d,request boy=%s",
                                 endpoint, response.getStatusLine().getStatusCode(), requestBody));
             }
         } catch (IOException e) {
             throw new ElasticsearchConnectorException(
                     ElasticsearchConnectorErrorCode.SCROLL_REQUEST_ERROR,
-                    String.format("POST %s error,request body=%s", endpoint, requestBody),
+                    String.format("POST %s error,request boy=%s", endpoint, requestBody),
                     e);
         }
-    }
-
-    private ScrollResult getDocsFromSqlResponse(ObjectNode responseJson, JsonNode columnNodes) {
-        ScrollResult scrollResult = new ScrollResult();
-        if (responseJson.get("cursor") != null) {
-            scrollResult.setScrollId(responseJson.get("cursor").asText());
-        }
-        if (columnNodes == null) {
-            columnNodes = responseJson.get("columns");
-        }
-        JsonNode valueNodes = responseJson.get("rows");
-        List<Map<String, Object>> docs = new ArrayList<>();
-        if (valueNodes != null) {
-
-            for (int i = 0; i < valueNodes.size(); i++) {
-                JsonNode valueNode = valueNodes.get(i);
-                Map<String, Object> doc = new HashMap<>();
-                for (int j = 0; j < columnNodes.size(); j++) {
-                    String fieldName = columnNodes.get(j).get("name").asText();
-                    if (valueNode.get(j) instanceof TextNode) {
-                        doc.put(fieldName, valueNode.get(j).textValue());
-                    } else {
-                        doc.put(fieldName, valueNode.get(j));
-                    }
-                }
-                docs.add(doc);
-            }
-        }
-        scrollResult.setDocs(docs);
-        scrollResult.setColumnNodes(columnNodes);
-
-        return scrollResult;
     }
 
     private ScrollResult getDocsFromScrollResponse(ObjectNode responseJson) {
@@ -497,7 +423,7 @@ public class EsRestClient implements Closeable {
      * @return true or false
      */
     public boolean checkIndexExist(String index) {
-        Request request = new Request("HEAD", "/" + index.toLowerCase());
+        Request request = new Request("HEAD", "/" + index);
         try {
             Response response = restClient.performRequest(request);
             int statusCode = response.getStatusLine().getStatusCode();
@@ -509,9 +435,7 @@ public class EsRestClient implements Closeable {
     }
 
     public List<IndexDocsCount> getIndexDocsCount(String index) {
-        String endpoint =
-                String.format(
-                        "/_cat/indices/%s?h=index,docsCount&format=json", index.toLowerCase());
+        String endpoint = String.format("/_cat/indices/%s?h=index,docsCount&format=json", index);
         Request request = new Request("GET", endpoint);
         try {
             Response response = restClient.performRequest(request);
@@ -569,7 +493,7 @@ public class EsRestClient implements Closeable {
     }
 
     public void createIndex(String indexName, String mapping) {
-        String endpoint = String.format("/%s", indexName.toLowerCase());
+        String endpoint = String.format("/%s", indexName);
         Request request = new Request("PUT", endpoint);
         if (StringUtils.isNotEmpty(mapping)) {
             request.setJsonEntity(mapping);
@@ -595,7 +519,7 @@ public class EsRestClient implements Closeable {
     }
 
     public void dropIndex(String tableName) {
-        String endpoint = String.format("/%s", tableName.toLowerCase());
+        String endpoint = String.format("/%s", tableName);
         Request request = new Request("DELETE", endpoint);
         try {
             Response response = restClient.performRequest(request);
@@ -621,7 +545,7 @@ public class EsRestClient implements Closeable {
     }
 
     public void clearIndexData(String indexName) {
-        String endpoint = String.format("/%s/_delete_by_query", indexName.toLowerCase());
+        String endpoint = String.format("/%s/_delete_by_query", indexName);
         Request request = new Request("POST", endpoint);
         String jsonString = "{ \"query\": { \"match_all\": {} } }";
         request.setJsonEntity(jsonString);
@@ -740,6 +664,36 @@ public class EsRestClient implements Closeable {
                                     Map<String, Object> options = new HashMap<>();
                                     options.put("element_type", elementType);
                                     typeDefine.nativeType(new EsType(type, options));
+
+                                    // es dense_vector dim
+                                    typeDefine.scale(fieldProperty.get("dims").asInt());
+
+                                } else if (type.equalsIgnoreCase(VECTOR)) {
+                                    //adapt for huawei cloud elastic search
+                                    String elementType =
+                                            fieldProperty.get("dim_type") == null
+                                                    ? "float"
+                                                    : fieldProperty.get("dim_type").asText();
+                                    Map<String, Object> options = new HashMap<>();
+                                    options.put("element_type", elementType);
+                                    typeDefine.nativeType(new EsType(type, options));
+
+                                    // es dense_vector dim
+                                    typeDefine.scale(fieldProperty.get("dimension").asInt());
+
+                                } else if (type.equalsIgnoreCase(KNN_VECTOR)) {
+                                //adapt for huawei cloud elastic search
+                                String elementType =
+                                        fieldProperty.get("data_type") == null
+                                                ? "float"
+                                                : fieldProperty.get("data_type").asText();
+                                Map<String, Object> options = new HashMap<>();
+                                options.put("element_type", elementType);
+                                typeDefine.nativeType(new EsType(type, options));
+
+                                // es dense_vector dim
+                                typeDefine.scale(fieldProperty.get("dimension").asInt());
+
                                 } else if (type.equalsIgnoreCase(DATE)
                                         || type.equalsIgnoreCase(DATE_NANOS)) {
                                     String format =
@@ -793,87 +747,24 @@ public class EsRestClient implements Closeable {
                                 fieldName -> {
                                     BasicTypeDefine<EsType> fieldType =
                                             allElasticSearchFieldTypeInfoMap.get(fieldName);
-                                    if (fieldType == null) {
-                                        log.warn(
-                                                "fail to get elasticsearch field {} mapping type,so give a default type text",
-                                                fieldName);
+                                    if (fieldType != null) {
+                                        return fieldType;
+                                    }
+                                    if (fieldName.equals("_id")) {
                                         return BasicTypeDefine.<EsType>builder()
                                                 .name(fieldName)
-                                                .columnType("text")
-                                                .dataType("text")
+                                                .columnType("string")
+                                                .dataType("string")
                                                 .build();
                                     }
-                                    return fieldType;
+                                    log.warn(
+                                            "fail to get elasticsearch field {} mapping type,so give a default type text",
+                                            fieldName);
+                                    return BasicTypeDefine.<EsType>builder()
+                                            .name(fieldName)
+                                            .columnType("text")
+                                            .dataType("text")
+                                            .build();
                                 }));
-    }
-
-    /**
-     * Add a new field to an existing index
-     *
-     * @param index index name
-     * @param fieldTypeDefine field type definition
-     */
-    public void addField(String index, BasicTypeDefine<EsType> fieldTypeDefine) {
-        String endpoint = String.format("/%s/_mapping", index);
-        Request request = new Request("PUT", endpoint);
-
-        // Build mapping JSON for the new field
-        ObjectNode mappingJson = OBJECT_MAPPER.createObjectNode();
-        ObjectNode propertiesJson = OBJECT_MAPPER.createObjectNode();
-        ObjectNode fieldJson = OBJECT_MAPPER.createObjectNode();
-
-        // Set field type
-        fieldJson.put("type", fieldTypeDefine.getNativeType().getType());
-
-        // Add additional options based on field type
-        Map<String, Object> options = fieldTypeDefine.getNativeType().getOptions();
-        if (!options.isEmpty()) {
-            if (fieldTypeDefine.getNativeType().getType().equalsIgnoreCase(DATE)
-                    || fieldTypeDefine.getNativeType().getType().equalsIgnoreCase(DATE_NANOS)) {
-                fieldJson.put("format", options.get("format").toString());
-            } else if (fieldTypeDefine.getNativeType().getType().equalsIgnoreCase(DENSE_VECTOR)) {
-                fieldJson.put("element_type", options.get("element_type").toString());
-            } else if (fieldTypeDefine.getNativeType().getType().equalsIgnoreCase(ALIAS)) {
-                fieldJson.put("path", options.get("path").toString());
-            } else if (fieldTypeDefine
-                    .getNativeType()
-                    .getType()
-                    .equalsIgnoreCase(AGGREGATE_METRIC_DOUBLE)) {
-                ArrayNode metricsArray = OBJECT_MAPPER.createArrayNode();
-                @SuppressWarnings("unchecked")
-                List<String> metrics = (List<String>) options.get("metrics");
-                metrics.forEach(metricsArray::add);
-                fieldJson.set("metrics", metricsArray);
-            }
-        }
-
-        propertiesJson.set(fieldTypeDefine.getName(), fieldJson);
-        mappingJson.set("properties", propertiesJson);
-
-        request.setJsonEntity(mappingJson.toString());
-
-        try {
-            Response response = restClient.performRequest(request);
-            if (response == null) {
-                throw new ElasticsearchConnectorException(
-                        ElasticsearchConnectorErrorCode.ADD_FIELD_FAILED,
-                        "PUT " + endpoint + " response null");
-            }
-            if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-                throw new ElasticsearchConnectorException(
-                        ElasticsearchConnectorErrorCode.ADD_FIELD_FAILED,
-                        String.format(
-                                "PUT %s response status code=%d, response=%s",
-                                endpoint,
-                                response.getStatusLine().getStatusCode(),
-                                EntityUtils.toString(response.getEntity())));
-            }
-        } catch (IOException ex) {
-            throw new ElasticsearchConnectorException(
-                    ElasticsearchConnectorErrorCode.ADD_FIELD_FAILED,
-                    String.format(
-                            "Failed to add field %s to index %s", fieldTypeDefine.getName(), index),
-                    ex);
-        }
     }
 }

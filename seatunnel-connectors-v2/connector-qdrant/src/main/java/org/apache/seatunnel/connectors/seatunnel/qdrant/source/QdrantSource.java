@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.options.table.TableSchemaOptions;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.CatalogTableUtil;
@@ -27,6 +28,7 @@ import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSpl
 import org.apache.seatunnel.connectors.seatunnel.common.source.SingleSplitReaderContext;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantConfig;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantParameters;
+import org.apache.seatunnel.connectors.seatunnel.qdrant.utils.ConnectorUtils;
 
 import java.util.Collections;
 import java.util.List;
@@ -42,7 +44,11 @@ public class QdrantSource extends AbstractSingleSplitSource<SeaTunnelRow> {
 
     public QdrantSource(ReadonlyConfig readonlyConfig) {
         this.qdrantParameters = new QdrantParameters(readonlyConfig);
-        this.catalogTable = CatalogTableUtil.buildWithConfig(readonlyConfig);
+        if (readonlyConfig.get(TableSchemaOptions.SCHEMA) == null){
+            this.catalogTable = ConnectorUtils.buildCatalogTable(readonlyConfig);
+        }else {
+            this.catalogTable = CatalogTableUtil.buildWithConfig(readonlyConfig);
+        }
     }
 
     @Override

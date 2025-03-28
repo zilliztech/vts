@@ -22,13 +22,7 @@ import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.converter.BasicTypeConverter;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.api.table.converter.TypeConverter;
-import org.apache.seatunnel.api.table.type.ArrayType;
-import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.DecimalType;
-import org.apache.seatunnel.api.table.type.LocalTimeType;
-import org.apache.seatunnel.api.table.type.MapType;
-import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
-import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.api.table.type.*;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType;
 
 import com.google.auto.service.AutoService;
@@ -43,7 +37,6 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.BYTE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.COMPLETION;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DATE;
-import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DATETIME;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DATE_NANOS;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DATE_RANGE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.DENSE_VECTOR;
@@ -62,9 +55,11 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.IP_RANGE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.JOIN;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KEYWORD;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.KNN_VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.LONG;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.LONG_RANGE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.MATCH_ONLY_TEXT;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.NESTED;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.OBJECT;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.PERCOLATOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.POINT;
@@ -78,6 +73,7 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsT
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.TEXT;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.TOKEN_COUNT;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.UNSIGNED_LONG;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VECTOR;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType.VERSION;
 
 @AutoService(TypeConverter.class)
@@ -111,12 +107,14 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
                                         .toArray(SeaTunnelDataType<?>[]::new)));
                 break;
             case DENSE_VECTOR:
-                String elementType =
-                        typeDefine.getNativeType().getOptions().get("element_type").toString();
+            case VECTOR:
+            case KNN_VECTOR:
+                String elementType = typeDefine.getNativeType().getOptions().containsKey("element_type") ?
+                        String.valueOf(typeDefine.getNativeType().getOptions().get("element_type")) : "";
                 if (elementType.equals("byte")) {
                     builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
                 } else {
-                    builder.dataType(ArrayType.FLOAT_ARRAY_TYPE);
+                    builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
                 }
                 break;
             case BYTE:
@@ -126,7 +124,6 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
                 builder.dataType(BasicType.BOOLEAN_TYPE);
                 break;
             case DATE:
-            case DATETIME:
                 builder.dataType(LocalTimeType.LOCAL_DATE_TIME_TYPE);
                 builder.scale(3);
                 break;
@@ -150,12 +147,6 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
                                     ArrayType.DOUBLE_ARRAY_TYPE, ArrayType.LONG_ARRAY_TYPE
                                 });
                 builder.dataType(rowType);
-                break;
-            case EsType.NESTED:
-                builder.dataType(
-                        new ArrayType<>(
-                                Map[].class,
-                                new MapType<>(BasicType.STRING_TYPE, BasicType.STRING_TYPE)));
                 break;
             case INTEGER:
             case TOKEN_COUNT:
@@ -214,6 +205,7 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
             case COMPLETION:
             case STRING:
             case GEO_SHAPE:
+            case NESTED:
             case PERCOLATOR:
             case POINT:
             case RANK_FEATURES:
