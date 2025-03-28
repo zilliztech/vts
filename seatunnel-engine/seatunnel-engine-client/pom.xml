@@ -19,7 +19,7 @@
     <parent>
         <groupId>org.apache.seatunnel</groupId>
         <artifactId>seatunnel-engine</artifactId>
-        <version>${revision}</version>
+        <version>2.3.11-SNAPSHOT</version>
     </parent>
 
     <artifactId>seatunnel-engine-client</artifactId>
@@ -97,6 +97,12 @@
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit-pioneer</groupId>
+            <artifactId>junit-pioneer</artifactId>
+            <version>1.9.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

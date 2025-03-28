@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.pinecone.source;
+package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 
-import java.io.Serializable;
-import java.util.List;
-import java.util.Map;
-
+/** es source pk config */
 @Data
 @AllArgsConstructor
-public class PineconeSourceState implements Serializable {
-    private List<TablePath> pendingTables;
-    private Map<Integer, List<PineconeSourceSplit>> pendingSplits;
+@Builder
+public class PkConfig {
+    private String name; // pk field name
+    private String type; // like: long/keyword/integer
+    private Integer length; // column length, when type is keyword need set length
 }

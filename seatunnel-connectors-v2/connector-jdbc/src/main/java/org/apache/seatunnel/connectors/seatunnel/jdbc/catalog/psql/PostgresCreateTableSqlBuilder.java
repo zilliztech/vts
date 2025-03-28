@@ -30,11 +30,14 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class PostgresCreateTableSqlBuilder {
     private List<Column> columns;
     private PrimaryKey primaryKey;
@@ -69,6 +72,11 @@ public class PostgresCreateTableSqlBuilder {
                                         CatalogUtils.quoteIdentifier(
                                                 buildColumnSql(column), fieldIde))
                         .collect(Collectors.toList());
+
+        // add primary key
+        if (createIndex && primaryKey != null) {
+            columnSqls.add("\t" + buildPrimaryKeySql());
+        }
 
         if (createIndex && CollectionUtils.isNotEmpty(constraintKeys)) {
             for (ConstraintKey constraintKey : constraintKeys) {
@@ -131,14 +139,6 @@ public class PostgresCreateTableSqlBuilder {
         if (!column.isNullable()) {
             columnSql.append(" NOT NULL");
         }
-
-        // Add primary key directly after the column if it is a primary key
-        if (createIndex
-                && primaryKey != null
-                && primaryKey.getColumnNames().contains(column.getName())) {
-            columnSql.append(" PRIMARY KEY");
-        }
-
         return columnSql.toString();
     }
 
@@ -160,11 +160,21 @@ public class PostgresCreateTableSqlBuilder {
         return columnCommentSql.toString();
     }
 
+    private String buildPrimaryKeySql() {
+        String constraintName = UUID.randomUUID().toString().replace("-", "");
+        String primaryKeyColumns =
+                primaryKey.getColumnNames().stream()
+                        .map(
+                                column ->
+                                        String.format(
+                                                "\"%s\"",
+                                                CatalogUtils.getFieldIde(column, fieldIde)))
+                        .collect(Collectors.joining(","));
+        return "CONSTRAINT \"" + constraintName + "\" PRIMARY KEY (" + primaryKeyColumns + ")";
+    }
+
     private String buildUniqueKeySql(ConstraintKey constraintKey) {
-        String constraintName = constraintKey.getConstraintName();
-        if (constraintName.length() > 25) {
-            constraintName = constraintName.substring(0, 25);
-        }
+        String constraintName = UUID.randomUUID().toString().replace("-", "");
         String indexColumns =
                 constraintKey.getColumnNames().stream()
                         .map(
@@ -175,16 +185,12 @@ public class PostgresCreateTableSqlBuilder {
                                                         constraintKeyColumn.getColumnName(),
                                                         fieldIde)))
                         .collect(Collectors.joining(", "));
-        return "CONSTRAINT " + constraintName + " UNIQUE (" + indexColumns + ")";
+        return "CONSTRAINT \"" + constraintName + "\" UNIQUE (" + indexColumns + ")";
     }
 
     private String buildIndexKeySql(TablePath tablePath, ConstraintKey constraintKey) {
-        // We add table name to index name to avoid name conflict in PG
-        // Since index name in PG should unique in the schema
-        String constraintName = tablePath.getTableName() + "_" + constraintKey.getConstraintName();
-        if (constraintName.length() > 25) {
-            constraintName = constraintName.substring(0, 25);
-        }
+        // If the index name is omitted, PostgreSQL will choose an appropriate name based on table
+        // name and indexed columns.
         String indexColumns =
                 constraintKey.getColumnNames().stream()
                         .map(
@@ -196,9 +202,7 @@ public class PostgresCreateTableSqlBuilder {
                                                         fieldIde)))
                         .collect(Collectors.joining(", "));
 
-        return "CREATE INDEX "
-                + constraintName
-                + " ON "
+        return "CREATE INDEX ON "
                 + tablePath.getSchemaAndTableName("\"")
                 + "("
                 + indexColumns

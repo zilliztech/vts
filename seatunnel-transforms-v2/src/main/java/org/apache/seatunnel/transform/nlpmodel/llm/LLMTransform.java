@@ -24,13 +24,14 @@ import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.SeaTunnelDataTypeConvertorUtil;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.transform.common.SeaTunnelRowAccessor;
+import org.apache.seatunnel.api.table.type.SeaTunnelRowAccessor;
 import org.apache.seatunnel.transform.common.SingleFieldOutputTransform;
 import org.apache.seatunnel.transform.nlpmodel.ModelProvider;
 import org.apache.seatunnel.transform.nlpmodel.ModelTransformConfig;
 import org.apache.seatunnel.transform.nlpmodel.llm.remote.Model;
 import org.apache.seatunnel.transform.nlpmodel.llm.remote.custom.CustomModel;
 import org.apache.seatunnel.transform.nlpmodel.llm.remote.kimiai.KimiAIModel;
+import org.apache.seatunnel.transform.nlpmodel.llm.remote.microsoft.MicrosoftModel;
 import org.apache.seatunnel.transform.nlpmodel.llm.remote.openai.OpenAIModel;
 
 import lombok.NonNull;
@@ -94,8 +95,21 @@ public class LLMTransform extends SingleFieldOutputTransform {
                                         LLMTransformConfig.CustomRequestConfig
                                                 .CUSTOM_RESPONSE_PARSE));
                 break;
+            case MICROSOFT:
+                model =
+                        new MicrosoftModel(
+                                inputCatalogTable.getSeaTunnelRowType(),
+                                outputDataType.getSqlType(),
+                                config.get(LLMTransformConfig.INFERENCE_COLUMNS),
+                                config.get(LLMTransformConfig.PROMPT),
+                                config.get(LLMTransformConfig.MODEL),
+                                config.get(LLMTransformConfig.API_KEY),
+                                provider.usedLLMPath(config.get(LLMTransformConfig.API_PATH)));
+                break;
+            case DEEPSEEK:
             case OPENAI:
             case DOUBAO:
+            case ZHIPU:
                 model =
                         new OpenAIModel(
                                 inputCatalogTable.getSeaTunnelRowType(),
@@ -105,6 +119,7 @@ public class LLMTransform extends SingleFieldOutputTransform {
                                 config.get(LLMTransformConfig.MODEL),
                                 config.get(LLMTransformConfig.API_KEY),
                                 provider.usedLLMPath(config.get(LLMTransformConfig.API_PATH)));
+                break;
             case KIMIAI:
                 model =
                         new KimiAIModel(

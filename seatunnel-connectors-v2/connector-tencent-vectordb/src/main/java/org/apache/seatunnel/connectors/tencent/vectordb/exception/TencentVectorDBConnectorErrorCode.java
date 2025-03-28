@@ -15,20 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.tencent.vectordb.exception;
+package org.apache.seatunnel.connectors.seatunnel.qdrant.exception;
 
 import lombok.Getter;
 import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
 
 @Getter
-public enum TencentVectorDBConnectorErrorCode implements SeaTunnelErrorCode {
-    SOURCE_TABLE_SCHEMA_IS_NULL("TC-VECTORDB-01", "Source table schema is null"),
-    READ_DATA_FAIL("TC-VECTORDB-02", "Read data fail");
+public enum QdrantConnectionErrorCode implements SeaTunnelErrorCode {
+    FAILED_CONNECT_QDRANT("QDRANT-01", "Failed to connect to Qdrant"),
+    EMPTY_COLLECTION("QDRANT-02", "No data in collection" );
 
     private final String code;
     private final String description;
 
-    TencentVectorDBConnectorErrorCode(String code, String description) {
+    QdrantConnectionErrorCode(String code, String description) {
         this.code = code;
         this.description = description;
     }

@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-hudi.md';
+
 # Hudi
 
 > Hudi 接收器连接器
@@ -8,7 +10,7 @@
 
 ## 主要特点
 
-- [x] [exactly-once](../../concept/connector-v2-features.md)
+- [ ] [exactly-once](../../concept/connector-v2-features.md)
 - [x] [cdc](../../concept/connector-v2-features.md)
 - [x] [support multiple table write](../../concept/connector-v2-features.md)
 
@@ -21,7 +23,6 @@
 | table_dfs_path             | string | 是      | -                            |
 | conf_files_path            | string | 否      | -                            |
 | table_list                 | string | 否      | -                            |
-| auto_commit                | boolean| 否      | true                         |
 | schema_save_mode           | enum   | 否      | CREATE_SCHEMA_WHEN_NOT_EXIST |
 | common-options             | config | 否      | -                            |
 
@@ -44,6 +45,7 @@
 | index_type                 | enum   | no       | BLOOM         |
 | index_class_name           | string | no       | -             |
 | record_byte_size           | Int    | no       | 1024          |
+| cdc_enabled                | boolean| no       | false         |
 
 注意: 当此配置对应于单个表时，您可以将table_list中的配置项展平到外层。
 
@@ -115,9 +117,9 @@
 
 `max_commits_to_keep` Hudi 表保留的最多提交数。
 
-### auto_commit [boolean]
+### cdc_enabled [boolean]
 
-`auto_commit` 是否自动提交.
+`cdc_enabled` 是否持久化Hudi表的CDC变更日志。启用后，在必要时持久化更改数据，表可以作为CDC模式进行查询.
 
 ### schema_save_mode [Enum]
 
@@ -204,3 +206,6 @@ sink {
 }
 ```
 
+## 变更日志
+
+<ChangeLog />

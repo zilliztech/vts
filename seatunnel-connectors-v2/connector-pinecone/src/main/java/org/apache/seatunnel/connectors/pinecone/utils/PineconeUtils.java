@@ -37,7 +37,7 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
-import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.API_KEY;
 import static org.apache.seatunnel.connectors.pinecone.config.PineconeSourceConfig.INDEX;

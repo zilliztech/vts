@@ -10,7 +10,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.api.table.type.VectorType;
-import org.apache.seatunnel.common.constants.CommonOptions;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -1,3 +1,5 @@
+import ChangeLog from '../changelog/connector-kudu.md';
+
 # Kudu
 
 > Kudu source connector
@@ -78,7 +80,7 @@ source {
   kudu {
     kudu_masters = "kudu-master:7051"
     table_name = "kudu_source_table"
-    result_table_name = "kudu"
+    plugin_output = "kudu"
     enable_kerberos = true
     kerberos_principal = "xx@xx.COM"
     kerberos_keytab = "xx.keytab"
@@ -90,11 +92,11 @@ transform {
 
 sink {
   console {
-    source_table_name = "kudu"
+    plugin_input = "kudu"
   }
 
   kudu {
-    source_table_name = "kudu"
+    plugin_input = "kudu"
     kudu_masters = "kudu-master:7051"
     table_name = "kudu_sink_table"
     enable_kerberos = true
@@ -125,7 +127,7 @@ source {
     table_name = "kudu_source_table_2"
    }
    ]
-   result_table_name = "kudu"
+   plugin_output = "kudu"
 }
 }
 
@@ -143,11 +145,5 @@ sink {
 
 ## Changelog
 
-### 2.2.0-beta 2022-09-26
-
-- Add Kudu Source Connector
-
-### Next Version
-
-- Change plugin name from `KuduSource` to `Kudu` [3432](https://github.com/apache/seatunnel/pull/3432)
+<ChangeLog />
 

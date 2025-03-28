@@ -19,7 +19,7 @@
     <parent>
         <groupId>org.apache.seatunnel</groupId>
         <artifactId>seatunnel</artifactId>
-        <version>${revision}</version>
+        <version>2.3.11-SNAPSHOT</version>
     </parent>
 
     <artifactId>seatunnel-e2e</artifactId>
@@ -27,6 +27,11 @@
     <name>SeaTunnel : E2E :</name>
 
     <modules>
+<!--        <module>seatunnel-e2e-common</module>-->
+<!--        <module>seatunnel-connector-v2-e2e</module>-->
+<!--        <module>seatunnel-engine-e2e</module>-->
+<!--        <module>seatunnel-transforms-v2-e2e</module>-->
+<!--        <module>seatunnel-core-e2e</module>-->
     </modules>
 
     <properties>
