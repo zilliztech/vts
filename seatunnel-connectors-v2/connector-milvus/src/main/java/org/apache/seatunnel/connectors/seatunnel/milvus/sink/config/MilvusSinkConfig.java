@@ -27,8 +27,10 @@ import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MilvusSinkConfig extends MilvusCommonConfig {
@@ -49,6 +51,24 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .noDefaultValue()
                     .withDescription("Milvus partition key field");
 
+    public static final Option<List<Object>> EXTRACT_DYNAMIC =
+            Options.key("extract_dynamic")
+                    .listType(Object.class)
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("the fields extracted from dynamic field");
+
+    public static final Option<List<String>> IS_NULLABLE =
+            Options.key("is_nullable")
+                    .listType()
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("the fields that is nullable");
+
+    public static final Option<Map<String, Object>> DEFAULT_VALUE =
+            Options.key("default_value")
+                    .mapObjectType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("the fields default value");
+
     public static final Option<SchemaSaveMode> SCHEMA_SAVE_MODE =
             Options.key("schema_save_mode")
                     .enumType(SchemaSaveMode.class)
@@ -68,6 +88,12 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .booleanType()
                     .noDefaultValue()
                     .withDescription("Enable Auto Id");
+
+    public static final Option<String> Auto_ID_NAME =
+            Options.key("auto_id_name")
+                    .stringType()
+                    .defaultValue("Auto_id")
+                    .withDescription("Auto Id Name");
 
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
