@@ -89,6 +89,12 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .noDefaultValue()
                     .withDescription("Enable Auto Id");
 
+    public static final Option<String> Auto_ID_NAME =
+            Options.key("auto_id_name")
+                    .stringType()
+                    .defaultValue("Auto_id")
+                    .withDescription("Auto Id Name");
+
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
                     .booleanType()
