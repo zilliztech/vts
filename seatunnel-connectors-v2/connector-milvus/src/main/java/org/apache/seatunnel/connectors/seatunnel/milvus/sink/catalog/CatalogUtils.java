@@ -107,11 +107,11 @@ public class CatalogUtils {
 
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
                     .name(milvusField.getNewFieldName() == null ? milvusField.getFieldName() : milvusField.getNewFieldName())
-                    .dataType(DataType.valueOf(milvusField.getDataType()))
+                    .dataType(DataType.forNumber(milvusField.getDataType()))
                     .isNullable(true)
                     .build();
             if(milvusField.getElementType() != null){
-                fieldSchema.setElementType(DataType.valueOf(milvusField.getElementType()));
+                fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
             }
             if(milvusField.getMaxLength() != null){
                 fieldSchema.setMaxLength(milvusField.getMaxLength());
