@@ -40,6 +40,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("database");
+    public static final Option<Map<String, String>> COLLECTION_RENAME =
+            Options.key("collection_rename")
+                    .mapType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("collection rename");
     public static final Option<Map<String, String>> COLLECTION_DESCRIPTION =
             Options.key("collection_description")
                     .mapType()
@@ -137,5 +142,4 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .intType()
                     .defaultValue(500000)
                     .withDescription("max cache allowed");
-
 }
