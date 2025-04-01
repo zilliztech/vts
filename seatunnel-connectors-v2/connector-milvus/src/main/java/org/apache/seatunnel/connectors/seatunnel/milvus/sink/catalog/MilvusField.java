@@ -10,9 +10,9 @@ public class MilvusField {
     @SerializedName("new_field_name")
     private String newFieldName;
     @SerializedName("data_type")
-    private String dataType;
+    private Integer dataType;
     @SerializedName("element_type")
-    private String elementType;
+    private Integer elementType;
     @SerializedName("max_length")
     private Integer maxLength;
     @SerializedName("is_nullable")
