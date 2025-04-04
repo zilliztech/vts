@@ -22,8 +22,10 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnect
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.io.IOException;
+import java.sql.Time;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
@@ -122,10 +124,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void close() throws Exception {
         remoteBulkWriter.close();
-        if(remoteBulkWriter.getBatchFiles().isEmpty()){
-            log.info("No data uploaded to remote");
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR);
-        }
+        TimeUnit.SECONDS.sleep(10);
         if(stageBucket.getAutoImport()) {
             milvusImport.importDatas(remoteBulkWriter.getBatchFiles());
             milvusImport.waitImportFinish();
