@@ -111,10 +111,10 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .withDescription("consistency level");
 
     public static final Option<Integer> SHARDS_NUM =
-            Options.key("consistency_level")
+            Options.key("shard_num")
                     .intType()
                     .noDefaultValue()
-                    .withDescription("consistency level");
+                    .withDescription("shard num");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
