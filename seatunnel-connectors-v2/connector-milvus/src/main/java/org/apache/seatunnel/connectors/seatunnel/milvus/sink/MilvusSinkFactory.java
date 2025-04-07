@@ -64,7 +64,11 @@ public class MilvusSinkFactory implements TableSinkFactory {
         } else {
             databaseName = sourceTableId.getDatabaseName();
         }
-        String tableName = sourceTableId.getTableName().replace("-", "_");
+        String tableName = sourceTableId.getTableName();
+        if(config.get(MilvusSinkConfig.COLLECTION_RENAME).containsKey(sourceTableId.getTableName())){
+            tableName = config.get(MilvusSinkConfig.COLLECTION_RENAME).get(sourceTableId.getTableName());
+        };
+        tableName = tableName.replace("-", "_");
         TableIdentifier newTableId =
                 TableIdentifier.of(
                         sourceTableId.getCatalogName(),
