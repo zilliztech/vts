@@ -38,7 +38,6 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusComm
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
@@ -49,10 +48,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWr
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -204,17 +204,19 @@ public class MilvusSinkWriter
             log.info("BatchWriter already closed");
             return;
         }
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         synchronized (batchWriters) {
             if (!closed.get()) {
                 log.info("Stopping Milvus Client");
                 for (MilvusWriter batchWriter : batchWriters.values()) {
                     try {
-                        writeCount.addAndGet(batchWriter.getWriteCache());
                         batchWriter.commit(false);
                         batchWriter.close();
                     } catch (Exception e) {
                         throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
                     }
+                    // Execute asynchronous wait job finish
+                    futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
                 }
                 log.info("Successfully put {} records to Milvus", writeCount.get());
                 log.info("Stop Milvus Client success");
@@ -223,5 +225,7 @@ public class MilvusSinkWriter
                 log.info("BatchWriter already closed");
             }
         }
+        // Wait for all waitJobFinish calls to complete
+        futures.forEach(CompletableFuture::join);
     }
 }
