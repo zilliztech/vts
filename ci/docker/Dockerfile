@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-FROM azul/zulu-openjdk:8
+FROM azul/zulu-openjdk:11
 
 ARG VERSION
 

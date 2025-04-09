@@ -108,6 +108,9 @@ public class CatalogUtils {
                     .dataType(DataType.forNumber(milvusField.getDataType()))
                     .isNullable(true)
                     .build();
+            if(milvusField.getMaxCapacity() != null){
+                fieldSchema.setMaxCapacity(milvusField.getMaxCapacity());
+            }
             if(milvusField.getElementType() != null){
                 fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
             }
