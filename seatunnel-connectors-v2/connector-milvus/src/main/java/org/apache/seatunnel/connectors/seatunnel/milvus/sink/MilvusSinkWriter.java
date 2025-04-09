@@ -38,7 +38,6 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusComm
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
@@ -51,7 +50,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -222,6 +220,9 @@ public class MilvusSinkWriter
             } else {
                 log.info("BatchWriter already closed");
             }
+        }
+        for (MilvusWriter batchWriter : batchWriters.values()) {
+            batchWriter.waitJobFinish();
         }
     }
 }

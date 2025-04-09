@@ -133,12 +133,18 @@ public class MilvusBulkWriter implements MilvusWriter {
             String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
             String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
             milvusImport.importFolder(objectFolder);
-            milvusImport.waitImportFinish();
         }
     }
 
     @Override
     public long getWriteCache() {
         return this.writeCache.get();
+    }
+
+    @Override
+    public void waitJobFinish() {
+        if(stageBucket.getAutoImport()) {
+            milvusImport.waitImportFinish();
+        }
     }
 }

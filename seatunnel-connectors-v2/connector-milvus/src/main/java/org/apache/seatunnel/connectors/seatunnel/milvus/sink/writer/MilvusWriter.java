@@ -8,4 +8,5 @@ public interface MilvusWriter {
     boolean needCommit();
     void close() throws Exception;
     long getWriteCache();
+    void waitJobFinish();
 }

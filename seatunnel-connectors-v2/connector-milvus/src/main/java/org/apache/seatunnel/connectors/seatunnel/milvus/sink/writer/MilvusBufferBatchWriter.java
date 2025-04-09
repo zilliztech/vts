@@ -139,6 +139,11 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         return writeCache.get();
     }
 
+    @Override
+    public void waitJobFinish() {
+        return;
+    }
+
     private void insertWrite(String partitionName, List<JsonObject> data)
             throws InterruptedException {
         InsertReq insertReq = InsertReq.builder()
