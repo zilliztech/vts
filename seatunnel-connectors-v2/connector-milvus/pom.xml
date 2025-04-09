@@ -74,6 +74,8 @@
                                 <relocation>
                                     <pattern>com.google</pattern>
                                     <shadedPattern>milvus.com.google</shadedPattern>
+                                    <pattern>io.grpc</pattern>
+                                    <shadedPattern>milvus.io.grpc</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>

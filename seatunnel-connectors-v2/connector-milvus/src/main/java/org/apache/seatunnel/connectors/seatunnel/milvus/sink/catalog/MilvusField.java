@@ -5,10 +5,10 @@ import lombok.Data;
 
 @Data
 public class MilvusField {
-    @SerializedName("field_name")
-    private String fieldName;
-    @SerializedName("new_field_name")
-    private String newFieldName;
+    @SerializedName("source_field_name")
+    private String sourceFieldName;
+    @SerializedName("target_field_name")
+    private String targetFieldName;
     @SerializedName("data_type")
     private Integer dataType;
     @SerializedName("element_type")

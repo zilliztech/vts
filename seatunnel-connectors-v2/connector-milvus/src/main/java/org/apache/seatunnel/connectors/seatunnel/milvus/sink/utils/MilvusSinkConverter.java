@@ -297,10 +297,10 @@ public class MilvusSinkConverter {
                         .forEach(
                                 entry -> {
                                     String entryKey = entry.getKey();
-                                    List<MilvusField> matches = milvusFields.stream().filter(a -> a.getFieldName().equals(entryKey)).collect(Collectors.toList());
+                                    List<MilvusField> matches = milvusFields.stream().filter(a -> a.getSourceFieldName().equals(entryKey)).collect(Collectors.toList());
                                     if(!matches.isEmpty()) {
-                                        if (matches.get(0).getFieldName().equals(entryKey)) {
-                                            data.add(matches.get(0).getNewFieldName(), entry.getValue());
+                                        if (matches.get(0).getSourceFieldName().equals(entryKey)) {
+                                            data.add(matches.get(0).getTargetFieldName(), entry.getValue());
                                         }
 
                                     }else {
