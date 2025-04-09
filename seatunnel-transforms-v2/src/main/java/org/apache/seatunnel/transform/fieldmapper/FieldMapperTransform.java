@@ -106,23 +106,24 @@ public class FieldMapperTransform extends AbstractCatalogSupportTransform {
                     int fieldIndex = inputFieldNames.indexOf(key);
                     if (fieldIndex < 0) {
                         log.warn("The field {} is not in the input table schema, so it will be ignored.", key);
-                    }
-                    Column oldColumn = inputColumns.get(fieldIndex);
-                    PhysicalColumn outputColumn =
-                            PhysicalColumn.of(
-                                    value,
-                                    oldColumn.getDataType(),
-                                    oldColumn.getColumnLength(),
-                                    oldColumn.getScale(),
-                                    oldColumn.isNullable(),
-                                    oldColumn.getDefaultValue(),
-                                    oldColumn.getComment(),
-                                    oldColumn.getSourceType(),
-                                    oldColumn.getOptions());
+                    }else {
+                        Column oldColumn = inputColumns.get(fieldIndex);
+                        PhysicalColumn outputColumn =
+                                PhysicalColumn.of(
+                                        value,
+                                        oldColumn.getDataType(),
+                                        oldColumn.getColumnLength(),
+                                        oldColumn.getScale(),
+                                        oldColumn.isNullable(),
+                                        oldColumn.getDefaultValue(),
+                                        oldColumn.getComment(),
+                                        oldColumn.getSourceType(),
+                                        oldColumn.getOptions());
 
-                    outputColumns.add(outputColumn);
-                    outputFieldNames.add(outputColumn.getName());
-                    needReaderColIndex.add(fieldIndex);
+                        outputColumns.add(outputColumn);
+                        outputFieldNames.add(outputColumn.getName());
+                        needReaderColIndex.add(fieldIndex);
+                    }
                 });
 
         List<ConstraintKey> outputConstraintKeys =
