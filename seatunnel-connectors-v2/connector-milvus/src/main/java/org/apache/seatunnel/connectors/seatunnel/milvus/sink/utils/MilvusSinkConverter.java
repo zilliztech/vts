@@ -334,6 +334,12 @@ public class MilvusSinkConverter {
                 fieldType.withMaxCapacity(fieldSchema.getMaxCapacity());
                 fieldType.withElementType(DataType.forNumber(fieldSchema.getElementType().getCode()));
             }
+            if(fieldSchema.getIsNullable() != null){
+                fieldType.withNullable(fieldSchema.getIsNullable());
+            }
+            if(fieldSchema.getDefaultValue() != null){
+                fieldType.withDefaultValue(fieldSchema.getDefaultValue());
+            }
             fieldTypes.add(fieldType.build());
         }
         return CollectionSchemaParam.newBuilder()
