@@ -1,6 +1,5 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
-import com.fasterxml.jackson.databind.deser.impl.FieldProperty;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.Gson;
 import io.milvus.v2.client.MilvusClientV2;
@@ -32,7 +31,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkCon
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -106,10 +104,13 @@ public class CatalogUtils {
             MilvusField milvusField = gson.fromJson(field.toString(), type);
 
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
-                    .name(milvusField.getNewFieldName() == null ? milvusField.getFieldName() : milvusField.getNewFieldName())
+                    .name(milvusField.getTargetFieldName() == null ? milvusField.getSourceFieldName() : milvusField.getTargetFieldName())
                     .dataType(DataType.forNumber(milvusField.getDataType()))
                     .isNullable(true)
                     .build();
+            if(milvusField.getMaxCapacity() != null){
+                fieldSchema.setMaxCapacity(milvusField.getMaxCapacity());
+            }
             if(milvusField.getElementType() != null){
                 fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
             }

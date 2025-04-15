@@ -28,8 +28,10 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig.BATCH_SIZE;
 
@@ -63,13 +65,7 @@ public class MilvusSourceReader implements SourceReader<SeaTunnelRow, MilvusSour
 
     @Override
     public void open() throws Exception {
-        client =
-                new MilvusClientV2(
-                        ConnectConfig.builder()
-                                .uri(config.get(MilvusSourceConfig.URL))
-                                .token(config.get(MilvusSourceConfig.TOKEN))
-                                .dbName(config.get(MilvusSourceConfig.DATABASE))
-                                .build());
+        client = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
 
     }
 

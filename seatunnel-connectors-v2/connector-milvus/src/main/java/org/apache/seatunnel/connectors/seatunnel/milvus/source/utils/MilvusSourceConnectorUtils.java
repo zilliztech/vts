@@ -42,6 +42,7 @@ import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 import org.jetbrains.annotations.NotNull;
 
@@ -61,12 +62,7 @@ public class MilvusSourceConnectorUtils {
     }
 
     public Map<TablePath, CatalogTable> getTables() {
-        MilvusClientV2 client = new MilvusClientV2(
-                        ConnectConfig.builder()
-                                .uri(config.get(MilvusSourceConfig.URL))
-                                .token(config.get(MilvusSourceConfig.TOKEN))
-                                .dbName(dbName)
-                                .build());
+        MilvusClientV2 client = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
 
         List<String> collectionList = new ArrayList<>();
         if (!config.get(MilvusSourceConfig.COLLECTION).isEmpty()) {

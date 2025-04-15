@@ -126,19 +126,25 @@ public class MilvusBulkWriter implements MilvusWriter {
         // trigger import after all data write done
         remoteBulkWriter.close();
         if(remoteBulkWriter.getBatchFiles().isEmpty()){
-            log.info("No data uploaded to remote");
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR);
+            log.warn("No data uploaded to remote");
+            return;
         }
         if(stageBucket.getAutoImport()) {
             String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
             String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
             milvusImport.importFolder(objectFolder);
-            milvusImport.waitImportFinish();
         }
     }
 
     @Override
     public long getWriteCache() {
         return this.writeCache.get();
+    }
+
+    @Override
+    public void waitJobFinish() {
+        if(stageBucket.getAutoImport()) {
+            milvusImport.waitImportFinish();
+        }
     }
 }

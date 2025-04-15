@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
-import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
@@ -33,26 +32,24 @@ import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstant.DEFAULT_PARTITION;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.TOKEN;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.URL;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StageHelper;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBufferBatchWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,12 +85,7 @@ public class MilvusSinkWriter
         this.collection = catalogTable.getTablePath().getTableName();
         log.info("create Milvus sink writer success");
         log.info("MilvusSinkWriter config: " + config);
-        ConnectConfig connectConfig = ConnectConfig.builder()
-                        .uri(config.get(URL))
-                        .token(config.get(TOKEN))
-                        .dbName(config.get(DATABASE))
-                        .build();
-        this.milvusClient = new MilvusClientV2(connectConfig);
+        this.milvusClient = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
         describeCollectionResp = milvusClient.describeCollection(DescribeCollectionReq.builder().collectionName(collection).build());
         hasPartitionKey = describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream().anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
         useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
@@ -204,17 +196,19 @@ public class MilvusSinkWriter
             log.info("BatchWriter already closed");
             return;
         }
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         synchronized (batchWriters) {
             if (!closed.get()) {
                 log.info("Stopping Milvus Client");
                 for (MilvusWriter batchWriter : batchWriters.values()) {
                     try {
-                        writeCount.addAndGet(batchWriter.getWriteCache());
                         batchWriter.commit(false);
                         batchWriter.close();
                     } catch (Exception e) {
                         throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
                     }
+                    // Execute asynchronous wait job finish
+                    futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
                 }
                 log.info("Successfully put {} records to Milvus", writeCount.get());
                 log.info("Stop Milvus Client success");
@@ -223,5 +217,7 @@ public class MilvusSinkWriter
                 log.info("BatchWriter already closed");
             }
         }
+        // Wait for all waitJobFinish calls to complete
+        futures.forEach(CompletableFuture::join);
     }
 }

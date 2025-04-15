@@ -100,7 +100,7 @@ public class MilvusImport {
                 throw new RuntimeException(e);
             }
         }
-        log.info("all import job finish");
+        log.info("all import jobs finished:{}", objectUrlsMap);
     }
     public boolean checkImportFinish() {
         HashSet<String> jobIds = new HashSet<>(objectUrlsMap.values());

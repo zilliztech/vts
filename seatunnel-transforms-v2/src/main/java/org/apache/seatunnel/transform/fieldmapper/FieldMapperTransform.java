@@ -26,6 +26,7 @@ import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.common.constants.CommonOptions;
 import org.apache.seatunnel.transform.common.AbstractCatalogSupportTransform;
 import org.apache.seatunnel.transform.exception.TransformCommonError;
 
@@ -38,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -103,24 +105,25 @@ public class FieldMapperTransform extends AbstractCatalogSupportTransform {
                 (key, value) -> {
                     int fieldIndex = inputFieldNames.indexOf(key);
                     if (fieldIndex < 0) {
-                        throw TransformCommonError.cannotFindInputFieldError(getPluginName(), key);
-                    }
-                    Column oldColumn = inputColumns.get(fieldIndex);
-                    PhysicalColumn outputColumn =
-                            PhysicalColumn.of(
-                                    value,
-                                    oldColumn.getDataType(),
-                                    oldColumn.getColumnLength(),
-                                    oldColumn.getScale(),
-                                    oldColumn.isNullable(),
-                                    oldColumn.getDefaultValue(),
-                                    oldColumn.getComment(),
-                                    oldColumn.getSourceType(),
-                                    oldColumn.getOptions());
+                        log.warn("The field {} is not in the input table schema, so it will be ignored.", key);
+                    }else {
+                        Column oldColumn = inputColumns.get(fieldIndex);
+                        PhysicalColumn outputColumn =
+                                PhysicalColumn.of(
+                                        value,
+                                        oldColumn.getDataType(),
+                                        oldColumn.getColumnLength(),
+                                        oldColumn.getScale(),
+                                        oldColumn.isNullable(),
+                                        oldColumn.getDefaultValue(),
+                                        oldColumn.getComment(),
+                                        oldColumn.getSourceType(),
+                                        oldColumn.getOptions());
 
-                    outputColumns.add(outputColumn);
-                    outputFieldNames.add(outputColumn.getName());
-                    needReaderColIndex.add(fieldIndex);
+                        outputColumns.add(outputColumn);
+                        outputFieldNames.add(outputColumn.getName());
+                        needReaderColIndex.add(fieldIndex);
+                    }
                 });
 
         List<ConstraintKey> outputConstraintKeys =
@@ -138,15 +141,21 @@ public class FieldMapperTransform extends AbstractCatalogSupportTransform {
                         .map(ConstraintKey::copy)
                         .collect(Collectors.toList());
 
-        PrimaryKey copiedPrimaryKey = null;
-        if (inputCatalogTable.getTableSchema().getPrimaryKey() != null
-                && outputFieldNames.containsAll(
-                        inputCatalogTable.getTableSchema().getPrimaryKey().getColumnNames())) {
-            copiedPrimaryKey = inputCatalogTable.getTableSchema().getPrimaryKey().copy();
+        PrimaryKey primaryKey = null;
+        if (inputCatalogTable.getTableSchema().getPrimaryKey() != null) {
+            PrimaryKey copiedPrimaryKey = inputCatalogTable.getTableSchema().getPrimaryKey().copy();
+            List<String> outputPrimaryKeyColumnNames = new ArrayList<>();
+            for(String columnName : copiedPrimaryKey.getColumnNames()) {
+                if(fieldMapper.containsKey(columnName)) {
+                    String newColumnName = fieldMapper.get(columnName);
+                    outputPrimaryKeyColumnNames.add(newColumnName);
+                }
+            }
+            primaryKey = PrimaryKey.of(copiedPrimaryKey.getPrimaryKey(), outputPrimaryKeyColumnNames, copiedPrimaryKey.getEnableAutoId());
         }
 
         return TableSchema.builder()
-                .primaryKey(copiedPrimaryKey)
+                .primaryKey(primaryKey)
                 .columns(outputColumns)
                 .constraintKey(outputConstraintKeys)
                 .build();
