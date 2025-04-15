@@ -259,7 +259,7 @@ public class MilvusSourceConverter {
         builder.name(fieldSchema.getName());
         builder.sourceType(dataType.name());
         builder.comment(fieldSchema.getDescription());
-
+        Map<String, Object> optionsMap = new HashMap<>();
         switch (dataType) {
             case Bool:
                 builder.dataType(BasicType.BOOLEAN_TYPE);
@@ -284,7 +284,8 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                builder.columnLength((long)fieldSchema.getMaxLength());
+                optionsMap.put(CommonOptions.MAX_LENGTH.getName(), fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
@@ -297,6 +298,11 @@ public class MilvusSourceConverter {
                 break;
             case Array:
                 builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                DataType elementType = fieldSchema.getElementType();
+                optionsMap.put(CommonOptions.ELEMENT_TYPE.getName(), elementType.getCode());
+                optionsMap.put(CommonOptions.MAX_CAPACITY.getName(), fieldSchema.getMaxCapacity());
+                optionsMap.put(CommonOptions.MAX_LENGTH.getName(), fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case FloatVector:
                 builder.dataType(VectorType.VECTOR_FLOAT_TYPE);

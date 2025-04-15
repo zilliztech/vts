@@ -5,7 +5,10 @@ import lombok.Getter;
 @Getter
 public enum CommonOptions {
     JSON("Json"),
-    METADATA("Metadata");
+    METADATA("Metadata"),
+    ELEMENT_TYPE("ElementType"),
+    MAX_CAPACITY("MaxCapacity"),
+    MAX_LENGTH("MaxLength"),;
 
     private final String name;
 

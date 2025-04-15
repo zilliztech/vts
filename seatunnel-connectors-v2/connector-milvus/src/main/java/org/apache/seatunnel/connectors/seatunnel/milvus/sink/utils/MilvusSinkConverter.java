@@ -165,24 +165,20 @@ public class MilvusSinkConverter {
                         && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
                     // check if is json
                     fieldSchema.setDataType(io.milvus.v2.common.DataType.JSON);
-                } else if (column.getColumnLength() == null || column.getColumnLength() == 0) {
-                    fieldSchema.setMaxLength(65535);
+                } else if (column.getOptions()!= null && column.getOptions().get(CommonOptions.MAX_LENGTH.getName()) != null) {
+                    fieldSchema.setMaxLength((Integer) column.getOptions().get(CommonOptions.MAX_LENGTH.getName()));
                 } else {
-                    fieldSchema.setMaxLength(column.getColumnLength().intValue());
+                    fieldSchema.setMaxLength(65535);
                 }
                 break;
             case ARRAY:
-                ArrayType arrayType = (ArrayType) column.getDataType();
-                SeaTunnelDataType elementType = arrayType.getElementType();
-                fieldSchema.setElementType(convertSqlTypeToDataType(elementType.getSqlType()));
-                fieldSchema.setMaxCapacity(4095);
-                if (Objects.requireNonNull(elementType.getSqlType()) == SqlType.STRING) {
-                    if (column.getColumnLength() == null || column.getColumnLength() == 0) {
-                        fieldSchema.setMaxLength(65535);
-                    } else {
-                        fieldSchema.setMaxLength((int) (column.getColumnLength() / 4));
-                    }
-                }
+                fieldSchema.setDataType(io.milvus.v2.common.DataType.Array);
+                Integer elementType = (Integer) column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName());
+                fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber(elementType));
+                Integer maxCapacity = (Integer) column.getOptions().get(CommonOptions.MAX_CAPACITY.getName());
+                Integer maxLength = (Integer) column.getOptions().get(CommonOptions.MAX_LENGTH.getName());
+                fieldSchema.setMaxCapacity(maxCapacity);
+                fieldSchema.setMaxLength(maxLength);
                 break;
             case BINARY_VECTOR:
             case FLOAT_VECTOR:
