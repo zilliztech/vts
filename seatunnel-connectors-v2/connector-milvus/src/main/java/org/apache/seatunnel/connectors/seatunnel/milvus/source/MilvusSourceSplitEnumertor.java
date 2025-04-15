@@ -33,6 +33,7 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.io.IOException;
@@ -78,13 +79,7 @@ public class MilvusSourceSplitEnumertor
 
     @Override
     public void open() {
-        ConnectConfig connectConfig =
-                ConnectConfig.builder()
-                        .uri(config.get(MilvusSourceConfig.URL))
-                        .token(config.get(MilvusSourceConfig.TOKEN))
-                        .dbName(config.get(MilvusSourceConfig.DATABASE))
-                        .build();
-        this.client = new MilvusClientV2(connectConfig);
+        this.client = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
         parallelism = config.get(MilvusSourceConfig.PARALLELISM);
     }
 

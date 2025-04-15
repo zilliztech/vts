@@ -20,6 +20,10 @@ Write data from milvus to Milvus or Zilliz Cloud
 | token       | String | Yes      | -       | User:password                                                                      |
 | database    | String | Yes      | default | Read data from which database.                                                     |
 | collections | List   | No       | -       | If set, will read collections, otherwise will read all collections under database. |
+|server_pem_path| String | No       | No      |    Path to the PEM file for server certificate                                                                                |
+| server_name            | String | No       | No      |  Server name for TLS verification                                                                                  |
+|       client_key_path                 | String | No       | No      |      Path to the KEY file for client certificate                                                                                                              |
+|       ca_pem_path                 | String | No       |         |    Path to the PEM file for CA certificate                                                                                                                |
 
 ## Sink Options
 
@@ -33,6 +37,10 @@ Write data from milvus to Milvus or Zilliz Cloud
 | enable_upsert        | boolean | No       | false                        | Upsert data not insert.                                   |
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
+|server_pem_path| String | No       | No      |    Path to the PEM file for server certificate                                                                                |
+| server_name            | String | No       | No      |  Server name for TLS verification                                                                                  |
+|       client_key_path                 | String | No       | No      |      Path to the KEY file for client certificate                                                                                                              |
+|       ca_pem_path                 | String | No       |         |    Path to the PEM file for CA certificate                                                                                                                |
 
 ## Task Example
 
@@ -61,4 +69,6 @@ sink {
   }
 }
 ```
-
+## USING TLS
+check this doc about how to use tls in milvus, just specify the related config in the source or sink configs:
+https://milvus.io/docs/tls.md
