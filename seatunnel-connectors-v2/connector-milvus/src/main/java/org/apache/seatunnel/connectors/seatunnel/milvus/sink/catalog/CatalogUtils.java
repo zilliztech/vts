@@ -101,27 +101,31 @@ public class CatalogUtils {
         Gson gson = new Gson();
         for(Object field : config.get(EXTRACT_DYNAMIC)){
             Type type = new TypeToken<MilvusField>(){}.getType();
-            MilvusField milvusField = gson.fromJson(field.toString(), type);
+            String json = gson.toJson(field);
+            MilvusField milvusField = gson.fromJson(json, type);
 
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
                     .name(milvusField.getTargetFieldName() == null ? milvusField.getSourceFieldName() : milvusField.getTargetFieldName())
                     .dataType(DataType.forNumber(milvusField.getDataType()))
                     .isNullable(true)
                     .build();
-            if(milvusField.getMaxCapacity() != null){
-                fieldSchema.setMaxCapacity(milvusField.getMaxCapacity());
-            }
-            if(milvusField.getElementType() != null){
-                fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
+            if(milvusField.getDataType() == DataType.Array.getCode()) {
+                if (milvusField.getMaxCapacity() != null) {
+                    fieldSchema.setMaxCapacity(milvusField.getMaxCapacity() < 1 ? 4096 : milvusField.getMaxCapacity());
+                }
+                if (milvusField.getElementType() != null) {
+                    fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
+                }
             }
             if(milvusField.getMaxLength() != null){
-                fieldSchema.setMaxLength(milvusField.getMaxLength());
+                fieldSchema.setMaxLength(milvusField.getMaxLength() < 1 ? 65535 : milvusField.getMaxLength());
             }
             if(milvusField.getIsNullable() != null){
                 fieldSchema.setIsNullable(milvusField.getIsNullable());
             }
             if(milvusField.getDefaultValue() != null){
-                fieldSchema.setDefaultValue(milvusField.getDefaultValue());
+                Object defaultValue = convertDefault(milvusField.getDataType(), milvusField.getDefaultValue());
+                fieldSchema.setDefaultValue(defaultValue);
             }
             if(fieldSchema.getName().equals(partitionKeyField)){
                 fieldSchema.setIsPartitionKey(true);
@@ -212,12 +216,47 @@ public class CatalogUtils {
         }
     }
 
+    private Object convertDefault(Integer dataType, Object defaultValue) {
+        if (defaultValue == null || defaultValue.toString().isEmpty()) {
+            return null;
+        }
+        DataType dataTypeEnum = DataType.forNumber(dataType);
+        try {
+        switch (dataTypeEnum){
+            case Int8:
+            case Int16:
+                return Short.valueOf(defaultValue.toString());
+            case Int32:
+                return Integer.valueOf(defaultValue.toString());
+            case Int64:
+                return Long.valueOf(defaultValue.toString());
+            case Bool:
+                return Boolean.valueOf(defaultValue.toString());
+            case Float:
+                return Float.valueOf(defaultValue.toString());
+            case Double:
+                return Double.valueOf(defaultValue.toString());
+            case VarChar:
+            case String:
+                return defaultValue.toString();
+            case JSON:
+                return defaultValue.toString();
+            default:
+                    return defaultValue;
+        }} catch (Exception e) {
+            log.error("convert default value failed, dataType: {}, defaultValue: {}", dataTypeEnum, defaultValue);
+            // if the default value is not valid, return null
+            return null;
+        }
+    }
+
     private void setupFieldProperty(CreateCollectionReq.FieldSchema fieldSchema) {
         if(config.get(IS_NULLABLE).contains(fieldSchema.getName())){
             fieldSchema.setIsNullable(true);
         }
         if(config.get(DEFAULT_VALUE).containsKey(fieldSchema.getName())){
-            fieldSchema.setDefaultValue(config.get(DEFAULT_VALUE).get(fieldSchema.getName()));
+            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(), config.get(DEFAULT_VALUE).get(fieldSchema.getName()));
+            fieldSchema.setDefaultValue(defaultValue);
         }
     }
 }

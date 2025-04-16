@@ -65,7 +65,7 @@ public class MilvusBulkWriter implements MilvusWriter {
 
         Gson gson = new Gson();
         Type type = new TypeToken<List<MilvusField>>() {}.getType();
-        this.milvusFields = gson.fromJson(config.get(EXTRACT_DYNAMIC).toString(), type);
+        this.milvusFields = gson.fromJson(gson.toJson(config.get(EXTRACT_DYNAMIC)), type);
 
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
