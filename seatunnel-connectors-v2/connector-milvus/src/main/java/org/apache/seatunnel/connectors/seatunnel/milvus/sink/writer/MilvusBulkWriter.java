@@ -127,7 +127,6 @@ public class MilvusBulkWriter implements MilvusWriter {
         remoteBulkWriter.close();
         if(remoteBulkWriter.getBatchFiles().isEmpty()){
             log.warn("No data uploaded to remote");
-            return;
         }
         if(stageBucket.getAutoImport()) {
             String object = remoteBulkWriter.getBatchFiles().get(0).get(0);

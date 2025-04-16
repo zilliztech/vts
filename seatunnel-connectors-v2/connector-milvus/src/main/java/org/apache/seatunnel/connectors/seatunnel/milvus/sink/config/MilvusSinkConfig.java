@@ -137,9 +137,9 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .mapType()
                     .defaultValue(new HashMap<>())
                     .withDescription("bulk writer config");
-    public static final Option<Integer> WRITER_CACHE =
-            Options.key("writer_cache")
+    public static final Option<Integer> TOTAL_COUNT =
+            Options.key("total_count")
                     .intType()
-                    .defaultValue(500000)
-                    .withDescription("max cache allowed");
+                    .noDefaultValue()
+                    .withDescription("num of rows to be inserted");
 }
