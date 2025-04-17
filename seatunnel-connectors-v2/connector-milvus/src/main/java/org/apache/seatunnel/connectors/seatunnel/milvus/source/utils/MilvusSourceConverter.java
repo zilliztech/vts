@@ -297,8 +297,27 @@ public class MilvusSourceConverter {
                 builder.options(options);
                 break;
             case Array:
-                builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+
                 DataType elementType = fieldSchema.getElementType();
+                if(elementType == DataType.Bool){
+                    builder.dataType(ArrayType.BOOLEAN_ARRAY_TYPE);
+                }else if(elementType == DataType.Int8){
+                    builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
+                }else if(elementType == DataType.Int16){
+                    builder.dataType(ArrayType.SHORT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int32){
+                    builder.dataType(ArrayType.INT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int64){
+                    builder.dataType(ArrayType.LONG_ARRAY_TYPE);
+                }else if(elementType == DataType.Float){
+                    builder.dataType(ArrayType.FLOAT_ARRAY_TYPE);
+                }else if(elementType == DataType.Double){
+                    builder.dataType(ArrayType.DOUBLE_ARRAY_TYPE);
+                }else if(elementType == DataType.VarChar){
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }else {
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }
                 optionsMap.put(CommonOptions.ELEMENT_TYPE.getName(), elementType.getCode());
                 optionsMap.put(CommonOptions.MAX_CAPACITY.getName(), fieldSchema.getMaxCapacity());
                 optionsMap.put(CommonOptions.MAX_LENGTH.getName(), fieldSchema.getMaxLength());
