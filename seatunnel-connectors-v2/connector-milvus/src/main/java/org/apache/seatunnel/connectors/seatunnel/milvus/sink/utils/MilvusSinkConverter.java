@@ -94,6 +94,9 @@ public class MilvusSinkConverter {
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 switch (arrayType.getElementType().getSqlType()) {
+                    case BOOLEAN:
+                        Boolean[] booleanArray = (Boolean[]) value;
+                        return Arrays.asList(booleanArray);
                     case STRING:
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
