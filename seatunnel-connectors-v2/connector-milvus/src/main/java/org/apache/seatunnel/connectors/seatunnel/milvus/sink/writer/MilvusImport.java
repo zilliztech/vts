@@ -47,6 +47,9 @@ public class MilvusImport {
             importData(objectUrl.get(0));
         }
     }
+    public void importFolder(String objectFolder) {
+        importData(objectFolder);
+    }
 
     private String processUrl(String path) {
         if(stageBucket.getCloudId().equals("gcp")){
@@ -97,7 +100,7 @@ public class MilvusImport {
                 throw new RuntimeException(e);
             }
         }
-        log.info("all import job finish");
+        log.info("all import jobs finished:{}", objectUrlsMap);
     }
     public boolean checkImportFinish() {
         HashSet<String> jobIds = new HashSet<>(objectUrlsMap.values());

@@ -64,6 +64,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.util.ArrayList;
@@ -91,14 +92,8 @@ public class MilvusCatalog implements Catalog {
 
     @Override
     public void open() throws CatalogException {
-        ConnectConfig connectConfig =
-                ConnectConfig.builder()
-                        .uri(config.get(MilvusSinkConfig.URL))
-                        .token(config.get(MilvusSinkConfig.TOKEN))
-                        .dbName(config.get(MilvusSinkConfig.DATABASE))
-                        .build();
         try {
-            this.client = new MilvusClientV2(connectConfig);
+            this.client = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
             catalogUtils = new CatalogUtils(client, config);
         } catch (Exception e) {
             throw new CatalogException(String.format("Failed to open catalog %s", catalogName), e);

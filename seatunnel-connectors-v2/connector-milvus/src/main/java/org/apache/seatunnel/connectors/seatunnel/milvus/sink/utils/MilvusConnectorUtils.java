@@ -17,14 +17,18 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.type.CommonOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,5 +81,26 @@ public class MilvusConnectorUtils {
                 milvusClient.describeCollection(
                         DescribeCollectionReq.builder().collectionName(collectionName).build());
         return describeCollectionResp.getEnableDynamicField();
+    }
+
+    public static ConnectConfig getConnectConfig(ReadonlyConfig config) {
+        ConnectConfig connectConfig = ConnectConfig.builder()
+                .uri(config.get(MilvusSourceConfig.URL))
+                .token(config.get(MilvusSourceConfig.TOKEN))
+                .dbName(config.get(MilvusSourceConfig.DATABASE))
+                .build();
+        if(config.get(MilvusCommonConfig.SERVER_PEM_PATH) != null){
+            connectConfig.setServerPemPath(config.get(MilvusCommonConfig.SERVER_PEM_PATH));
+        }
+        if(config.get(MilvusCommonConfig.CLIENT_KEY_PATH) != null){
+            connectConfig.setClientKeyPath(config.get(MilvusCommonConfig.CLIENT_KEY_PATH));
+        }
+        if(config.get(MilvusCommonConfig.CA_PEM_PATH) != null){
+            connectConfig.setCaPemPath(config.get(MilvusCommonConfig.CA_PEM_PATH));
+        }
+        if(config.get(MilvusCommonConfig.SERVER_NAME) != null){
+            connectConfig.setServerName(config.get(MilvusCommonConfig.SERVER_NAME));
+        }
+        return connectConfig;
     }
 }

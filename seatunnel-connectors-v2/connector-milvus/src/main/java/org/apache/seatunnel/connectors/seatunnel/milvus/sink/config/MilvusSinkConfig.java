@@ -27,8 +27,10 @@ import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MilvusSinkConfig extends MilvusCommonConfig {
@@ -38,6 +40,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("database");
+    public static final Option<Map<String, String>> COLLECTION_RENAME =
+            Options.key("collection_rename")
+                    .mapType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("collection rename");
     public static final Option<Map<String, String>> COLLECTION_DESCRIPTION =
             Options.key("collection_description")
                     .mapType()
@@ -48,6 +55,24 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Milvus partition key field");
+
+    public static final Option<List<Object>> EXTRACT_DYNAMIC =
+            Options.key("extract_dynamic")
+                    .listType(Object.class)
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("the fields extracted from dynamic field");
+
+    public static final Option<List<String>> IS_NULLABLE =
+            Options.key("is_nullable")
+                    .listType()
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("the fields that is nullable");
+
+    public static final Option<Map<String, Object>> DEFAULT_VALUE =
+            Options.key("default_value")
+                    .mapObjectType()
+                    .defaultValue(new HashMap<>())
+                    .withDescription("the fields default value");
 
     public static final Option<SchemaSaveMode> SCHEMA_SAVE_MODE =
             Options.key("schema_save_mode")
@@ -69,6 +94,12 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .noDefaultValue()
                     .withDescription("Enable Auto Id");
 
+    public static final Option<String> Auto_ID_NAME =
+            Options.key("auto_id_name")
+                    .stringType()
+                    .defaultValue("Auto_id")
+                    .withDescription("Auto Id Name");
+
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
                     .booleanType()
@@ -85,10 +116,10 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .withDescription("consistency level");
 
     public static final Option<Integer> SHARDS_NUM =
-            Options.key("consistency_level")
+            Options.key("shard_num")
                     .intType()
                     .noDefaultValue()
-                    .withDescription("consistency level");
+                    .withDescription("shard num");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
@@ -106,10 +137,9 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .mapType()
                     .defaultValue(new HashMap<>())
                     .withDescription("bulk writer config");
-    public static final Option<Integer> WRITER_CACHE =
-            Options.key("writer_cache")
+    public static final Option<Integer> TOTAL_COUNT =
+            Options.key("total_count")
                     .intType()
-                    .defaultValue(500000)
-                    .withDescription("max cache allowed");
-
+                    .noDefaultValue()
+                    .withDescription("num of rows to be inserted");
 }

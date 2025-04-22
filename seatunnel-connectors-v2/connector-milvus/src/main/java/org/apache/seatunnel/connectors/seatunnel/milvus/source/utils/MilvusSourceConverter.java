@@ -37,6 +37,7 @@ import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstant;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
 import java.nio.ByteBuffer;
@@ -259,7 +260,7 @@ public class MilvusSourceConverter {
         builder.name(fieldSchema.getName());
         builder.sourceType(dataType.name());
         builder.comment(fieldSchema.getDescription());
-
+        Map<String, Object> optionsMap = new HashMap<>();
         switch (dataType) {
             case Bool:
                 builder.dataType(BasicType.BOOLEAN_TYPE);
@@ -284,7 +285,8 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                builder.columnLength((long)fieldSchema.getMaxLength());
+                optionsMap.put(MilvusConstant.MAX_LENGTH, fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
@@ -296,7 +298,31 @@ public class MilvusSourceConverter {
                 builder.options(options);
                 break;
             case Array:
-                builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+
+                DataType elementType = fieldSchema.getElementType();
+                if(elementType == DataType.Bool){
+                    builder.dataType(ArrayType.BOOLEAN_ARRAY_TYPE);
+                }else if(elementType == DataType.Int8){
+                    builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
+                }else if(elementType == DataType.Int16){
+                    builder.dataType(ArrayType.SHORT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int32){
+                    builder.dataType(ArrayType.INT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int64){
+                    builder.dataType(ArrayType.LONG_ARRAY_TYPE);
+                }else if(elementType == DataType.Float){
+                    builder.dataType(ArrayType.FLOAT_ARRAY_TYPE);
+                }else if(elementType == DataType.Double){
+                    builder.dataType(ArrayType.DOUBLE_ARRAY_TYPE);
+                }else if(elementType == DataType.VarChar){
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }else {
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }
+                optionsMap.put(MilvusConstant.ELEMENT_TYPE, elementType.getCode());
+                optionsMap.put(MilvusConstant.MAX_CAPACITY, fieldSchema.getMaxCapacity());
+                optionsMap.put(MilvusConstant.MAX_LENGTH, fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case FloatVector:
                 builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
