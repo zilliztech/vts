@@ -107,8 +107,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp.getAutoID(),
-                describeCollectionResp.getEnableDynamicField(), jsonFieldNames, dynamicFieldName, milvusFields, element);
+                        catalogTable, describeCollectionResp, jsonFieldNames, dynamicFieldName, milvusFields, element);
         remoteBulkWriter.appendRow(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();

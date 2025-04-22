@@ -20,6 +20,7 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import io.milvus.grpc.DataType;
 import io.milvus.param.collection.CollectionSchemaParam;
 import io.milvus.param.collection.FieldType;
@@ -41,6 +42,7 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.CatalogUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
 
 import java.nio.ByteBuffer;
@@ -262,20 +264,18 @@ public class MilvusSinkConverter {
 
     public JsonObject buildMilvusData(
             CatalogTable catalogTable,
-            Boolean autoId,
-            Boolean enableDynamicField,
+            DescribeCollectionResp describeCollectionResp,
             List<String> jsonFields,
             String dynamicField,
             List<MilvusField> milvusFields,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
-        PrimaryKey primaryKey = catalogTable.getTableSchema().getPrimaryKey();
         JsonObject data = new JsonObject();
         Gson gson = new Gson();
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
             String fieldName = seaTunnelRowType.getFieldNames()[i];
             Boolean isJson = jsonFields.contains(fieldName);
-            if (autoId && isPrimaryKeyField(primaryKey, fieldName)) {
+            if (describeCollectionResp.getAutoID() && fieldName.equals(describeCollectionResp.getPrimaryFieldName())) {
                 continue; // if create table open AutoId, then don't need insert data with
                 // primaryKey field.
             }
@@ -289,7 +289,7 @@ public class MilvusSinkConverter {
             // if the field is dynamic field, then parse the dynamic field
             if (dynamicField != null
                     && dynamicField.equals(fieldName)
-                    && enableDynamicField) {
+                    && describeCollectionResp.getEnableDynamicField()) {
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
                 dynamicData
                         .entrySet()
@@ -299,7 +299,9 @@ public class MilvusSinkConverter {
                                     List<MilvusField> matches = milvusFields.stream().filter(a -> a.getSourceFieldName().equals(entryKey)).collect(Collectors.toList());
                                     if(!matches.isEmpty()) {
                                         if (matches.get(0).getSourceFieldName().equals(entryKey)) {
-                                            data.add(matches.get(0).getTargetFieldName(), entry.getValue());
+                                            DataType dataType = DataType.forNumber(matches.get(0).getDataType());
+                                            Object newValue = convertDefault(dataType.getNumber(), entry.getValue());
+                                            data.add(matches.get(0).getTargetFieldName(), gson.toJsonTree(newValue));
                                         }
 
                                     }else {
@@ -312,6 +314,40 @@ public class MilvusSinkConverter {
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
+    }
+
+    public Object convertDefault(Integer dataType, Object defaultValue) {
+        if (defaultValue == null || defaultValue.toString().isEmpty()) {
+            return null;
+        }
+        io.milvus.v2.common.DataType dataTypeEnum = io.milvus.v2.common.DataType.forNumber(dataType);
+        JsonPrimitive value = (JsonPrimitive) defaultValue;
+        try {
+            switch (dataTypeEnum){
+                case Int8:
+                case Int16:
+                    return value.getAsShort();
+                case Int32:
+                    return value.getAsInt();
+                case Int64:
+                    return Long.valueOf(defaultValue.toString());
+                case Bool:
+                    return Boolean.valueOf(defaultValue.toString());
+                case Float:
+                    return Float.valueOf(defaultValue.toString());
+                case Double:
+                    return Double.valueOf(defaultValue.toString());
+                case VarChar:
+                case String:
+                    return defaultValue.toString();
+                case JSON:
+                    return defaultValue.toString();
+                default:
+                    return defaultValue;
+            }} catch (Exception e) {
+            // if the default value is not valid, return null
+            return null;
+        }
     }
 
     public static CollectionSchemaParam convertToMilvusSchema(DescribeCollectionResp describeCollectionResp) {

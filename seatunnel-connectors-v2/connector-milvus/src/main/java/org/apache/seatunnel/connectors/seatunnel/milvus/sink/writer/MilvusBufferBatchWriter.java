@@ -91,7 +91,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         // put data to cache by partition
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
-                        catalogTable, descriptionCollectionResp.getAutoID(), descriptionCollectionResp.getEnableDynamicField(), jsonFieldNames, dynamicFieldName, milvusFields, element);
+                        catalogTable, descriptionCollectionResp, jsonFieldNames, dynamicFieldName, milvusFields, element);
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
