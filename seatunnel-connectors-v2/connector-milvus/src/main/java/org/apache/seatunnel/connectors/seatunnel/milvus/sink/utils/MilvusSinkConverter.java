@@ -178,12 +178,24 @@ public class MilvusSinkConverter {
                 break;
             case ARRAY:
                 fieldSchema.setDataType(io.milvus.v2.common.DataType.Array);
-                Integer elementType = (Integer) column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName());
-                fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber(elementType));
-                Integer maxCapacity = (Integer) column.getOptions().get(CommonOptions.MAX_CAPACITY.getName());
-                Integer maxLength = (Integer) column.getOptions().get(CommonOptions.MAX_LENGTH.getName());
-                fieldSchema.setMaxCapacity(maxCapacity);
-                fieldSchema.setMaxLength(maxLength);
+                ArrayType arrayType = (ArrayType) column.getDataType();
+                SeaTunnelDataType elementType = arrayType.getElementType();
+                fieldSchema.setElementType(convertSqlTypeToDataType(elementType.getSqlType()));
+                fieldSchema.setMaxCapacity(4096);
+                if (Objects.requireNonNull(elementType.getSqlType()) == SqlType.STRING) {
+                    fieldSchema.setMaxLength(65535);
+                }
+                if(column.getOptions()!= null){
+                    if (column.getOptions().get(CommonOptions.MAX_LENGTH.getName()) != null) {
+                        fieldSchema.setMaxLength((Integer) column.getOptions().get(CommonOptions.MAX_LENGTH.getName()));
+                    }
+                    if (column.getOptions().get(CommonOptions.MAX_CAPACITY.getName()) != null) {
+                        fieldSchema.setMaxCapacity((Integer) column.getOptions().get(CommonOptions.MAX_CAPACITY.getName()));
+                    }
+                    if (column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName()) != null) {
+                        fieldSchema.setElementType(convertSqlTypeToDataType((SqlType) column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName())));
+                    }
+                }
                 break;
             case BINARY_VECTOR:
             case FLOAT_VECTOR:

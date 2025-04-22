@@ -94,6 +94,7 @@ public class CatalogUtils {
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
                             .name(config.get(Auto_ID_NAME))
                             .isPrimaryKey(true)
+                            .autoID(true)
                             .dataType(DataType.Int64)
                             .build();
             fieldSchemaList.add(fieldSchema);
@@ -110,15 +111,13 @@ public class CatalogUtils {
                     .isNullable(true)
                     .build();
             if(milvusField.getDataType() == DataType.Array.getCode()) {
-                if (milvusField.getMaxCapacity() != null) {
-                    fieldSchema.setMaxCapacity(milvusField.getMaxCapacity() < 1 ? 4096 : milvusField.getMaxCapacity());
-                }
+                fieldSchema.setMaxCapacity(4096);
                 if (milvusField.getElementType() != null) {
                     fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
                 }
             }
-            if(milvusField.getMaxLength() != null){
-                fieldSchema.setMaxLength(milvusField.getMaxLength() < 1 ? 65535 : milvusField.getMaxLength());
+            if(milvusField.getDataType() == DataType.VarChar.getCode()){
+                fieldSchema.setMaxLength(65535);
             }
             if(milvusField.getIsNullable() != null){
                 fieldSchema.setIsNullable(milvusField.getIsNullable());
