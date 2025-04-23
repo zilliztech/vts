@@ -61,8 +61,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MilvusSinkWriter
         implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
     //set this to static, then all thread will reuse this
-    private final static Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
-    private final static AtomicBoolean closed = new AtomicBoolean(false);
+    private final Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
     private final CatalogTable catalogTable;
     private final String collection;
     private final ReadonlyConfig config;
@@ -73,8 +73,7 @@ public class MilvusSinkWriter
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
-    private final static AtomicLong writeCount = new AtomicLong(0);
-    private final static AtomicLong writeCache = new AtomicLong(0);
+    private final AtomicLong writeCount = new AtomicLong(0);
 
     public MilvusSinkWriter(
             Context context,
@@ -160,7 +159,8 @@ public class MilvusSinkWriter
         // 增加计数并定期提交
         writeCount.incrementAndGet();
         if (writeCount.get() % 10000 == 0) {
-            log.info("Successfully put {} records to Milvus. Total records written: {}", "10000", writeCount.get());
+            log.info("Successfully put {} records to Milvus, Collection: {}. Total records written: {}", "10000",
+                    this.collection, writeCount.get());
         }
     }
 
@@ -203,7 +203,6 @@ public class MilvusSinkWriter
                 log.info("Stopping Milvus Client");
                 for (MilvusWriter batchWriter : batchWriters.values()) {
                     try {
-                        batchWriter.commit(false);
                         batchWriter.close();
                     } catch (Exception e) {
                         throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
@@ -211,7 +210,7 @@ public class MilvusSinkWriter
                     // Execute asynchronous wait job finish
                     futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
                 }
-                log.info("Successfully put {} records to Milvus", writeCount.get());
+                log.info("Successfully put {} records to Milvus, collection: {}", writeCount.get(), this.collection);
                 log.info("Stop Milvus Client success");
                 closed.set(true); // Mark as closed
             } else {

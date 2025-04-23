@@ -30,7 +30,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
-import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.catalog.exception.CatalogException;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -42,7 +41,6 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.CatalogUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
 
 import java.nio.ByteBuffer;
@@ -57,6 +55,9 @@ public class MilvusSinkConverter {
 
     public Object convertBySeaTunnelType(
             SeaTunnelDataType<?> fieldType, Boolean isJson, Object value) {
+        if(value == null) {
+            return null;
+        }
         SqlType sqlType = fieldType.getSqlType();
         switch (sqlType) {
             case INT:
@@ -312,8 +313,7 @@ public class MilvusSinkConverter {
                                     if(!matches.isEmpty()) {
                                         if (matches.get(0).getSourceFieldName().equals(entryKey)) {
                                             DataType dataType = DataType.forNumber(matches.get(0).getDataType());
-                                            Object newValue = convertDefault(dataType.getNumber(), entry.getValue());
-                                            data.add(matches.get(0).getTargetFieldName(), gson.toJsonTree(newValue));
+                                            data.add(matches.get(0).getTargetFieldName(), entry.getValue());
                                         }
 
                                     }else {
@@ -328,7 +328,7 @@ public class MilvusSinkConverter {
         return data;
     }
 
-    public Object convertDefault(Integer dataType, Object defaultValue) {
+    public Object convertValue(Integer dataType, Object defaultValue) {
         if (defaultValue == null || defaultValue.toString().isEmpty()) {
             return null;
         }
