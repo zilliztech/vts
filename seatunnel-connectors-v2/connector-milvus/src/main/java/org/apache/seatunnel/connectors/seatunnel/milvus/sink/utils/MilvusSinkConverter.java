@@ -194,7 +194,7 @@ public class MilvusSinkConverter {
                         fieldSchema.setMaxCapacity((Integer) column.getOptions().get(CommonOptions.MAX_CAPACITY.getName()));
                     }
                     if (column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName()) != null) {
-                        fieldSchema.setElementType(convertSqlTypeToDataType((SqlType) column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName())));
+                        fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber((Integer) column.getOptions().get(CommonOptions.ELEMENT_TYPE.getName())));
                     }
                 }
                 break;
