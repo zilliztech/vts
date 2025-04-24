@@ -15,16 +15,28 @@
 # limitations under the License.
 #
 
-# JVM Heap
--Xms512m
--Xmx16g
+FROM azul/zulu-openjdk:11
 
-# JVM Dump
--XX:+HeapDumpOnOutOfMemoryError
--XX:HeapDumpPath=/tmp/seatunnel/dump/zeta-server
+ARG VERSION
 
-# Metaspace
--XX:MaxMetaspaceSize=2g
+ENV DOCKER true
+ENV TZ Asia/Shanghai
+ENV SEATUNNEL_HOME /opt/seatunnel
 
-# G1GC
--XX:+UseG1GC
+RUN apt-get update && \
+    apt-get install -y curl vim sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# add seatunnel
+COPY ./apache-seatunnel-${VERSION}-bin.tar.gz /opt/apache-seatunnel-${VERSION}-bin.tar.gz
+WORKDIR /opt
+RUN tar -xzvf apache-seatunnel-${VERSION}-bin.tar.gz
+RUN mv apache-seatunnel-${VERSION} seatunnel
+RUN rm -f /opt/apache-seatunnel-${VERSION}-bin.tar.gz
+WORKDIR /opt/seatunnel
+
+EXPOSE 5801
+
+CMD [ "/bin/bash", "./bin/seatunnel-cluster.sh"]
+
+#CMD [ "/bin/bash"]
