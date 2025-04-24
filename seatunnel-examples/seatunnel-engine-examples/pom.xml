@@ -27,6 +27,43 @@
     <artifactId>seatunnel-engine-examples</artifactId>
     <name>SeaTunnel : Examples : Engine</name>
 
+    <properties>
+        <hadoop3.version>3.1.4</hadoop3.version>
+        <!-- Specify the gRPC version -->
+        <grpc.version>1.59.1</grpc.version>
+        <protobuf.version>3.25.1</protobuf.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty-shaded</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-protobuf</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-stub</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
 
         <!--   seatunnel core dependencies   -->
@@ -39,12 +76,6 @@
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>seatunnel-transforms-v2</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.seatunnel</groupId>
-            <artifactId>seatunnel-hadoop3-3.1.4-uber</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -63,7 +94,17 @@
 
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
-            <artifactId>connector-assert</artifactId>
+            <artifactId>connector-pinecone</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-milvus</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-qdrant</artifactId>
             <version>${project.version}</version>
         </dependency>
 
