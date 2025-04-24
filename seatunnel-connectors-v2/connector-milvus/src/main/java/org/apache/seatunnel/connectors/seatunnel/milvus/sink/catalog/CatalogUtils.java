@@ -90,7 +90,7 @@ public class CatalogUtils {
         if(config.get(MilvusSinkConfig.ENABLE_AUTO_ID) != null){
             enableAutoId = config.get(MilvusSinkConfig.ENABLE_AUTO_ID);
         }
-        if((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1) && enableAutoId){
+        if((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1)){
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
                             .name(config.get(Auto_ID_NAME))
                             .isPrimaryKey(true)

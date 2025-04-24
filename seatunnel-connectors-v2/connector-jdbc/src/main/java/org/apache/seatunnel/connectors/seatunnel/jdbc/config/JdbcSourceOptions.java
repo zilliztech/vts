@@ -105,4 +105,9 @@ public interface JdbcSourceOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("Skip the analysis of table count");
+    Option<Boolean> USE_SINGLE_SPLIT =
+            Options.key("use_single_split")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription("Use single split for table snapshot");
 }
