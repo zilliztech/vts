@@ -21,7 +21,7 @@ import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchConfig;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.IndexDocsCount;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.ElasticsearchConnectorException;
 
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 public class ElasticsearchSourceSplitEnumerator
         implements SourceSplitEnumerator<ElasticsearchSourceSplit, ElasticsearchSourceState> {
 
-    private final SourceSplitEnumerator.Context<ElasticsearchSourceSplit> context;
+    private final Context<ElasticsearchSourceSplit> context;
 
     private final ReadonlyConfig connConfig;
 
@@ -52,22 +52,22 @@ public class ElasticsearchSourceSplitEnumerator
 
     private Map<Integer, List<ElasticsearchSourceSplit>> pendingSplit;
 
-    private final List<ElasticsearchConfig> elasticsearchConfigs;
+    private final List<SourceConfig> sourceConfigs;
 
     private volatile boolean shouldEnumerate;
 
     public ElasticsearchSourceSplitEnumerator(
-            SourceSplitEnumerator.Context<ElasticsearchSourceSplit> context,
+            Context<ElasticsearchSourceSplit> context,
             ReadonlyConfig connConfig,
-            List<ElasticsearchConfig> elasticsearchConfigs) {
-        this(context, null, connConfig, elasticsearchConfigs);
+            List<SourceConfig> sourceConfigs) {
+        this(context, null, connConfig, sourceConfigs);
     }
 
     public ElasticsearchSourceSplitEnumerator(
-            SourceSplitEnumerator.Context<ElasticsearchSourceSplit> context,
+            Context<ElasticsearchSourceSplit> context,
             ElasticsearchSourceState sourceState,
             ReadonlyConfig connConfig,
-            List<ElasticsearchConfig> elasticsearchConfigs) {
+            List<SourceConfig> sourceConfigs) {
         this.context = context;
         this.connConfig = connConfig;
         this.pendingSplit = new HashMap<>();
@@ -76,7 +76,7 @@ public class ElasticsearchSourceSplitEnumerator
             this.shouldEnumerate = sourceState.isShouldEnumerate();
             this.pendingSplit.putAll(sourceState.getPendingSplit());
         }
-        this.elasticsearchConfigs = elasticsearchConfigs;
+        this.sourceConfigs = sourceConfigs;
     }
 
     @Override
@@ -139,9 +139,9 @@ public class ElasticsearchSourceSplitEnumerator
 
     private List<ElasticsearchSourceSplit> getElasticsearchSplit() {
         List<ElasticsearchSourceSplit> splits = new ArrayList<>();
-        for (ElasticsearchConfig elasticsearchConfig : elasticsearchConfigs) {
+        for (SourceConfig sourceConfig : sourceConfigs) {
 
-            String index = elasticsearchConfig.getIndex();
+            String index = sourceConfig.getIndex();
             List<IndexDocsCount> indexDocsCounts = esRestClient.getIndexDocsCount(index);
             indexDocsCounts =
                     indexDocsCounts.stream()
@@ -149,7 +149,7 @@ public class ElasticsearchSourceSplitEnumerator
                             .sorted(Comparator.comparingLong(IndexDocsCount::getDocsCount))
                             .collect(Collectors.toList());
             for (IndexDocsCount indexDocsCount : indexDocsCounts) {
-                ElasticsearchConfig cloneCfg = elasticsearchConfig.clone();
+                SourceConfig cloneCfg = sourceConfig.clone();
                 cloneCfg.setIndex(indexDocsCount.getIndex());
                 splits.add(
                         new ElasticsearchSourceSplit(
@@ -186,7 +186,7 @@ public class ElasticsearchSourceSplitEnumerator
 
     @Override
     public void registerReader(int subtaskId) {
-        log.debug("Register reader {} to ElasticsearchSourceSplitEnumerator.", subtaskId);
+        log.debug("Register reader {} to IoTDBSourceSplitEnumerator.", subtaskId);
         if (!pendingSplit.isEmpty()) {
             assignSplit(Collections.singletonList(subtaskId));
         }

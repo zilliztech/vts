@@ -23,14 +23,11 @@ import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchConfig;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SearchTypeEnum;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.ScrollResult;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.DefaultSeaTunnelRowDeserializer;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.ElasticsearchRecord;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source.SeaTunnelRowDeserializer;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,7 +42,7 @@ import java.util.Map;
 public class ElasticsearchSourceReader
         implements SourceReader<SeaTunnelRow, ElasticsearchSourceSplit> {
 
-    SourceReader.Context context;
+    Context context;
 
     private final ReadonlyConfig connConfig;
 
@@ -56,7 +53,7 @@ public class ElasticsearchSourceReader
 
     private final long pollNextWaitTime = 1000L;
 
-    public ElasticsearchSourceReader(SourceReader.Context context, ReadonlyConfig connConfig) {
+    public ElasticsearchSourceReader(Context context, ReadonlyConfig connConfig) {
         this.context = context;
         this.connConfig = connConfig;
     }
@@ -77,8 +74,23 @@ public class ElasticsearchSourceReader
             ElasticsearchSourceSplit split = splits.poll();
             if (split != null) {
                 SeaTunnelRowType seaTunnelRowType = split.getSeaTunnelRowType();
-                ElasticsearchConfig sourceIndexInfo = split.getElasticsearchConfig();
-                scrollSearchResult(seaTunnelRowType, sourceIndexInfo, output);
+                SeaTunnelRowDeserializer deserializer =
+                        new DefaultSeaTunnelRowDeserializer(seaTunnelRowType);
+                SourceConfig sourceIndexInfo = split.getSourceConfig();
+                ScrollResult scrollResult =
+                        esRestClient.searchByScroll(
+                                sourceIndexInfo.getIndex(),
+                                sourceIndexInfo.getSource(),
+                                sourceIndexInfo.getQuery(),
+                                sourceIndexInfo.getScrollTime(),
+                                sourceIndexInfo.getScrollSize());
+                outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                while (scrollResult.getDocs() != null && scrollResult.getDocs().size() > 0) {
+                    scrollResult =
+                            esRestClient.searchWithScrollId(
+                                    scrollResult.getScrollId(), sourceIndexInfo.getScrollTime());
+                    outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
+                }
             } else if (noMoreSplit) {
                 // signal to the source that we have reached the end of the data.
                 log.info("Closed the bounded ELasticsearch source");
@@ -89,51 +101,13 @@ public class ElasticsearchSourceReader
         }
     }
 
-    private void scrollSearchResult(
-            SeaTunnelRowType seaTunnelRowType,
-            ElasticsearchConfig sourceIndexInfo,
-            Collector<SeaTunnelRow> output) {
-
-        SeaTunnelRowDeserializer deserializer =
-                new DefaultSeaTunnelRowDeserializer(seaTunnelRowType);
-        // sql client
-        if (SearchTypeEnum.SQL.equals(sourceIndexInfo.getSearchType())) {
-            ScrollResult scrollResult =
-                    esRestClient.searchBySql(
-                            sourceIndexInfo.getSqlQuery(), sourceIndexInfo.getScrollSize());
-
-            outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-            while (StringUtils.isNotEmpty(scrollResult.getScrollId())) {
-                scrollResult =
-                        esRestClient.searchWithSql(
-                                scrollResult.getScrollId(), scrollResult.getColumnNodes());
-                outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-            }
-        } else {
-            ScrollResult scrollResult =
-                    esRestClient.searchByScroll(
-                            sourceIndexInfo.getIndex(),
-                            sourceIndexInfo.getSource(),
-                            sourceIndexInfo.getQuery(),
-                            sourceIndexInfo.getScrollTime(),
-                            sourceIndexInfo.getScrollSize());
-            outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-            while (scrollResult.getDocs() != null && !scrollResult.getDocs().isEmpty()) {
-                scrollResult =
-                        esRestClient.searchWithScrollId(
-                                scrollResult.getScrollId(), sourceIndexInfo.getScrollTime());
-                outputFromScrollResult(scrollResult, sourceIndexInfo, output, deserializer);
-            }
-        }
-    }
-
     private void outputFromScrollResult(
             ScrollResult scrollResult,
-            ElasticsearchConfig elasticsearchConfig,
+            SourceConfig sourceConfig,
             Collector<SeaTunnelRow> output,
             SeaTunnelRowDeserializer deserializer) {
-        List<String> source = elasticsearchConfig.getSource();
-        String tableId = elasticsearchConfig.getCatalogTable().getTablePath().toString();
+        List<String> source = sourceConfig.getSource();
+        String tableId = sourceConfig.getCatalogTable().getTablePath().toString();
         for (Map<String, Object> doc : scrollResult.getDocs()) {
             SeaTunnelRow seaTunnelRow =
                     deserializer.deserialize(new ElasticsearchRecord(doc, source, tableId));

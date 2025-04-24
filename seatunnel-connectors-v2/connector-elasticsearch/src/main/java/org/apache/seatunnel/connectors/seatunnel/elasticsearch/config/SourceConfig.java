@@ -17,14 +17,18 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
 
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
 
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -32,13 +36,19 @@ import java.util.Map;
 
 @Getter
 @Setter
-public class ElasticsearchSourceOptions extends ElasticsearchBaseOptions {
+public class SourceConfig implements Serializable {
 
     public static final Option<List<Map<String, Object>>> INDEX_LIST =
             Options.key("index_list")
                     .type(new TypeReference<List<Map<String, Object>>>() {})
                     .noDefaultValue()
                     .withDescription("index_list for multiTable sync");
+
+    public static final Option<String> INDEX =
+            Options.key("index")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Elasticsearch index name, support * fuzzy matching");
 
     public static final Option<List<String>> SOURCE =
             Options.key("source")
@@ -61,18 +71,6 @@ public class ElasticsearchSourceOptions extends ElasticsearchBaseOptions {
                     .withDescription(
                             "Amount of time Elasticsearch will keep the search context alive for scroll requests");
 
-    public static final Option<SearchTypeEnum> SEARCH_TYPE =
-            Options.key("search_type")
-                    .enumType(SearchTypeEnum.class)
-                    .defaultValue(SearchTypeEnum.DSL)
-                    .withDescription("Choose dsl syntax or x-pack sql.");
-
-    public static final Option<String> SQL_QUERY =
-            Options.key("sql_query")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription("X-pack sql,if search_type is sql, this value is required.");
-
     public static final Option<Integer> SCROLL_SIZE =
             Options.key("scroll_size")
                     .intType()
@@ -87,4 +85,28 @@ public class ElasticsearchSourceOptions extends ElasticsearchBaseOptions {
                             Collections.singletonMap("match_all", new HashMap<String, String>()))
                     .withDescription(
                             "Elasticsearch query language. You can control the range of data read");
+    public static final Option<Map> PK =
+            Options.key("pk")
+                    .objectType(Map.class)
+                    .defaultValue(ImmutableMap.of("name", "_id", "type", "string", "length", 512))
+                    .withDescription("The PK of es index, will as pk field of sink table.");
+
+    private String index;
+    private List<String> source;
+    private Map<String, Object> query;
+    private String scrollTime;
+    private int scrollSize;
+
+    private CatalogTable catalogTable;
+
+    public SourceConfig clone() {
+        SourceConfig sourceConfig = new SourceConfig();
+        sourceConfig.setIndex(index);
+        sourceConfig.setSource(new ArrayList<>(source));
+        sourceConfig.setQuery(new HashMap<>(query));
+        sourceConfig.setScrollTime(scrollTime);
+        sourceConfig.setScrollSize(scrollSize);
+        sourceConfig.setCatalogTable(catalogTable);
+        return sourceConfig;
+    }
 }

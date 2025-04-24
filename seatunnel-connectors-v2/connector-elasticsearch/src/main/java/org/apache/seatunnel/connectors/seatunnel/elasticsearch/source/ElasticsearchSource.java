@@ -17,31 +17,26 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.source;
 
+import org.apache.seatunnel.api.table.catalog.*;
+import org.apache.seatunnel.api.table.type.SqlType;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.PkConfig;
 import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
-import org.apache.seatunnel.api.options.ConnectorCommonOptions;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.source.SupportColumnProjection;
 import org.apache.seatunnel.api.source.SupportParallelism;
-import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.CatalogTableUtil;
-import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
-import org.apache.seatunnel.api.table.catalog.SeaTunnelDataTypeConvertorUtil;
-import org.apache.seatunnel.api.table.catalog.TableIdentifier;
-import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.catalog.schema.TableSchemaOptions;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.catalog.ElasticSearchTypeConverter;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchConfig;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchSourceOptions;
-import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SearchTypeEnum;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.ElasticsearchConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.ElasticsearchConnectorException;
 
@@ -56,9 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchSourceOptions.SEARCH_TYPE;
-import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.ElasticsearchSourceOptions.SQL_QUERY;
-
 @Slf4j
 public class ElasticsearchSource
         implements SeaTunnelSource<
@@ -66,22 +58,16 @@ public class ElasticsearchSource
                 SupportParallelism,
                 SupportColumnProjection {
 
-    private final List<ElasticsearchConfig> elasticsearchConfigList;
+    private final List<SourceConfig> sourceConfigList;
     private final ReadonlyConfig connectionConfig;
+
+    private final int STR_PK_DEFAULT_LENGTH = 512 * 4;
+    private final int STR_FIELD_DEFAULT_LENGTH = 2048 * 4;
 
     public ElasticsearchSource(ReadonlyConfig config) {
         this.connectionConfig = config;
-        boolean multiSource = config.getOptional(ElasticsearchSourceOptions.INDEX_LIST).isPresent();
-        boolean singleSource = config.getOptional(ElasticsearchSourceOptions.INDEX).isPresent();
-
-        boolean sqlQuery = config.getOptional(SQL_QUERY).isPresent();
-
-        if (SearchTypeEnum.SQL.equals(config.get(SEARCH_TYPE)) && !sqlQuery) {
-            throw new ElasticsearchConnectorException(
-                    ElasticsearchConnectorErrorCode.SOURCE_CONFIG_ERROR_02,
-                    ElasticsearchConnectorErrorCode.SOURCE_CONFIG_ERROR_02.getDescription());
-        }
-
+        boolean multiSource = config.getOptional(SourceConfig.INDEX_LIST).isPresent();
+        boolean singleSource = config.getOptional(SourceConfig.INDEX).isPresent();
         if (multiSource && singleSource) {
             log.warn(
                     "Elasticsearch Source config warn: when both 'index' and 'index_list' are present in the configuration, only the 'index_list' configuration will take effect");
@@ -92,55 +78,55 @@ public class ElasticsearchSource
                     ElasticsearchConnectorErrorCode.SOURCE_CONFIG_ERROR_01.getDescription());
         }
         if (multiSource) {
-            this.elasticsearchConfigList = createMultiSource(config);
+            this.sourceConfigList = createMultiSource(config);
         } else {
-            this.elasticsearchConfigList =
-                    Collections.singletonList(parseOneIndexQueryConfig(config));
+            this.sourceConfigList = Collections.singletonList(parseOneIndexQueryConfig(config));
         }
     }
 
-    private List<ElasticsearchConfig> createMultiSource(ReadonlyConfig config) {
-        List<Map<String, Object>> configMaps = config.get(ElasticsearchSourceOptions.INDEX_LIST);
+    private List<SourceConfig> createMultiSource(ReadonlyConfig config) {
+        List<Map<String, Object>> configMaps = config.get(SourceConfig.INDEX_LIST);
         List<ReadonlyConfig> configList =
                 configMaps.stream().map(ReadonlyConfig::fromMap).collect(Collectors.toList());
-        List<ElasticsearchConfig> elasticsearchConfigList = new ArrayList<>(configList.size());
+        List<SourceConfig> sourceConfigList = new ArrayList<>(configList.size());
         for (ReadonlyConfig readonlyConfig : configList) {
-            ElasticsearchConfig elasticsearchConfig = parseOneIndexQueryConfig(readonlyConfig);
-            elasticsearchConfigList.add(elasticsearchConfig);
+            SourceConfig sourceConfig = parseOneIndexQueryConfig(readonlyConfig);
+            sourceConfigList.add(sourceConfig);
         }
-        return elasticsearchConfigList;
+        return sourceConfigList;
     }
 
-    private ElasticsearchConfig parseOneIndexQueryConfig(ReadonlyConfig readonlyConfig) {
+    private SourceConfig parseOneIndexQueryConfig(ReadonlyConfig readonlyConfig) {
 
-        Map<String, Object> query = readonlyConfig.get(ElasticsearchSourceOptions.QUERY);
-        String index = readonlyConfig.get(ElasticsearchSourceOptions.INDEX);
+        Map<String, Object> query = readonlyConfig.get(SourceConfig.QUERY);
+        String index = readonlyConfig.get(SourceConfig.INDEX);
 
         CatalogTable catalogTable;
         List<String> source;
         Map<String, String> arrayColumn;
 
-        if (readonlyConfig.getOptional(ConnectorCommonOptions.SCHEMA).isPresent()) {
+        if (readonlyConfig.getOptional(TableSchemaOptions.SCHEMA).isPresent()) {
             // todo: We need to remove the schema in ES.
             log.warn(
                     "The schema config in ElasticSearch source/sink is deprecated, please use source config instead!");
             catalogTable = CatalogTableUtil.buildWithConfig(readonlyConfig);
             source = Arrays.asList(catalogTable.getSeaTunnelRowType().getFieldNames());
         } else {
-            source = readonlyConfig.get(ElasticsearchSourceOptions.SOURCE);
-            arrayColumn = readonlyConfig.get(ElasticsearchSourceOptions.ARRAY_COLUMN);
-            Map<String, BasicTypeDefine<EsType>> esFieldType;
-            if (SearchTypeEnum.SQL.equals(readonlyConfig.get(SEARCH_TYPE))) {
-                esFieldType = getSqlFieldTypeMapping(readonlyConfig.get(SQL_QUERY), source);
-            } else {
-                esFieldType = getFieldTypeMapping(index, source);
-            }
-
+            source = readonlyConfig.get(SourceConfig.SOURCE);
+            arrayColumn = readonlyConfig.get(SourceConfig.ARRAY_COLUMN);
+            Map<String, BasicTypeDefine<EsType>> esFieldType = getFieldTypeMapping(index, source);
             if (CollectionUtils.isEmpty(source)) {
                 source = new ArrayList<>(esFieldType.keySet());
             }
             SeaTunnelDataType[] fieldTypes = getSeaTunnelDataType(esFieldType, source);
             TableSchema.Builder builder = TableSchema.builder();
+
+            PkConfig pkConfig = getPkConfig(readonlyConfig);
+            builder.primaryKey(
+                    PrimaryKey.of(
+                            "es_pk",
+                            Arrays.asList(pkConfig.getName()),
+                            false)); // todo: autoId没有传递到sink
 
             for (int i = 0; i < source.size(); i++) {
                 String key = source.get(i);
@@ -151,7 +137,7 @@ public class ElasticsearchSource
                             SeaTunnelDataTypeConvertorUtil.deserializeSeaTunnelDataType(key, value);
                     builder.column(
                             PhysicalColumn.of(
-                                    key, dataType, 0L, true, null, null, sourceType, null));
+                                    key, dataType, 0L, esFieldType.get(key).getScale(), true, null, null, sourceType, null));
                     continue;
                 }
 
@@ -160,12 +146,17 @@ public class ElasticsearchSource
                                 source.get(i),
                                 fieldTypes[i],
                                 0L,
+                                esFieldType.get(key).getScale(),
                                 true,
                                 null,
                                 null,
                                 sourceType,
                                 null));
             }
+            if (!source.contains(pkConfig.getName())) {
+                addPkFieldIfNotExistInSourceList(builder, pkConfig);
+            }
+
             catalogTable =
                     CatalogTable.of(
                             TableIdentifier.of("elasticsearch", null, index),
@@ -174,21 +165,66 @@ public class ElasticsearchSource
                             Collections.emptyList(),
                             "");
         }
-        SearchTypeEnum searchType = readonlyConfig.get(SEARCH_TYPE);
-        String sqlQuery = readonlyConfig.get(ElasticsearchSourceOptions.SQL_QUERY);
-        String scrollTime = readonlyConfig.get(ElasticsearchSourceOptions.SCROLL_TIME);
-        int scrollSize = readonlyConfig.get(ElasticsearchSourceOptions.SCROLL_SIZE);
-        ElasticsearchConfig elasticsearchConfig = new ElasticsearchConfig();
-        elasticsearchConfig.setSource(source);
-        elasticsearchConfig.setCatalogTable(catalogTable);
-        elasticsearchConfig.setQuery(query);
-        elasticsearchConfig.setScrollTime(scrollTime);
-        elasticsearchConfig.setScrollSize(scrollSize);
-        elasticsearchConfig.setIndex(index);
-        elasticsearchConfig.setCatalogTable(catalogTable);
-        elasticsearchConfig.setSqlQuery(sqlQuery);
-        elasticsearchConfig.setSearchType(searchType);
-        return elasticsearchConfig;
+
+        String scrollTime = readonlyConfig.get(SourceConfig.SCROLL_TIME);
+        int scrollSize = readonlyConfig.get(SourceConfig.SCROLL_SIZE);
+        SourceConfig sourceConfig = new SourceConfig();
+        sourceConfig.setSource(source);
+        sourceConfig.setCatalogTable(catalogTable);
+        sourceConfig.setQuery(query);
+        sourceConfig.setScrollTime(scrollTime);
+        sourceConfig.setScrollSize(scrollSize);
+        sourceConfig.setIndex(index);
+        sourceConfig.setCatalogTable(catalogTable);
+        return sourceConfig;
+    }
+
+    private void addPkFieldIfNotExistInSourceList(TableSchema.Builder builder, PkConfig pkConfig) {
+        SeaTunnelDataType<?> dataType = buildPkSeaTunnelDataType(pkConfig);
+        builder.column(
+                PhysicalColumn.of(
+                        pkConfig.getName(),
+                        dataType,
+                        getColumnLength(pkConfig, pkConfig.getName(), dataType),
+                        null,
+                        true,
+                        null,
+                        null));
+    }
+
+    private static SeaTunnelDataType<?> buildPkSeaTunnelDataType(PkConfig pkConfig) {
+        BasicTypeDefine.BasicTypeDefineBuilder<EsType> typeDefine =
+                BasicTypeDefine.<EsType>builder()
+                        .name(pkConfig.getName())
+                        .columnType(pkConfig.getType())
+                        .dataType(pkConfig.getType());
+        SeaTunnelDataType<?> dataType =
+                ElasticSearchTypeConverter.INSTANCE.convert(typeDefine.build()).getDataType();
+        return dataType;
+    }
+
+    private long getColumnLength(
+            PkConfig pkConfig, String fieldName, SeaTunnelDataType<?> dataType) {
+        if (dataType.getSqlType() != SqlType.STRING) {
+            return 0;
+        }
+        // 采用es source这种方式，string类型字段长度统一设为: 2048, 主键如果是string 长度统一为512
+        if (pkConfig.getName().equals(fieldName)) {
+            return pkConfig.getLength() == null ? STR_PK_DEFAULT_LENGTH : pkConfig.getLength() * 4;
+        } else {
+            return STR_FIELD_DEFAULT_LENGTH;
+        }
+    }
+
+
+    private PkConfig getPkConfig(ReadonlyConfig config) {
+        Map pkMap = config.get(SourceConfig.PK);
+        Object length = pkMap.get("length");
+        return PkConfig.builder()
+                .name(pkMap.get("name").toString())
+                .type(pkMap.get("type").toString())
+                .length(length == null ? null : (int) length)
+                .build();
     }
 
     @Override
@@ -203,8 +239,8 @@ public class ElasticsearchSource
 
     @Override
     public List<CatalogTable> getProducedCatalogTables() {
-        return elasticsearchConfigList.stream()
-                .map(ElasticsearchConfig::getCatalogTable)
+        return sourceConfigList.stream()
+                .map(SourceConfig::getCatalogTable)
                 .collect(Collectors.toList());
     }
 
@@ -219,7 +255,7 @@ public class ElasticsearchSource
             createEnumerator(
                     SourceSplitEnumerator.Context<ElasticsearchSourceSplit> enumeratorContext) {
         return new ElasticsearchSourceSplitEnumerator(
-                enumeratorContext, connectionConfig, elasticsearchConfigList);
+                enumeratorContext, connectionConfig, sourceConfigList);
     }
 
     @Override
@@ -228,7 +264,7 @@ public class ElasticsearchSource
                     SourceSplitEnumerator.Context<ElasticsearchSourceSplit> enumeratorContext,
                     ElasticsearchSourceState sourceState) {
         return new ElasticsearchSourceSplitEnumerator(
-                enumeratorContext, sourceState, connectionConfig, elasticsearchConfigList);
+                enumeratorContext, sourceState, connectionConfig, sourceConfigList);
     }
 
     @VisibleForTesting
@@ -242,15 +278,6 @@ public class ElasticsearchSource
             fieldTypes[i] = seaTunnelDataType;
         }
         return fieldTypes;
-    }
-
-    private Map<String, BasicTypeDefine<EsType>> getSqlFieldTypeMapping(
-            String query, List<String> source) {
-        // EsRestClient#getFieldTypeMapping may throw runtime exception
-        // so here we use try-resources-finally to close the resource
-        try (EsRestClient esRestClient = EsRestClient.createInstance(connectionConfig)) {
-            return esRestClient.getSqlMapping(query, source);
-        }
     }
 
     private Map<String, BasicTypeDefine<EsType>> getFieldTypeMapping(

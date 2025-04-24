@@ -20,10 +20,9 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 
-import java.io.Serializable;
 import java.util.List;
 
-public class ElasticsearchBaseOptions implements Serializable {
+public class EsClusterConnectionConfig {
 
     public static final Option<List<String>> HOSTS =
             Options.key("hosts")
@@ -31,6 +30,11 @@ public class ElasticsearchBaseOptions implements Serializable {
                     .noDefaultValue()
                     .withDescription(
                             "Elasticsearch cluster http address, the format is host:port, allowing multiple hosts to be specified. Such as [\"host1:9200\", \"host2:9200\"]");
+    public static final Option<String> CLOUD_ID =
+            Options.key("cloud_id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Elasticsearch cloud id");
 
     public static final Option<String> USERNAME =
             Options.key("username")
@@ -38,17 +42,17 @@ public class ElasticsearchBaseOptions implements Serializable {
                     .noDefaultValue()
                     .withDescription("x-pack username");
 
-    public static final Option<String> INDEX =
-            Options.key("index")
-                    .stringType()
-                    .noDefaultValue()
-                    .withDescription(
-                            "Elasticsearch index name.Index support contains variables of field name,such as seatunnel_${age},and the field must appear at seatunnel row. If not, we will treat it as a normal index");
     public static final Option<String> PASSWORD =
             Options.key("password")
                     .stringType()
                     .noDefaultValue()
                     .withDescription("x-pack password");
+
+    public static final Option<String> API_KEY =
+            Options.key("api_key")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("api key");
 
     public static final Option<Boolean> TLS_VERIFY_CERTIFICATE =
             Options.key("tls_verify_certificate")

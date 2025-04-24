@@ -29,7 +29,14 @@ import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
 import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
 import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 
-public class ElasticsearchSinkOptions extends ElasticsearchBaseOptions {
+public class SinkConfig {
+
+    public static final Option<String> INDEX =
+            Options.key("index")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Elasticsearch index name.Index support contains variables of field name,such as seatunnel_${age},and the field must appear at seatunnel row. If not, we will treat it as a normal index");
 
     public static final Option<String> INDEX_TYPE =
             Options.key("index_type")

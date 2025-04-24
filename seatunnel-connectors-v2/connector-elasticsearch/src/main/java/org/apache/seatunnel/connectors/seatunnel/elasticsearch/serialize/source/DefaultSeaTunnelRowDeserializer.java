@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source;
 
+import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,13 +43,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.api.table.type.BasicType.BOOLEAN_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.BYTE_TYPE;
@@ -59,6 +57,7 @@ import static org.apache.seatunnel.api.table.type.BasicType.LONG_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.SHORT_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.VOID_TYPE;
+import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 
 public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer {
 
@@ -99,6 +98,8 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                     put(
                             "yyyy-MM-dd HH:mm:ss.SSSSSSSSS".length(),
                             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSS"));
+                    put("2025-02-07 03:06:16.693985+00:00".length(),
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSSXXX"));
                 }
             };
 
@@ -180,17 +181,7 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
             } else if (fieldType instanceof ArrayType) {
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 SeaTunnelDataType<?> elementType = arrayType.getElementType();
-                List<String> stringList = new ArrayList<>();
-                if (elementType instanceof MapType) {
-                    stringList =
-                            JsonUtils.isJsonArray(fieldValue)
-                                    ? JsonUtils.toList(fieldValue, Map.class).stream()
-                                            .map(JsonUtils::toJsonString)
-                                            .collect(Collectors.toList())
-                                    : Collections.singletonList(fieldValue);
-                } else {
-                    stringList = JsonUtils.toList(fieldValue, String.class);
-                }
+                List<String> stringList = JsonUtils.toList(fieldValue, String.class);
                 Object arr = Array.newInstance(elementType.getTypeClass(), stringList.size());
                 for (int i = 0; i < stringList.size(); i++) {
                     Object convertValue = convertValue(elementType, stringList.get(i));
@@ -235,7 +226,12 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                 return Base64.getDecoder().decode(fieldValue);
             } else if (VOID_TYPE.equals(fieldType) || fieldType == null) {
                 return null;
-            } else {
+            } else if (VECTOR_FLOAT_TYPE.equals(fieldType)) {
+                List<Float> list = JsonUtils.toList(fieldValue, Float.class);
+                Float[] vectorArray = new Float[list.size()];
+                list.toArray(vectorArray);
+                return BufferUtils.toByteBuffer(vectorArray);
+            }  else {
                 throw new ElasticsearchConnectorException(
                         CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
                         "Unexpected value: " + fieldType);
@@ -255,6 +251,10 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
         if (fieldValue.length() == "yyyyMMdd".length()
                 || fieldValue.length() == "yyyy-MM-dd".length()) {
             formatDate = fieldValue + " 00:00:00";
+        }
+        if(fieldValue.length() == "2025-02-07 03:06:16.693985+00:00".length()){
+            // Remove the offset (+00:00)
+            formatDate = formatDate.substring(0, formatDate.lastIndexOf("+"));
         }
         DateTimeFormatter dateTimeFormatter = dateTimeFormatterMap.get(formatDate.length());
         if (dateTimeFormatter == null) {
