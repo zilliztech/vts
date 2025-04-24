@@ -39,6 +39,9 @@
         <module>connector-mongodb</module>
         <module>connector-iceberg</module>
         <module>connector-milvus</module>
+        <module>connector-pinecone</module>
+        <module>connector-qdrant</module>
+        <module>connector-tencent-vectordb</module>
     </modules>
 
     <dependencyManagement>
