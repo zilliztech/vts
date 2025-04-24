@@ -17,10 +17,9 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import org.apache.seatunnel.api.table.catalog.TablePath;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.apache.seatunnel.api.table.catalog.TablePath;
 
 import java.io.Serializable;
 import java.util.List;

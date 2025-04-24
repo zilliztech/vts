@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.serialization.DefaultSerializer;
 import org.apache.seatunnel.api.serialization.Serializer;
@@ -27,18 +28,18 @@ import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
+import org.apache.seatunnel.api.sink.SupportMultiTableSink;
 import org.apache.seatunnel.api.sink.SupportSaveMode;
 import org.apache.seatunnel.api.table.catalog.Catalog;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.factory.CatalogFactory;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusCatalogFactory;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusAggregatedCommitInfo;
-import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusCommitInfo;
-import org.apache.seatunnel.connectors.seatunnel.milvus.state.MilvusSinkState;
-
-import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusCatalogFactory;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusAggregatedCommitInfo;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkCommitter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 
 import java.util.Collections;
 import java.util.List;
@@ -51,6 +52,7 @@ public class MilvusSink
                         MilvusSinkState,
                         MilvusCommitInfo,
                         MilvusAggregatedCommitInfo>,
+                SupportMultiTableSink,
                 SupportSaveMode {
 
     private final ReadonlyConfig config;
@@ -104,7 +106,7 @@ public class MilvusSink
 
         SchemaSaveMode schemaSaveMode = config.get(MilvusSinkConfig.SCHEMA_SAVE_MODE);
         DataSaveMode dataSaveMode = config.get(MilvusSinkConfig.DATA_SAVE_MODE);
-
+        catalog.open();
         return Optional.of(
                 new DefaultSaveModeHandler(
                         schemaSaveMode,
@@ -113,10 +115,5 @@ public class MilvusSink
                         catalogTable.getTablePath(),
                         catalogTable,
                         null));
-    }
-
-    @Override
-    public Optional<CatalogTable> getWriteCatalogTable() {
-        return Optional.ofNullable(catalogTable);
     }
 }

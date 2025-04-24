@@ -17,10 +17,18 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.catalog;
 
+import com.fasterxml.jackson.core.Base64Variant;
+
 public class MilvusOptions {
 
     public static final String ENABLE_DYNAMIC_FIELD = "enableDynamicField";
     public static final String SHARDS_NUM = "shardsNum";
     public static final String PARTITION_KEY_FIELD = "partitionKeyField";
     public static final String PARTITION_NAMES = "partitionNames";
+    public static final String MILVUS = "milvus";
+    public static final String ENABLE_AUTO_ID = "enableAutoId";
+    public static final String CONSISTENCY_LEVEL = "consistencyLevel";
+    public static final String ELEMENT_TYPE = "elementType";
+    public static final String MAX_CAPACITY = "maxCapacity";
+    public static final String MAX_LENGTH = "maxLength";
 }

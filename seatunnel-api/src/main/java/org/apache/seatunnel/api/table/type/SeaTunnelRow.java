@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.api.table.type;
 
+import lombok.Data;
+
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -25,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /** SeaTunnel row type. */
+@Data
 public final class SeaTunnelRow implements Serializable {
     private static final long serialVersionUID = -1L;
     /** Table identifier. */
@@ -35,6 +38,8 @@ public final class SeaTunnelRow implements Serializable {
     private final Object[] fields;
 
     private Map<String, Object> options;
+
+    private String partitionName;
 
     private volatile int size;
 

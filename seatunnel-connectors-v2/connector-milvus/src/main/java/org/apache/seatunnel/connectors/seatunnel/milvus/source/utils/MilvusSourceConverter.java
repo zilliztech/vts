@@ -15,39 +15,36 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.utils.source;
+package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import io.milvus.response.QueryResultsWrapper;
+import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
-import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.CommonOptions;
+import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.api.table.type.VectorType;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import io.milvus.grpc.DataType;
-import io.milvus.grpc.FieldSchema;
-import io.milvus.grpc.KeyValuePair;
-import io.milvus.response.QueryResultsWrapper;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 
 public class MilvusSourceConverter {
     private final List<String> existField;
@@ -66,7 +63,7 @@ public class MilvusSourceConverter {
     }
 
     public SeaTunnelRow convertToSeaTunnelRow(
-            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, TablePath tablePath) {
+            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, String collectionName, String partitionName) {
         // get field names and types
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         String[] fieldNames = typeInfo.getFieldNames();
@@ -251,18 +248,19 @@ public class MilvusSourceConverter {
         }
 
         SeaTunnelRow seaTunnelRow = new SeaTunnelRow(seatunnelField);
-        seaTunnelRow.setTableId(tablePath.getFullName());
+        seaTunnelRow.setTableId(collectionName+"_"+partitionName);
+        seaTunnelRow.setPartitionName(partitionName);
         seaTunnelRow.setRowKind(RowKind.INSERT);
         return seaTunnelRow;
     }
 
-    public static PhysicalColumn convertColumn(FieldSchema fieldSchema) {
+    public static PhysicalColumn convertColumn(CreateCollectionReq.FieldSchema fieldSchema) {
         DataType dataType = fieldSchema.getDataType();
         PhysicalColumn.PhysicalColumnBuilder builder = PhysicalColumn.builder();
         builder.name(fieldSchema.getName());
         builder.sourceType(dataType.name());
         builder.comment(fieldSchema.getDescription());
-
+        Map<String, Object> optionsMap = new HashMap<>();
         switch (dataType) {
             case Bool:
                 builder.dataType(BasicType.BOOLEAN_TYPE);
@@ -287,12 +285,8 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("max_length")) {
-                        builder.columnLength(Long.parseLong(keyValuePair.getValue()) * 4);
-                        break;
-                    }
-                }
+                optionsMap.put(MilvusOptions.MAX_LENGTH, fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
@@ -304,46 +298,50 @@ public class MilvusSourceConverter {
                 builder.options(options);
                 break;
             case Array:
-                builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+
+                DataType elementType = fieldSchema.getElementType();
+                if(elementType == DataType.Bool){
+                    builder.dataType(ArrayType.BOOLEAN_ARRAY_TYPE);
+                }else if(elementType == DataType.Int8){
+                    builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
+                }else if(elementType == DataType.Int16){
+                    builder.dataType(ArrayType.SHORT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int32){
+                    builder.dataType(ArrayType.INT_ARRAY_TYPE);
+                }else if(elementType == DataType.Int64){
+                    builder.dataType(ArrayType.LONG_ARRAY_TYPE);
+                }else if(elementType == DataType.Float){
+                    builder.dataType(ArrayType.FLOAT_ARRAY_TYPE);
+                }else if(elementType == DataType.Double){
+                    builder.dataType(ArrayType.DOUBLE_ARRAY_TYPE);
+                }else if(elementType == DataType.VarChar){
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }else {
+                    builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+                }
+                optionsMap.put(MilvusOptions.ELEMENT_TYPE, elementType.getCode());
+                optionsMap.put(MilvusOptions.MAX_CAPACITY, fieldSchema.getMaxCapacity());
+                optionsMap.put(MilvusOptions.MAX_LENGTH, fieldSchema.getMaxLength());
+                builder.options(optionsMap);
                 break;
             case FloatVector:
                 builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case BinaryVector:
                 builder.dataType(VectorType.VECTOR_BINARY_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case SparseFloatVector:
                 builder.dataType(VectorType.VECTOR_SPARSE_FLOAT_TYPE);
                 break;
             case Float16Vector:
                 builder.dataType(VectorType.VECTOR_FLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             case BFloat16Vector:
                 builder.dataType(VectorType.VECTOR_BFLOAT16_TYPE);
-                for (KeyValuePair keyValuePair : fieldSchema.getTypeParamsList()) {
-                    if (keyValuePair.getKey().equals("dim")) {
-                        builder.scale(Integer.valueOf(keyValuePair.getValue()));
-                        break;
-                    }
-                }
+                builder.scale(fieldSchema.getDimension());
                 break;
             default:
                 throw new UnsupportedOperationException("Unsupported data type: " + dataType);

@@ -15,16 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.milvus.state;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.state;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.experimental.SuperBuilder;
 
 import java.io.Serializable;
-import java.util.List;
 
 @Data
+@SuperBuilder
 @AllArgsConstructor
-public class MilvusAggregatedCommitInfo implements Serializable {
-    List<MilvusCommitInfo> commitInfos;
-}
+public class MilvusSinkState implements Serializable {}

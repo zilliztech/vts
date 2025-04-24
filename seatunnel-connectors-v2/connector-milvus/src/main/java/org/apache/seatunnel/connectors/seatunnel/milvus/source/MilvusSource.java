@@ -27,8 +27,8 @@ import org.apache.seatunnel.api.source.SupportParallelism;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSourceConfig;
-import org.apache.seatunnel.connectors.seatunnel.milvus.utils.MilvusConvertUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConnectorUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,10 +42,10 @@ public class MilvusSource
     private final ReadonlyConfig config;
     private final Map<TablePath, CatalogTable> sourceTables;
 
-    public MilvusSource(ReadonlyConfig sourceConfig) {
-        this.config = sourceConfig;
-        MilvusConvertUtils milvusConvertUtils = new MilvusConvertUtils(sourceConfig);
-        this.sourceTables = milvusConvertUtils.getSourceTables();
+    public MilvusSource(ReadonlyConfig sourceConfing) {
+        this.config = sourceConfing;
+        MilvusSourceConnectorUtils milvusSourceConnectorUtils = new MilvusSourceConnectorUtils(sourceConfing);
+        this.sourceTables = milvusSourceConnectorUtils.getTables();
     }
 
     @Override
@@ -66,7 +66,7 @@ public class MilvusSource
     @Override
     public SourceSplitEnumerator<MilvusSourceSplit, MilvusSourceState> createEnumerator(
             SourceSplitEnumerator.Context<MilvusSourceSplit> context) throws Exception {
-        return new MilvusSourceSplitEnumerator(context, config, sourceTables, null);
+        return new MilvusSourceSplitEnumertor(context, config, sourceTables, null);
     }
 
     @Override
@@ -74,7 +74,7 @@ public class MilvusSource
             SourceSplitEnumerator.Context<MilvusSourceSplit> context,
             MilvusSourceState checkpointState)
             throws Exception {
-        return new MilvusSourceSplitEnumerator(context, config, sourceTables, checkpointState);
+        return new MilvusSourceSplitEnumertor(context, config, sourceTables, checkpointState);
     }
 
     @Override
