@@ -18,7 +18,7 @@ package org.apache.seatunnel.engine.common.exception;
 
 import lombok.Getter;
 import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
-
+@Getter
 public enum ClassLoaderErrorCode implements SeaTunnelErrorCode {
     NOT_FOUND_JAR("NOT-FOUND-JAR", "Jar package not found");
 
