@@ -32,6 +32,7 @@
     <modules>
         <module>connector-common</module>
         <module>connector-console</module>
+        <module>connector-file</module>
         <module>connector-fake</module>
         <module>connector-jdbc</module>
         <module>connector-kafka</module>
