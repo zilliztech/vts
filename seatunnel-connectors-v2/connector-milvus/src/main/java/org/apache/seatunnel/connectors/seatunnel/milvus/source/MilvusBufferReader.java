@@ -88,21 +88,10 @@ public class MilvusBufferReader {
         QueryIterator iterator = milvusClient.queryIterator(queryIteratorReq);
 
         int maxFailRetry = 3;
-
+        List<QueryResultsWrapper.RowRecord> next = null;
         while (maxFailRetry > 0) {
             try {
-                List<QueryResultsWrapper.RowRecord> next = iterator.next();
-                if (next == null || next.isEmpty()) {
-                    log.info("No more records in iterator");
-                    completionSignal.countDown();
-                    break;
-                } else {
-                    for (QueryResultsWrapper.RowRecord record : next) {
-                        SeaTunnelRow seaTunnelRow = milvusSourceConverter.convertToSeaTunnelRow(record, tableSchema, collectionName, partitionName);
-                        seaTunnelRow.setTableId(split.getTablePath().toString());
-                        output.collect(seaTunnelRow);
-                    }
-                }
+                next = iterator.next();
             } catch (Exception e) {
                 if (e.getMessage().contains("rate limit exceeded")) {
                     maxFailRetry--;
@@ -110,8 +99,18 @@ public class MilvusBufferReader {
                     Thread.sleep(30000);
                 } else {
                     log.error("Query failed. Batch size: {}. Aborting...", batchSize, e);
-                    throw new RuntimeException("Query failed", e);
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL, e);
                 }
+            }
+        }
+        if (next == null || next.isEmpty()) {
+            log.info("No more records in iterator");
+            completionSignal.countDown();
+        } else {
+            for (QueryResultsWrapper.RowRecord record : next) {
+                SeaTunnelRow seaTunnelRow = milvusSourceConverter.convertToSeaTunnelRow(record, tableSchema, collectionName, partitionName);
+                seaTunnelRow.setTableId(split.getTablePath().toString());
+                output.collect(seaTunnelRow);
             }
         }
 
