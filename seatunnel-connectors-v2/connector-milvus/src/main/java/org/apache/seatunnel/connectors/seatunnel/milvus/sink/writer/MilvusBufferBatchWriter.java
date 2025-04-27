@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 
 import com.google.gson.Gson;
+
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import io.milvus.v2.client.MilvusClientV2;
@@ -59,8 +60,6 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
 
-    private final List<String> jsonFieldNames;
-    private final String dynamicFieldName;
     private final List<MilvusField> milvusFields;
 
     public MilvusBufferBatchWriter (CatalogTable catalogTable, ReadonlyConfig config,
@@ -77,8 +76,6 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         this.milvusSinkConverter = new MilvusSinkConverter();
         this.milvusClient = milvusClient;
 
-        this.dynamicFieldName = MilvusConnectorUtils.getDynamicField(catalogTable);
-        this.jsonFieldNames = MilvusConnectorUtils.getJsonField(catalogTable);
         this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(describeCollectionResp);
         this.descriptionCollectionResp = describeCollectionResp;
         Gson gson = new Gson();
@@ -91,7 +88,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         // put data to cache by partition
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
-                        catalogTable, descriptionCollectionResp, jsonFieldNames, dynamicFieldName, milvusFields, element);
+                        catalogTable, descriptionCollectionResp, milvusFields, element);
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();

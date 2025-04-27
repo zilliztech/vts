@@ -39,8 +39,6 @@ public class MilvusBulkWriter implements MilvusWriter {
     MilvusImport milvusImport;
 
     MilvusSinkConverter milvusSinkConverter;
-    private final List<String> jsonFieldNames;
-    private final String dynamicFieldName;
 
     private final CatalogTable catalogTable;
     private final ReadonlyConfig config;
@@ -59,8 +57,6 @@ public class MilvusBulkWriter implements MilvusWriter {
         CollectionSchemaParam collectionSchemaParam = MilvusSinkConverter.convertToMilvusSchema(describeCollectionResp);
 
         this.milvusSinkConverter = new MilvusSinkConverter();
-        this.dynamicFieldName = MilvusConnectorUtils.getDynamicField(catalogTable);
-        this.jsonFieldNames = MilvusConnectorUtils.getJsonField(catalogTable);
         this.describeCollectionResp = describeCollectionResp;
 
         Gson gson = new Gson();
@@ -107,7 +103,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp, jsonFieldNames, dynamicFieldName, milvusFields, element);
+                        catalogTable, describeCollectionResp, milvusFields, element);
         remoteBulkWriter.appendRow(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();

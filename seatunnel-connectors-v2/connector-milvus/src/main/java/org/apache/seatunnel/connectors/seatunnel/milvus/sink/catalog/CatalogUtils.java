@@ -27,6 +27,7 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.Milvu
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.IS_NULLABLE;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaConverter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.lang.reflect.Type;
@@ -138,7 +139,7 @@ public class CatalogUtils {
                 // skip dynamic field
                 continue;
             }
-            CreateCollectionReq.FieldSchema fieldSchema = MilvusSinkConverter.convertToFieldType(
+            CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
                     column,
                     tableSchema.getPrimaryKey(),
                     partitionKeyField,

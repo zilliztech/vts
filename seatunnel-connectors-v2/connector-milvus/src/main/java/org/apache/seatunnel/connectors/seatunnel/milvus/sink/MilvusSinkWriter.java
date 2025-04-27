@@ -36,7 +36,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.TOTAL_COUNT;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
@@ -219,9 +218,5 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
-        if(writeCount.get() == 0 && config.get(TOTAL_COUNT) != null && config.get(TOTAL_COUNT) > 0) {
-            // If no data is written, throw an exception
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, "No data written to Milvus");
-        }
     }
 }
