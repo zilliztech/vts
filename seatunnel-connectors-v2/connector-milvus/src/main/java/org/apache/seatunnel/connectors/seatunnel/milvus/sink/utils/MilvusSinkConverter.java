@@ -18,6 +18,8 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
@@ -70,7 +72,17 @@ public class MilvusSinkConverter {
                 return Short.parseShort(value.toString());
             case STRING:
                 if (isJson) {
-                    return gson.fromJson(value.toString(), JsonObject.class);
+                    String jsonStr = value.toString();
+                    if (!"null".equalsIgnoreCase(jsonStr.trim())) {
+                        JsonElement el = JsonParser.parseString(jsonStr);
+                        if (el.isJsonObject()) {
+                            return el.getAsJsonObject();
+                        } else {
+                            return el; // or throw, depending on desired behavior
+                        }
+                    } else {
+                        return JsonNull.INSTANCE;
+                    }
                 }
                 return value.toString();
             case FLOAT_VECTOR:
