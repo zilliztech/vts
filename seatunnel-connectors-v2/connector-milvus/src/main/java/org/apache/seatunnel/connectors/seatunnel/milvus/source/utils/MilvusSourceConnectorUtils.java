@@ -167,17 +167,21 @@ public class MilvusSourceConnectorUtils {
                     .collectionName(collection)
                     .indexName(index)
                     .build();
-            DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
+            try {
+                DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
+                for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
+                    try {
+                        VectorIndex vectorIndex = new VectorIndex(indexDesc.getIndexName(), indexDesc.getFieldName(),
+                                indexDesc.getIndexType().getName(), indexDesc.getMetricType().name());
+                        constraintKeyColumns.add(vectorIndex);
+                    }catch (Exception e){
+                        log.info("invalid index, maybe scalar field{}", e.getMessage());
+                    }
 
-            for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
-                try {
-                    VectorIndex vectorIndex = new VectorIndex(indexDesc.getIndexName(), indexDesc.getFieldName(),
-                            indexDesc.getIndexType().getName(), indexDesc.getMetricType().name());
-                    constraintKeyColumns.add(vectorIndex);
-                }catch (Exception e){
-                    log.info("invalid index, maybe scalar field{}", e.getMessage());
                 }
-
+            }catch (Exception e){
+                log.info("describe index error, maybe index not exist {}", e.getMessage());
+                continue;
             }
         }
         return ConstraintKey.of(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY,
