@@ -112,7 +112,7 @@ public class MilvusImport {
                             .jobId(jobId)
                             .build();
             String body = BulkImport.getImportProgress(this.baseUrl, importProgress);
-            RestfulResponse<GetImportProgressResponse> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<GetImportProgressResponse>>() {
+            RestfulResponse<GetImportProgressResp> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<GetImportProgressResp>>() {
             }).getType());
             if(response.getData().getState().equals("Completed")) {
                 log.info("import job: " + jobId + " finish");
