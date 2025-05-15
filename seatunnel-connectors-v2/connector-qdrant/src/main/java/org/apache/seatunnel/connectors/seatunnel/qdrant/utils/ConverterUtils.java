@@ -80,6 +80,9 @@ public class ConverterUtils {
             }
 
             Points.Vector vector = vectorsMap.get(fieldName);
+            if(vector == null){
+                continue;
+            }
             switch (seaTunnelDataType.getSqlType()) {
                 case FLOAT_VECTOR:
                 case BINARY_VECTOR:
