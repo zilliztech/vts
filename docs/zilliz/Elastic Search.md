@@ -1,92 +1,63 @@
-# Tutorial: Migrating Data from Elasticsearch to Milvus Using VTS
-This guide explains how to use Vector Transport Service (VTS) to migrate data from Elasticsearch to Milvus vector database.
+# Elasticsearch
 
-**Prerequisites**
+> Elasticsearch connector
 
-- Elasticsearch instance
-- Milvus instance
-- JAVA 8
+## Description
 
-### Step 1: Download and Extract VTS
+Allows reading data from and writing data to Elasticsearch.
 
-- Navigate to the VTS releases page: https://github.com/zilliztech/vts/releases
-- Download the latest binary package
-- Extract the package using:
-```shell
-tar -xzvf "vector-transport-service-bin-xxx.tar.gz"
-```
-### Step 2: Configure the Migration
-Create a configuration file named es_to_milvus.conf with the following structure:
-```yaml
-# Environment Configuration
+## Key Features
+
+- [x] [batch](../../concept/connector-v2-features.md)
+- [ ] [exactly-once](../../concept/connector-v2-features.md)
+- [x] [column projection](../../concept/connector-v2-features.md)
+
+## Source Options
+
+| Name           | Type    | Required | Default | Description                                                                        |
+|----------------|---------|----------|---------|------------------------------------------------------------------------------------|
+| hosts          | List    | Yes      | -       | List of Elasticsearch host URLs.                                                   |
+| username       | String  | No       | -       | Username for authentication.                                                       |
+| password       | String  | No       | -       | Password for authentication.                                                       |
+| tls_verify_hostname | Boolean | No    | false   | Whether to verify hostname in TLS connection.                                      |
+| tls_verify_certificate | Boolean | No | false   | Whether to verify certificate in TLS connection.                                   |
+| index          | String  | Yes*     | -       | The name of the Elasticsearch index to read from. Required if index_list is not set.|
+## Task Example
+
+This example shows reading from Elasticsearch and writing to Milvus.
+
+```bash
 env {
-    # Number of parallel tasks
-    parallelism = 1
-    # Job execution mode
-    job.mode = "BATCH"
+  parallelism = 1
+  job.mode = "BATCH"
 }
 
-# Source Configuration (Elasticsearch)
 source {
-    Elasticsearch {
-          # SSL/TLS Settings
-          tls_verify_hostname = false
-          tls_verify_certificate = false
-        
-          # Connection Settings
-          hosts = ["https://your-elasticsearch-host:9200"]
-          username = "your-username"  # Leave empty if no authentication
-          password = "your-password"  # Leave empty if no authentication
-        
-          # Data Source
-          index = "my_index"      
-    }
+  Elasticsearch {
+    hosts = ["https://your-elasticsearch-host:9200"]
+    username = "your-username"
+    password = "your-password"
+    tls_verify_hostname = false
+    tls_verify_certificate = false
+    index = "source_index"
+  }
 }
 
-# Destination Configuration (Milvus)
 sink {
-    Milvus {
-          # Connection Settings
-          url = "https://your-milvus-instance.vectordb.zillizcloud.com:19531"
-          token = "your-milvus-token"
-        
-          # Target Database
-          database = "default"
-        
-          # Performance Tuning
-          batch_size = 10  # Adjust based on your needs    
-    }
+  Milvus {
+    url = "https://your-milvus-url.vectordb.zillizcloud.com:19532"
+    token = "YOUR_MILVUS_TOKEN"
+    database = "default"
+    batch_size = 10
+  }
 }
 ```
-Configuration Notes:
 
-Replace placeholder values (marked with your-*) with your actual credentials
-Adjust batch_size based on your data volume and system resources
-The parallelism value can be increased for better performance on larger datasets
+## Security
 
-### Step 3: Run the Migration
-Execute the migration using the SeaTunnel shell script:
-#### Cluster Mode (Recommended)
-- Start the SeaTunnel cluster:
-```shell
-mkdir -p ./logs
-./bin/seatunnel-cluster.sh -d
-```
-- Submit the migration job:
+Elasticsearch connections can be secured using:
+- Basic authentication (username/password)
+- TLS/SSL encryption with certificate verification
+- API key authentication
 
-```shell
-./bin/seatunnel.sh --config ./es_to_milvus.conf
-```
-#### Local Mode
-```shell
-./bin/seatunnel.sh --config ./es_to_milvus.conf -m local
-```
-
-
-#### Monitoring and Troubleshooting
-
-Check the console output for progress and any error messages
-
-### Next Steps
-
-Verify data integrity in Milvus after migration. If Need help with specific configuration options or running into issues? Feel free to ask for clarification!
+Ensure your credentials are kept confidential and managed securely.

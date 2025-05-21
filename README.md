@@ -81,9 +81,9 @@ sink {
 ```
 Configuration Notes:
 
-Replace placeholder values (marked with your-*) with your actual credentials
-Adjust batch_size based on your data volume and system resources
-The parallelism value can be increased for better performance on larger datasets
+- Replace placeholder values (marked with your-*) with your actual credentials
+- Adjust batch_size based on your data volume and system resources
+- The parallelism value can be increased for better performance on larger datasets
 
 #### Step 3: Run the Migration
 Execute the migration using the SeaTunnel shell script:
@@ -111,10 +111,9 @@ Check the console output for progress and any error messages
 
 ### Next Steps
 
-Verify data integrity in Milvus after migration. If Need help with specific configuration options or running into issues? Feel free to ask for clarification!
+Verify data integrity in Milvus after migration. If you need help with specific configuration options or running into issues, feel free to ask for clarification!
 
-### Docker Deployment
-VTS can also be deployed using Docker. To deploy VTS using Docker, follow the instructions in the [Docker Deployment Guide](./docs/zilliz/Docker%20Deployment.md).
+Create Index for your collection and load data into Milvus.
 
 ```shell
 docker pull zilliz/vector-transport-service:latest
@@ -131,12 +130,12 @@ For detailed information, please refer to [Tutorial.md](./Tutorial.md)
 VTS supports a variety of connectors to move data between different systems.
 
 Find Detailed documentation for each connector:
- - [Milvus](docs/zilliz/Milvus.md)
- - [Elasitc Search](docs/zilliz/Elastic%20Search.md)
- - [Pinecone](docs/zilliz/Pinecone.md)
- - [Qdrant](docs/zilliz/Qdrant.md)
- - [Postgres Vector](docs/zilliz/Postgres%20Vector.md)
- - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md)
+ - [Milvus](docs/zilliz/Milvus.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/milvus_to_milvus.conf))
+ - [Elasitc Search](docs/zilliz/Elastic%20Search.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/es_to_milvus.conf))
+ - [Pinecone](docs/zilliz/Pinecone.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pinecone_to_milvus.conf))
+ - [Qdrant](docs/zilliz/Qdrant.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/qdrant_to_milvus.conf))
+ - [Postgres Vector](docs/zilliz/Postgres%20Vector.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pg_to_milvus.conf))
+ - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/tencent_to_milvus.conf))
 
 ### Development
 see [Development.md](./Development.md) for building from source code and running examples.
