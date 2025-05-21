@@ -1,9 +1,12 @@
-# VTS
+# VTS (Vector Transport Service)
+
 [![Discord](https://img.shields.io/discord/1160323594396635310?label=Discord&logo=discord&style=social)](https://discord.com/invite/mKc3R95yE5)
 [![Twitter Follow](https://img.shields.io/twitter/follow/zilliz_universe?style=social)](https://x.com/zilliz_universe)
 [![Twitter Follow](https://img.shields.io/twitter/follow/milvusio?style=social)](https://x.com/milvusio)
+
 ## Overview
-**VTS** (short for Vector Transport Service) is an open-source tool for moving [vectors](https://zilliz.com/glossary/vector-embeddings) and [unstructured data](https://zilliz.com/learn/introduction-to-unstructured-data). It is developed **by** [Zilliz](https://zilliz.com/) based on **Apache Seatunnel**.
+
+**VTS** (Vector Transport Service) is an open-source tool for moving [vectors](https://zilliz.com/glossary/vector-embeddings) and [unstructured data](https://zilliz.com/learn/introduction-to-unstructured-data). It is developed by [Zilliz](https://zilliz.com/) based on **Apache Seatunnel**.
 
 ![VTS Diagram](docs/zilliz/images/vts.png)
 
@@ -23,37 +26,33 @@ Built on top of Apache Seatunnel, Vector-Transport-Service offers:
 
 Additionally, Vector-Transport-Service introduces vector-specific capabilities such as multiple data source support, schema matching, and basic data validation. 
 
-
 ## Roadmap
-Future roadmaps include incremental sync, combined one-time migration and change data capture, and more advanced data transformation capabilities.
+
+Future developments include:
+- Incremental synchronization
+- Combined one-time migration and change data capture
+- Advanced data transformation capabilities
+- Enhanced monitoring and alerting
 
 ![roadmap.png](docs/zilliz/images/roadmap.png)
 
-To learn more details about VTS used in action, read our blog: 
-- [**Introducing Migration Services: Efficiently Move Unstructured Data Across Platforms.**](https://zilliz.com/blog/zilliz-introduces-migration-services)
+## Getting Started
 
-## Get Started
-To get started with VTS, follow the [QuickStart Guide](#quickstart-guide).
+### Prerequisites
+- Docker installed
+- Access to source and target databases
+- Required credentials and permissions
 
-### QuickStart Guide
-This guide will help you get started with how to use vts to transport vector data into milvus, currently, we support the following source connectors:
-- milvus
-- postgres vector
-- elastic search
-- pinecone
-- qdrant
-- tencent vectordb
+### Quick Start
 
-#### Step 1: Download VTS Image
-```shell
+1. **Pull the VTS Image**
+```bash
 docker pull zilliz/vector-transport-service:latest
 docker run -it zilliz/vector-transport-service:latest /bin/bash
 ```
-#### Step 2: Configure the Migration
-Create a configuration file named milvus_to_milvus.conf with the following structure:
-```shell
-vim milvus_to_milvus.conf
-```
+
+2. **Configure Your Migration**
+Create a configuration file (e.g., `migration.conf`):
 ```yaml
 env {
   parallelism = 1
@@ -61,90 +60,87 @@ env {
 }
 
 source {
+  # Source configuration (e.g., Milvus, Elasticsearch, etc.)
   Milvus {
-  url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19530"
-  token="***"
-  database="default"
-  collections=["medium_articles"]
-  batch_size=100
+    url = "https://your-source-url:19530"
+    token = "your-token"
+    database = "default"
+    collections = ["your-collection"]
+    batch_size = 100
   }
 }
 
 sink {
+  # Target configuration
   Milvus {
-  url="https://in01-***.aws-us-west-2.vectordb.zillizcloud.com:19542"
-  token="***"
-  database="default"
-  batch_size=10
+    url = "https://your-target-url:19530"
+    token = "your-token"
+    database = "default"
+    batch_size = 10
   }
 }
 ```
-Configuration Notes:
 
-- Replace placeholder values (marked with your-*) with your actual credentials
-- Adjust batch_size based on your data volume and system resources
-- The parallelism value can be increased for better performance on larger datasets
+3. **Run the Migration**
 
-#### Step 3: Run the Migration
-Execute the migration using the SeaTunnel shell script:
-
-_Cluster Mode (Recommended)_
-- Start the SeaTunnel cluster:
-```shell
+Cluster Mode (Recommended):
+```bash
+# Start the cluster
 mkdir -p ./logs
 ./bin/seatunnel-cluster.sh -d
-```
-- Submit the migration job:
 
-```shell
-./bin/seatunnel.sh --config ./milvus_to_milvus.conf
-```
-_Local Mode_
-```shell
-./bin/seatunnel.sh --config ./milvus_to_milvus.conf -m local
+# Submit the job
+./bin/seatunnel.sh --config ./migration.conf
 ```
 
-
-#### Monitoring and Troubleshooting
-
-Check the console output for progress and any error messages
-
-### Next Steps
-
-Verify data integrity in Milvus after migration. If you need help with specific configuration options or running into issues, feel free to ask for clarification!
-
-Create Index for your collection and load data into Milvus.
-
-```shell
-docker pull zilliz/vector-transport-service:latest
+Local Mode:
+```bash
+./bin/seatunnel.sh --config ./migration.conf -m local
 ```
-## Tutorial
-In addition to the quick start guide, vts has much more powerful features like
-- lots of transformer to support TabelPathMapper, FieldMapper, Embedding etc.
-- cluster mode ready for production use with restful api to manage the job
-- docker deploy, etc.
 
-For detailed information, please refer to [Tutorial.md](./Tutorial.md)
+### Configuration Tips
+- Adjust `parallelism` based on your data volume
+- Configure appropriate `batch_size` for optimal performance
+- Set up proper authentication and security measures
+- Monitor system resources during migration
 
-### Connectors
-VTS supports a variety of connectors to move data between different systems.
+## Supported Connectors
 
-Find Detailed documentation for each connector:
- - [Milvus](docs/zilliz/Milvus.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/milvus_to_milvus.conf))
- - [Elasitc Search](docs/zilliz/Elastic%20Search.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/es_to_milvus.conf))
- - [Pinecone](docs/zilliz/Pinecone.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pinecone_to_milvus.conf))
- - [Qdrant](docs/zilliz/Qdrant.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/qdrant_to_milvus.conf))
- - [Postgres Vector](docs/zilliz/Postgres%20Vector.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pg_to_milvus.conf))
- - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/tencent_to_milvus.conf))
+VTS supports various connectors for data migration:
 
-### Development
-see [Development.md](./Development.md) for building from source code and running examples.
+- [Milvus](docs/zilliz/Milvus.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/milvus_to_milvus.conf))
+- [Elasticsearch](docs/zilliz/Elasticsearch.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/es_to_milvus.conf))
+- [Pinecone](docs/zilliz/Pinecone.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pinecone.conf))
+- [Qdrant](docs/zilliz/Qdrant.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/qdrant.conf))
+- [Postgres Vector](docs/zilliz/Postgres%20Vector.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pg_to_milvus.conf))
+- [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/tencent.conf))
+
+## Advanced Features
+
+For more advanced features, refer to our [Tutorial.md](./docs/zilliz/Tutorial.md) and the [Apache SeaTunnel Documentation](https://seatunnel.apache.org/docs/2.3.10/about):
+
+- Transformers (TablePathMapper, FieldMapper, Embedding)
+- Cluster mode deployment
+- RESTful API for job management
+- Docker deployment
+- Advanced configuration options
+
+## Development
+
+For development setup and contribution guidelines, see [Development.md](./Development.md).
 
 ## Support
-If you require any assistance or have questions regarding VTS, please feel free to reach out to our support team: Email: support@zilliz.com
+
+Need help? Contact our support team:
+- Email: support@zilliz.com
+- Discord: [Join our community](https://discord.com/invite/mKc3R95yE5)
 
 ## About Apache Seatunnel
-SeaTunnel is a next-generation, high-performance, distributed data integration tool, capable of synchronizing vast amounts of data daily. It's trusted by numerous companies for its efficiency and stability.
-It's released under [Apache 2 License](https://github.com/apache/seatunnel/blob/dev/LICENSE).
 
-SeaTunnel is a top-level project of the Apache Software Foundation (ASF). For more information, visit the [Apache Seatunnel website](https://seatunnel.apache.org/).
+SeaTunnel is a next-generation, high-performance, distributed data integration tool. It's:
+- Capable of synchronizing vast amounts of data daily
+- Trusted by numerous companies for efficiency and stability
+- Released under [Apache 2 License](https://github.com/apache/seatunnel/blob/dev/LICENSE)
+- A top-level project of the Apache Software Foundation (ASF)
+
+For more information, visit the [Apache Seatunnel website](https://seatunnel.apache.org/).
