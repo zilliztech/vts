@@ -137,4 +137,10 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .mapType()
                     .defaultValue(new HashMap<>())
                     .withDescription("bulk writer config");
+
+    public static final Option<Integer> STOP_ON_ERROR =
+            Options.key("stop_on_error")
+                    .intType()
+                    .defaultValue(0)
+                    .withDescription("the number of error entities able to skip before job stop");
 }

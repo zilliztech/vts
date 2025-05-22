@@ -36,6 +36,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.STOP_ON_ERROR;
+
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
@@ -68,7 +70,8 @@ public class MilvusSinkWriter
     private final MilvusClientV2 milvusClient;
     private final Boolean useBulkWriter;
     private final StageBucket stageBucket;
-
+    private final int stopOnError;
+    private Map<String, String> errorMap = new ConcurrentHashMap<>();
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
@@ -90,6 +93,7 @@ public class MilvusSinkWriter
         useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
+        stopOnError = config.get(STOP_ON_ERROR);
 
     }
 
@@ -151,7 +155,12 @@ public class MilvusSinkWriter
             try {
                 batchWriter.write(element);
             } catch (Exception e) {
-                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
+                log.error("write data to milvus failed, error: {}", e.getMessage());
+                errorMap.put(element.toString(), e.getMessage());
+                if (errorMap.size() > stopOnError) {
+                    log.error("stop on error, error: {}", e.getMessage());
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
+                }
             }
         }
 
@@ -218,5 +227,9 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
+        if(!errorMap.isEmpty()) {
+            log.error("task completed with errors, error: {}", errorMap);
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.COMPLETED_WITH_ERRORS, errorMap.toString());
+        }
     }
 }

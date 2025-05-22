@@ -45,7 +45,8 @@ public enum MilvusConnectionErrorCode implements SeaTunnelErrorCode {
     COMMIT_ERROR("MILVUS-23","Milvus bulk writer commit data failed" ),
     INIT_WRITER_ERROR("Milvus-24", "Init milvus writer error" ),
     INVALID_PARAM("Milvus-25", "Invalid param" ),
-    IMPORT_JOB_FAILED("Milvus-26", "Import job failed" ),;
+    IMPORT_JOB_FAILED("Milvus-26", "Import job failed" ),
+    COMPLETED_WITH_ERRORS("Milvus-27", "Completed with errors" );
 
     private final String code;
     private final String description;
