@@ -42,6 +42,7 @@ Future developments include:
 - Docker installed
 - Access to source and target databases
 - Required credentials and permissions
+- Milvus Version >= 2.3.6
 
 ### Quick Start
 

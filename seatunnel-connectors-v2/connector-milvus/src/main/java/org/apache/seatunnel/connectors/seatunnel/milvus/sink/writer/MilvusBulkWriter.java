@@ -22,12 +22,12 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
+
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusImport;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;

@@ -55,4 +55,9 @@ public abstract class MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Server name for TLS verification");
+    public static final Option<String> JOB_ID =
+            Options.key("job_id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("related vts job id");
 }

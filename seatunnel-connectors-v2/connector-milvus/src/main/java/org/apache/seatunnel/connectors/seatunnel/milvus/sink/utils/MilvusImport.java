@@ -1,10 +1,9 @@
-package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.google.gson.reflect.TypeToken;
 import io.milvus.bulkwriter.BulkImport;
 import io.milvus.bulkwriter.request.describe.CloudDescribeImportRequest;
 import io.milvus.bulkwriter.response.BulkImportResponse;
-import io.milvus.bulkwriter.response.GetImportProgressResponse;
 import io.milvus.bulkwriter.response.RestfulResponse;
 import io.milvus.common.utils.JsonUtils;
 import kong.unirest.HttpResponse;
@@ -15,6 +14,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.GetImportProgressResp;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.InnerImportRequest;
 
 import java.util.HashMap;
 import java.util.HashSet;
