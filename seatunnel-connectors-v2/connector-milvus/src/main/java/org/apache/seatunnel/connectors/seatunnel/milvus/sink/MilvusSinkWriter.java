@@ -34,7 +34,10 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstant.DEFAULT_PARTITION;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
+
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.JOB_ID;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.STOP_ON_ERROR;
 
@@ -42,9 +45,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitI
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StageHelper;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.EventHelper;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBufferBatchWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,10 +73,11 @@ public class MilvusSinkWriter
     private final String collection;
     private final ReadonlyConfig config;
     private final MilvusClientV2 milvusClient;
+    private final EventHelper eventHelper;
     private final Boolean useBulkWriter;
     private final StageBucket stageBucket;
     private final int stopOnError;
-    private Map<String, String> errorMap = new ConcurrentHashMap<>();
+    private final Map<String, String> errorMap = new ConcurrentHashMap<>();
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
@@ -94,7 +100,8 @@ public class MilvusSinkWriter
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
         stopOnError = config.get(STOP_ON_ERROR);
-
+        String baseUrl = ControllerAPI.getControllerAPI(config.get(MilvusSourceConfig.URL));
+        eventHelper = new EventHelper(baseUrl, config.get(JOB_ID));
     }
 
     /**
@@ -227,9 +234,6 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
-        if(!errorMap.isEmpty()) {
-            log.error("task completed with errors, error: {}", errorMap);
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.COMPLETED_WITH_ERRORS, errorMap.toString());
-        }
+        eventHelper.noticeSuccess(errorMap);
     }
 }

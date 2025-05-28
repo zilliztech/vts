@@ -1,4 +1,4 @@
-package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
