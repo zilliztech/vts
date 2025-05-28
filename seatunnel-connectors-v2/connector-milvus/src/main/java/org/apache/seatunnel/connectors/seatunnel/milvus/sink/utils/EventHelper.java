@@ -26,7 +26,7 @@ public class EventHelper {
         this.jobId = jobId;
     }
 
-    public void noticeSuccess(Map<String, String> errorMap) {
+    public void noticeSuccess(String collectionName, Map<String, String> errorMap) {
         if(StringUtils.isEmpty(jobId)){
             log.error("jobId is empty");
             return;
@@ -37,6 +37,7 @@ public class EventHelper {
             .build();
         SentEventRequest sentEventRequest = SentEventRequest.builder()
             .jobId(jobId)
+            .collectionName(collectionName)
             .eventType(0)
             .eventData(JsonUtils.toJson(vtsJob))
             .build();

@@ -234,6 +234,6 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
-        eventHelper.noticeSuccess(errorMap);
+        eventHelper.noticeSuccess(collection, errorMap);
     }
 }
