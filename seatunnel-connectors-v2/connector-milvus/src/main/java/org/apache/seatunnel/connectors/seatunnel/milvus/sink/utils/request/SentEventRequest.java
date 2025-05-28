@@ -11,7 +11,6 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class SentEventRequest {
     private String jobId;
-    private String collectionName;
     private Integer eventType;
     private String eventData;
     private String message;

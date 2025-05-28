@@ -12,6 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 public class VTSJob {
+    private String collectionName;
     private List<String> skippedData;
     private String dataPath;
 }

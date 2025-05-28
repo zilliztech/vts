@@ -38,9 +38,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAP
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.JOB_ID;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.URL;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.STOP_ON_ERROR;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.VTSAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
@@ -100,8 +102,7 @@ public class MilvusSinkWriter
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
         stopOnError = config.get(STOP_ON_ERROR);
-        String baseUrl = ControllerAPI.getControllerAPI(config.get(MilvusSourceConfig.URL));
-        eventHelper = new EventHelper(baseUrl, config.get(JOB_ID));
+        eventHelper = new EventHelper(config.get(MilvusSourceConfig.URL), config.get(JOB_ID));
     }
 
     /**
