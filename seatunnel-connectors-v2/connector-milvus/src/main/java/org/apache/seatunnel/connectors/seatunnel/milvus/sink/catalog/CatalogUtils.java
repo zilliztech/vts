@@ -51,14 +51,16 @@ public class CatalogUtils {
         List<IndexParam> indexParams = new ArrayList<>();
         if (constraintKey != null) {
             constraintKey.getColumnNames().forEach(constraintKeyColumn -> {
-                VectorIndex vectorIndex = (VectorIndex) constraintKeyColumn;
-                IndexParam indexParam = IndexParam.builder()
-                        .fieldName(vectorIndex.getColumnName())
-                        .metricType(IndexParam.MetricType.valueOf(vectorIndex.getMetricType().name()))
-                        .indexType(IndexParam.IndexType.AUTOINDEX)
-                        .indexName(vectorIndex.getIndexName())
-                        .build();
-                indexParams.add(indexParam);
+                        if (constraintKeyColumn instanceof VectorIndex) {
+                            VectorIndex vectorIndex = (VectorIndex) constraintKeyColumn;
+                            IndexParam indexParam = IndexParam.builder()
+                                    .fieldName(vectorIndex.getColumnName())
+                                    .metricType(IndexParam.MetricType.valueOf(vectorIndex.getMetricType().name()))
+                                    .indexType(IndexParam.IndexType.AUTOINDEX)
+                                    .indexName(vectorIndex.getIndexName())
+                                    .build();
+                            indexParams.add(indexParam);
+                        }
             });
         }
         // create index
