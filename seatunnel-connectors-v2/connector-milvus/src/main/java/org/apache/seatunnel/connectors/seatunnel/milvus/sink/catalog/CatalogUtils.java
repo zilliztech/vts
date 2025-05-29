@@ -50,17 +50,17 @@ public class CatalogUtils {
         ConstraintKey constraintKey = tableSchema.getConstraintKeys().stream().filter(constraintKey1 -> constraintKey1.getConstraintType().equals(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY)).findFirst().orElse(null);
         List<IndexParam> indexParams = new ArrayList<>();
         if (constraintKey != null) {
-            constraintKey.getColumnNames().forEach(constraintKeyColumn -> {
-                        if (constraintKeyColumn instanceof VectorIndex) {
-                            VectorIndex vectorIndex = (VectorIndex) constraintKeyColumn;
-                            IndexParam indexParam = IndexParam.builder()
-                                    .fieldName(vectorIndex.getColumnName())
-                                    .metricType(IndexParam.MetricType.valueOf(vectorIndex.getMetricType().name()))
-                                    .indexType(IndexParam.IndexType.AUTOINDEX)
-                                    .indexName(vectorIndex.getIndexName())
-                                    .build();
-                            indexParams.add(indexParam);
-                        }
+            constraintKey.getVectorIndexes().forEach(vectorIndex -> {
+                if(vectorIndex != null) {
+                    IndexParam indexParam = IndexParam.builder()
+                            .fieldName(vectorIndex.getFieldName())
+                            .metricType(IndexParam.MetricType.valueOf(vectorIndex.getMetricType().name()))
+                            .indexType(IndexParam.IndexType.AUTOINDEX)
+                            .indexName(vectorIndex.getIndexName())
+                            .build();
+                    indexParams.add(indexParam);
+                }
+
             });
         }
         // create index

@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,6 +37,8 @@ public class ConstraintKey implements Serializable {
 
     private final List<ConstraintKeyColumn> columnNames;
 
+    private final List<VectorIndex> vectorIndexes;
+
     private ConstraintKey(
             ConstraintType constraintType,
             String constraintName,
@@ -45,6 +48,20 @@ public class ConstraintKey implements Serializable {
         this.constraintType = constraintType;
         this.constraintName = constraintName;
         this.columnNames = columnNames;
+        this.vectorIndexes = new ArrayList<>();
+    }
+
+    public ConstraintKey(
+            ConstraintType constraintType,
+            String constraintName,
+            List<ConstraintKeyColumn> columnNames,
+            List<VectorIndex> vectorIndexes) {
+        checkNotNull(constraintType, "constraintType must not be null");
+
+        this.constraintType = constraintType;
+        this.constraintName = constraintName;
+        this.columnNames = columnNames;
+        this.vectorIndexes = vectorIndexes;
     }
 
     public static ConstraintKey of(
@@ -52,6 +69,14 @@ public class ConstraintKey implements Serializable {
             String constraintName,
             List<ConstraintKeyColumn> columnNames) {
         return new ConstraintKey(constraintType, constraintName, columnNames);
+    }
+
+    public static ConstraintKey of(
+            ConstraintType constraintType,
+            String constraintName,
+            List<ConstraintKeyColumn> columnNames,
+            List<VectorIndex> vectorIndexes) {
+        return new ConstraintKey(constraintType, constraintName, columnNames, vectorIndexes);
     }
 
     @Data
@@ -84,6 +109,6 @@ public class ConstraintKey implements Serializable {
     public ConstraintKey copy() {
         List<ConstraintKeyColumn> collect =
                 columnNames.stream().map(ConstraintKeyColumn::copy).collect(Collectors.toList());
-        return ConstraintKey.of(constraintType, constraintName, collect);
+        return ConstraintKey.of(constraintType, constraintName, collect, vectorIndexes);
     }
 }
