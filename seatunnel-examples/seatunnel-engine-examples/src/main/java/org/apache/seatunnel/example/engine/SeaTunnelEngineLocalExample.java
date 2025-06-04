@@ -36,7 +36,7 @@ public class SeaTunnelEngineLocalExample {
 
     public static void main(String[] args)
             throws FileNotFoundException, URISyntaxException, CommandException {
-        String configurePath = args.length > 0 ? args[0] : "/real/milvus_to_milvus.conf";
+        String configurePath = args.length > 0 ? args[0] : "/examples/milvus_to_milvus.conf";
         String configFile = getTestConfigFile(configurePath);
         ClientCommandArgs clientCommandArgs = new ClientCommandArgs();
         clientCommandArgs.setConfigFile(configFile);

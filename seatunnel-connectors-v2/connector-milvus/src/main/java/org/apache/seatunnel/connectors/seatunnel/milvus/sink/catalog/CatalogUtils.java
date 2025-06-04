@@ -48,6 +48,7 @@ public class CatalogUtils {
 
     void createIndex(TablePath tablePath, TableSchema tableSchema){
         ConstraintKey constraintKey = tableSchema.getConstraintKeys().stream().filter(constraintKey1 -> constraintKey1.getConstraintType().equals(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY)).findFirst().orElse(null);
+        log.info("constraintKey: {}", constraintKey);
         List<IndexParam> indexParams = new ArrayList<>();
         if (constraintKey != null) {
             constraintKey.getVectorIndexes().forEach(vectorIndex -> {
@@ -62,13 +63,16 @@ public class CatalogUtils {
                 }
 
             });
-        }
+            log.info("indexParams: {}", indexParams);
         // create index
         CreateIndexReq createIndexReq = CreateIndexReq.builder()
                 .collectionName(tablePath.getTableName())
                 .indexParams(indexParams)
                 .build();
         this.client.createIndex(createIndexReq);
+        }else{
+            log.info("no vector index, skip create index");
+        }
     }
 
     void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {

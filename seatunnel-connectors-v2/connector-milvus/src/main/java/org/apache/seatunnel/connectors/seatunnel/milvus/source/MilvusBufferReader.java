@@ -46,7 +46,7 @@ public class MilvusBufferReader {
     }
 
     public void pollData(Integer batchSize) {
-        log.info("Starting to read data from Milvus, table schema: {}", tableSchema);
+        log.info("Starting to read data from Milvus, table schema: {}", tableSchema.toString());
 
         Boolean loadState = milvusClient.getLoadState(
                 GetLoadStateReq.builder()

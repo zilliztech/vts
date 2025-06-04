@@ -157,9 +157,11 @@ public class MilvusCatalog implements Catalog {
 
     @Override
     public void createTable(TablePath tablePath, CatalogTable catalogTable, boolean ignoreIfExists) throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
+        log.info("create table: {}", tablePath.getTableName());
         checkNotNull(tablePath, "Table path cannot be null");
         if (tableExists(tablePath)) {
             if (ignoreIfExists) {
+                log.info("table: {} already exists, skip create table", tablePath.getTableName());
                 return;
             }
             throw new TableAlreadyExistException(catalogName, tablePath);
@@ -169,9 +171,14 @@ public class MilvusCatalog implements Catalog {
         TableSchema tableSchema = catalogTable.getTableSchema();
         checkNotNull(tableSchema, "tableSchema must not be null");
         catalogUtils.createTableInternal(tablePath, catalogTable);
-        if(config.get(MilvusSinkConfig.CREATE_INDEX)) {
+        if(config.get(MilvusSinkConfig.CREATE_INDEX).booleanValue()) {
+            log.info("create index is enabled, create index for table: {}", tablePath.getTableName());
             catalogUtils.createIndex(tablePath, tableSchema);
+            log.info("create index for table: {} success", tablePath.getTableName());
+        }else{
+            log.info("create index is disabled, skip create index");
         }
+        log.info("create table: {} success", tablePath.getTableName());
     }
 
 

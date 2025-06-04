@@ -129,7 +129,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
     public static final Option<Boolean> CREATE_INDEX =
             Options.key("create_index")
                     .booleanType()
-                    .defaultValue(false)
+                    .defaultValue(true)
                     .withDescription("create index");
 
     public static final Option<Map<String, String>> BULK_WRITER_CONFIG =
