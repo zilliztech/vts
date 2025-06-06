@@ -18,6 +18,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import org.apache.seatunnel.api.table.type.CommonOptions;
+import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class CatalogUtils {
@@ -47,32 +49,32 @@ public class CatalogUtils {
     }
 
     void createIndex(TablePath tablePath, TableSchema tableSchema){
-        ConstraintKey constraintKey = tableSchema.getConstraintKeys().stream().filter(constraintKey1 -> constraintKey1.getConstraintType().equals(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY)).findFirst().orElse(null);
-        log.info("constraintKey: {}", constraintKey);
+        
+        List<Column> vectorColumns = tableSchema.getColumns().stream()
+                    .filter(column -> column.getDataType().getSqlType().equals(SqlType.FLOAT_VECTOR))
+                    .collect(Collectors.toList());
+        if(vectorColumns.size() == 0){
+            log.info("no vector index, skip create index");
+            return;
+        }
         List<IndexParam> indexParams = new ArrayList<>();
-        if (constraintKey != null) {
-            constraintKey.getVectorIndexes().forEach(vectorIndex -> {
-                if(vectorIndex != null) {
-                    IndexParam indexParam = IndexParam.builder()
-                            .fieldName(vectorIndex.getFieldName())
-                            .metricType(IndexParam.MetricType.valueOf(vectorIndex.getMetricType().name()))
-                            .indexType(IndexParam.IndexType.AUTOINDEX)
-                            .indexName(vectorIndex.getIndexName())
-                            .build();
-                    indexParams.add(indexParam);
-                }
-
-            });
-            log.info("indexParams: {}", indexParams);
+        for(Column column : vectorColumns){
+            IndexParam indexParam = IndexParam.builder()
+                    .fieldName(column.getName())
+                    .metricType(IndexParam.MetricType.COSINE)
+                    .indexType(IndexParam.IndexType.AUTOINDEX)
+                    .indexName(column.getName())
+                    .build();
+            indexParams.add(indexParam);
+        }        
+        
+        log.info("indexParams: {}", indexParams);
         // create index
         CreateIndexReq createIndexReq = CreateIndexReq.builder()
                 .collectionName(tablePath.getTableName())
                 .indexParams(indexParams)
                 .build();
         this.client.createIndex(createIndexReq);
-        }else{
-            log.info("no vector index, skip create index");
-        }
     }
 
     void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
