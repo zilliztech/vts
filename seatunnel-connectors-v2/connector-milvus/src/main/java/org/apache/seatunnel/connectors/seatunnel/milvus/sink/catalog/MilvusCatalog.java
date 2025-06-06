@@ -171,14 +171,10 @@ public class MilvusCatalog implements Catalog {
         TableSchema tableSchema = catalogTable.getTableSchema();
         checkNotNull(tableSchema, "tableSchema must not be null");
         catalogUtils.createTableInternal(tablePath, catalogTable);
-        if(config.get(MilvusSinkConfig.CREATE_INDEX).booleanValue()) {
-            log.info("create index is enabled, create index for table: {}", tablePath.getTableName());
-            catalogUtils.createIndex(tablePath, tableSchema);
-            log.info("create index for table: {} success", tablePath.getTableName());
-        }else{
-            log.info("create index is disabled, skip create index");
-        }
         log.info("create table: {} success", tablePath.getTableName());
+        log.info("create index for table: {}", tablePath.getTableName());
+        catalogUtils.createIndex(tablePath, tableSchema);
+        log.info("create index for table: {} success", tablePath.getTableName());
     }
 
 

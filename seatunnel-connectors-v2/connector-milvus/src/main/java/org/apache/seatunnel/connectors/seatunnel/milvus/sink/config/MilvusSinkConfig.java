@@ -126,11 +126,6 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .intType()
                     .defaultValue(1000)
                     .withDescription("writer batch size");
-    public static final Option<Boolean> CREATE_INDEX =
-            Options.key("create_index")
-                    .booleanType()
-                    .defaultValue(true)
-                    .withDescription("create index");
 
     public static final Option<Map<String, String>> BULK_WRITER_CONFIG =
             Options.key("bulk_writer_config")
