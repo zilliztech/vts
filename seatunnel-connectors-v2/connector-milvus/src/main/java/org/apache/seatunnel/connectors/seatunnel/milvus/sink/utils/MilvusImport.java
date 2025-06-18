@@ -55,7 +55,7 @@ public class MilvusImport {
     private String processUrl(String path) {
         if(stageBucket.getCloudId().equals("gcp")){
             return "https://storage.cloud.google.com/" + stageBucket.getBucketName() + "/" + path;
-        }else if(stageBucket.getCloudId().equals("az")) {
+        }else if(stageBucket.getCloudId().equals("az") || stageBucket.getCloudId().equals("azure")) {
             https://myaccount.blob.core.windows.net/bucket-name/parquet-folder/data.parquet
             return "https://" + stageBucket.getAccessKey() + ".blob.core.windows.net/" + stageBucket.getBucketName() + "/" + path;
         }
