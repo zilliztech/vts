@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAPI;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.api.ControllerAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.GetImportProgressResp;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.InnerImportRequest;

@@ -7,17 +7,15 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
 
 import org.apache.commons.lang3.StringUtils;
 import io.milvus.common.utils.JsonUtils;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.VTSAPI;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.api.VTSAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.SentEventRequest;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.VTSJob;
-import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 @Slf4j
 public class EventHelper {

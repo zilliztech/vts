@@ -1,0 +1,51 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Install Maven Daemon
+      run: |
+        curl -s https://downloads.apache.org/maven/mvnd/1.0.2/maven-mvnd-1.0.2-linux-amd64.zip -o mvnd.zip
+        unzip mvnd.zip
+        sudo mv maven-mvnd-1.0.2-linux-amd64 /opt/mvnd
+        sudo ln -s /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
+        mvnd --version
+    
+    - name: Build with Maven Daemon
+      run: |
+        mvnd clean package \
+          -pl :seatunnel-dist \
+          -am \
+          -D"skip.ui"=true \
+          -Dmaven.test.skip=true \
+          -Prelease \
+          --batch-mode \
+          --no-transfer-progress
+      env:
+        MAVEN_OPTS: -Xmx4g

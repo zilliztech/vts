@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source;
 
-import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
