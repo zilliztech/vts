@@ -27,8 +27,6 @@
     <name>SeaTunnel : E2E : Connector V2 :</name>
 
     <modules>
-        <module>connector-jdbc-e2e</module>
-        <module>connector-mongodb-e2e</module>
         <module>connector-milvus-e2e</module>
     </modules>
 

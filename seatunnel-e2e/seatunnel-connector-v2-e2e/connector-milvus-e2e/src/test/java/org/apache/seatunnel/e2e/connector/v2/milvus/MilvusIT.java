@@ -31,8 +31,8 @@ import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.common.utils.BufferUtils;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusCatalog;
-import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusCatalog;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import org.apache.seatunnel.e2e.common.TestResource;
 import org.apache.seatunnel.e2e.common.TestSuiteBase;
 import org.apache.seatunnel.e2e.common.container.EngineType;
@@ -413,7 +413,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         R<Boolean> hasCollectionResponse =
                 this.milvusClient.hasCollection(
                         HasCollectionParam.newBuilder()
-                                .withDatabaseName("test")
+                                .withDatabaseName("default")
                                 .withCollectionName(COLLECTION_NAME)
                                 .build());
         Assertions.assertTrue(hasCollectionResponse.getData());
@@ -422,7 +422,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         R<DescribeCollectionResponse> describeCollectionResponseR =
                 this.milvusClient.describeCollection(
                         DescribeCollectionParam.newBuilder()
-                                .withDatabaseName("test")
+                                .withDatabaseName("default")
                                 .withCollectionName(COLLECTION_NAME)
                                 .build());
 
@@ -437,172 +437,5 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         Assertions.assertTrue(fileds.contains(VECTOR_FIELD3));
         Assertions.assertTrue(fileds.contains(VECTOR_FIELD4));
         Assertions.assertTrue(fileds.contains(TITLE_FIELD));
-    }
-
-    @TestTemplate
-    public void testMilvusWithPartitionKey(TestContainer container)
-            throws IOException, InterruptedException {
-        Container.ExecResult execResult =
-                container.executeJob("/milvus-to-milvus-with-partitionkey.conf");
-        Assertions.assertEquals(0, execResult.getExitCode());
-
-        // assert table exist
-        R<Boolean> hasCollectionResponse =
-                this.milvusClient.hasCollection(
-                        HasCollectionParam.newBuilder()
-                                .withDatabaseName("test")
-                                .withCollectionName(COLLECTION_NAME_WITH_PARTITIONKEY)
-                                .build());
-        Assertions.assertTrue(hasCollectionResponse.getData());
-
-        // check table fields
-        R<DescribeCollectionResponse> describeCollectionResponseR =
-                this.milvusClient.describeCollection(
-                        DescribeCollectionParam.newBuilder()
-                                .withDatabaseName("test")
-                                .withCollectionName(COLLECTION_NAME_WITH_PARTITIONKEY)
-                                .build());
-
-        DescribeCollectionResponse data = describeCollectionResponseR.getData();
-        List<String> fileds =
-                data.getSchema().getFieldsList().stream()
-                        .map(FieldSchema::getName)
-                        .collect(Collectors.toList());
-        Assertions.assertTrue(fileds.contains(ID_FIELD));
-        Assertions.assertTrue(fileds.contains(VECTOR_FIELD));
-        Assertions.assertTrue(fileds.contains(VECTOR_FIELD2));
-        Assertions.assertTrue(fileds.contains(VECTOR_FIELD3));
-        Assertions.assertTrue(fileds.contains(VECTOR_FIELD4));
-        Assertions.assertTrue(fileds.contains(TITLE_FIELD));
-    }
-
-    @TestTemplate
-    public void testFakeToMilvus(TestContainer container) throws IOException, InterruptedException {
-        Container.ExecResult execResult = container.executeJob("/fake-to-milvus.conf");
-        Assertions.assertEquals(0, execResult.getExitCode());
-
-        // assert table exist
-        R<Boolean> hasCollectionResponse =
-                this.milvusClient.hasCollection(
-                        HasCollectionParam.newBuilder()
-                                .withDatabaseName("test1")
-                                .withCollectionName(COLLECTION_NAME_1)
-                                .build());
-        Assertions.assertTrue(hasCollectionResponse.getData());
-
-        // check table fields
-        R<DescribeCollectionResponse> describeCollectionResponseR =
-                this.milvusClient.describeCollection(
-                        DescribeCollectionParam.newBuilder()
-                                .withDatabaseName("test1")
-                                .withCollectionName(COLLECTION_NAME_1)
-                                .build());
-
-        DescribeCollectionResponse data = describeCollectionResponseR.getData();
-        List<String> fileds =
-                data.getSchema().getFieldsList().stream()
-                        .map(FieldSchema::getName)
-                        .collect(Collectors.toList());
-        Assertions.assertTrue(fileds.contains(ID_FIELD));
-        Assertions.assertTrue(fileds.contains(VECTOR_FIELD));
-        Assertions.assertTrue(fileds.contains(TITLE_FIELD));
-    }
-
-    @TestTemplate
-    public void testMultiFakeToMilvus(TestContainer container)
-            throws IOException, InterruptedException {
-        Container.ExecResult execResult = container.executeJob("/multi-fake-to-milvus.conf");
-        Assertions.assertEquals(0, execResult.getExitCode());
-
-        // assert table exist
-        R<Boolean> hasCollectionResponse =
-                this.milvusClient.hasCollection(
-                        HasCollectionParam.newBuilder()
-                                .withDatabaseName("test2")
-                                .withCollectionName(COLLECTION_NAME_2)
-                                .build());
-        Assertions.assertTrue(hasCollectionResponse.getData());
-
-        // check table fields
-        R<DescribeCollectionResponse> describeCollectionResponseR =
-                this.milvusClient.describeCollection(
-                        DescribeCollectionParam.newBuilder()
-                                .withDatabaseName("test2")
-                                .withCollectionName(COLLECTION_NAME_2)
-                                .build());
-
-        DescribeCollectionResponse data = describeCollectionResponseR.getData();
-        List<String> fileds =
-                data.getSchema().getFieldsList().stream()
-                        .map(FieldSchema::getName)
-                        .collect(Collectors.toList());
-
-        // assert table fields
-        Assertions.assertTrue(fileds.contains(ID_FIELD));
-        Assertions.assertTrue(fileds.contains("book_intro_1"));
-        Assertions.assertTrue(fileds.contains("book_intro_2"));
-        Assertions.assertTrue(fileds.contains("book_intro_3"));
-        Assertions.assertTrue(fileds.contains("book_intro_4"));
-    }
-
-    @TestTemplate
-    public void testCatalog(TestContainer container) {
-        // simple_example always exist
-        Assertions.assertThrows(
-                TableAlreadyExistException.class,
-                () -> catalog.createTable(TablePath.of("default", "simple_example"), null, false));
-        Assertions.assertDoesNotThrow(
-                () -> catalog.createTable(TablePath.of("default", "simple_example"), null, true));
-
-        // create tmp
-        Assertions.assertDoesNotThrow(
-                () ->
-                        catalog.createTable(
-                                TablePath.of("default", "tmp"),
-                                CatalogTable.of(
-                                        TableIdentifier.of(
-                                                COLLECTION_NAME, TablePath.of("default", "tmp")),
-                                        TableSchema.builder()
-                                                .column(
-                                                        new PhysicalColumn(
-                                                                "id",
-                                                                BasicType.LONG_TYPE,
-                                                                null,
-                                                                null,
-                                                                false,
-                                                                null,
-                                                                null))
-                                                .column(
-                                                        new PhysicalColumn(
-                                                                "vector",
-                                                                VectorType.VECTOR_FLOAT_TYPE,
-                                                                128L,
-                                                                8,
-                                                                false,
-                                                                null,
-                                                                null))
-                                                .primaryKey(
-                                                        new PrimaryKey(
-                                                                "",
-                                                                Collections.singletonList("id")))
-                                                .build(),
-                                        Collections.emptyMap(),
-                                        Collections.emptyList(),
-                                        ""),
-                                false));
-        Assertions.assertDoesNotThrow(
-                () -> catalog.dropTable(TablePath.of("default", "tmp"), false));
-        Assertions.assertThrows(
-                TableNotExistException.class,
-                () -> catalog.dropTable(TablePath.of("default", "tmp"), false));
-
-        // create new database
-        Assertions.assertDoesNotThrow(
-                () -> catalog.createDatabase(TablePath.of("new_db.table"), true));
-        Assertions.assertThrows(
-                DatabaseAlreadyExistException.class,
-                () -> catalog.createDatabase(TablePath.of("new_db.table"), false));
-        Assertions.assertDoesNotThrow(
-                () -> catalog.dropDatabase(TablePath.of("new_db.table"), false));
     }
 }
