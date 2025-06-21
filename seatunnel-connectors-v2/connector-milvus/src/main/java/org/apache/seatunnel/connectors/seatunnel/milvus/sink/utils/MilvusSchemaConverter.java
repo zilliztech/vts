@@ -9,7 +9,7 @@ import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SqlType;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +46,8 @@ public class MilvusSchemaConverter {
                         && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
                     // check if is json
                     fieldSchema.setDataType(io.milvus.v2.common.DataType.JSON);
-                } else if (column.getOptions()!= null && column.getOptions().get(MilvusOptions.MAX_LENGTH) != null) {
-                    fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusOptions.MAX_LENGTH));
+                } else if (column.getOptions()!= null && column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
+                    fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusConstants.MAX_LENGTH));
                 } else {
                     fieldSchema.setMaxLength(65535);
                 }
@@ -62,14 +62,14 @@ public class MilvusSchemaConverter {
                     fieldSchema.setMaxLength(65535);
                 }
                 if(column.getOptions()!= null){
-                    if (column.getOptions().get(MilvusOptions.MAX_LENGTH) != null) {
-                        fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusOptions.MAX_LENGTH));
+                    if (column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
+                        fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusConstants.MAX_LENGTH));
                     }
-                    if (column.getOptions().get(MilvusOptions.MAX_CAPACITY) != null) {
-                        fieldSchema.setMaxCapacity((Integer) column.getOptions().get(MilvusOptions.MAX_CAPACITY));
+                    if (column.getOptions().get(MilvusConstants.MAX_CAPACITY) != null) {
+                        fieldSchema.setMaxCapacity((Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY));
                     }
-                    if (column.getOptions().get(MilvusOptions.ELEMENT_TYPE) != null) {
-                        fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber((Integer) column.getOptions().get(MilvusOptions.ELEMENT_TYPE)));
+                    if (column.getOptions().get(MilvusConstants.ELEMENT_TYPE) != null) {
+                        fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber((Integer) column.getOptions().get(MilvusConstants.ELEMENT_TYPE)));
                     }
                 }
                 break;

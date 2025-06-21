@@ -15,8 +15,8 @@ import kong.unirest.Unirest;
 import org.apache.commons.lang3.StringUtils;
 import io.milvus.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.VTSAPI;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.SentEventRequest;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.VTSJob;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.SentEventRequest;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.VTSJob;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 @Slf4j

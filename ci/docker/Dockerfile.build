@@ -48,7 +48,7 @@ RUN mvnd clean package \
     --no-transfer-progress
 
 # Runtime stage
-FROM azul/zulu-openjdk:11
+FROM azul/zulu-openjdk:17
 
 ARG VERSION=2.3.11-SNAPSHOT
 

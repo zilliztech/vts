@@ -1,7 +1,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.google.gson.Gson;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 
 import java.util.Map;
 
