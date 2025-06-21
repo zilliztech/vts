@@ -13,13 +13,11 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.api.table.catalog.ConstraintKey;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
-import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.SqlType;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
@@ -29,7 +27,6 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.Milvu
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.IS_NULLABLE;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaConverter;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -82,8 +79,8 @@ public class CatalogUtils {
 
         // partition key logic
         String partitionKeyField = null;
-        if(options.containsKey(MilvusOptions.PARTITION_KEY_FIELD)){
-            partitionKeyField = options.get(MilvusOptions.PARTITION_KEY_FIELD);
+        if(options.containsKey(MilvusConstants.PARTITION_KEY_FIELD)){
+            partitionKeyField = options.get(MilvusConstants.PARTITION_KEY_FIELD);
         }
         // if partition key is set in config, use the one in config
         if (StringUtils.isNotEmpty(config.get(MilvusSinkConfig.PARTITION_KEY))) {
@@ -93,8 +90,8 @@ public class CatalogUtils {
         TableSchema tableSchema = catalogTable.getTableSchema();
         List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
         Boolean enableAutoId = false;
-        if(options.containsKey(MilvusOptions.ENABLE_AUTO_ID)){
-            enableAutoId = Boolean.valueOf(options.get(MilvusOptions.ENABLE_AUTO_ID));
+        if(options.containsKey(MilvusConstants.ENABLE_AUTO_ID)){
+            enableAutoId = Boolean.valueOf(options.get(MilvusConstants.ENABLE_AUTO_ID));
         }
         if(config.get(MilvusSinkConfig.ENABLE_AUTO_ID) != null){
             enableAutoId = config.get(MilvusSinkConfig.ENABLE_AUTO_ID);
@@ -158,8 +155,8 @@ public class CatalogUtils {
 
         Boolean enableDynamicField = true;
 
-        if(options.containsKey(MilvusOptions.ENABLE_DYNAMIC_FIELD)) {
-            enableDynamicField = Boolean.valueOf(options.get(MilvusOptions.ENABLE_DYNAMIC_FIELD));
+        if(options.containsKey(MilvusConstants.ENABLE_DYNAMIC_FIELD)) {
+            enableDynamicField = Boolean.valueOf(options.get(MilvusConstants.ENABLE_DYNAMIC_FIELD));
         }
         // if enable_dynamic_field is set in config, use the one in config
         if(config.get(ENABLE_DYNAMIC_FIELD) != null){
@@ -168,8 +165,8 @@ public class CatalogUtils {
 
         // consistency level
         ConsistencyLevel consistencyLevel = ConsistencyLevel.BOUNDED;
-        if(options.containsKey(MilvusOptions.CONSISTENCY_LEVEL)){
-            consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusOptions.CONSISTENCY_LEVEL).toUpperCase());
+        if(options.containsKey(MilvusConstants.CONSISTENCY_LEVEL)){
+            consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusConstants.CONSISTENCY_LEVEL).toUpperCase());
         }
         if(config.get(MilvusSinkConfig.CONSISTENCY_LEVEL) != null){
             consistencyLevel = config.get(MilvusSinkConfig.CONSISTENCY_LEVEL);
@@ -198,8 +195,8 @@ public class CatalogUtils {
                         .enableDynamicField(enableDynamicField)
                         .consistencyLevel(consistencyLevel)
                         .build();
-        if (StringUtils.isNotEmpty(options.get(MilvusOptions.SHARDS_NUM))) {
-            createCollectionReq.setNumShards(Integer.parseInt(options.get(MilvusOptions.SHARDS_NUM)));
+        if (StringUtils.isNotEmpty(options.get(MilvusConstants.SHARDS_NUM))) {
+            createCollectionReq.setNumShards(Integer.parseInt(options.get(MilvusConstants.SHARDS_NUM)));
         }
         if(config.get(MilvusSinkConfig.SHARDS_NUM) != null){
             createCollectionReq.setNumShards(config.get(MilvusSinkConfig.SHARDS_NUM));

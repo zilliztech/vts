@@ -37,7 +37,7 @@ import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
 import java.nio.ByteBuffer;
@@ -285,7 +285,7 @@ public class MilvusSourceConverter {
                 break;
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                optionsMap.put(MilvusOptions.MAX_LENGTH, fieldSchema.getMaxLength());
+                optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
                 builder.options(optionsMap);
                 break;
             case String:
@@ -319,9 +319,9 @@ public class MilvusSourceConverter {
                 }else {
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
                 }
-                optionsMap.put(MilvusOptions.ELEMENT_TYPE, elementType.getCode());
-                optionsMap.put(MilvusOptions.MAX_CAPACITY, fieldSchema.getMaxCapacity());
-                optionsMap.put(MilvusOptions.MAX_LENGTH, fieldSchema.getMaxLength());
+                optionsMap.put(MilvusConstants.ELEMENT_TYPE, elementType.getCode());
+                optionsMap.put(MilvusConstants.MAX_CAPACITY, fieldSchema.getMaxCapacity());
+                optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
                 builder.options(optionsMap);
                 break;
             case FloatVector:

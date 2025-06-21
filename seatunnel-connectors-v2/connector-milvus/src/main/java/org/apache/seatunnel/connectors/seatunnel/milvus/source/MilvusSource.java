@@ -66,7 +66,7 @@ public class MilvusSource
     @Override
     public SourceSplitEnumerator<MilvusSourceSplit, MilvusSourceState> createEnumerator(
             SourceSplitEnumerator.Context<MilvusSourceSplit> context) throws Exception {
-        return new MilvusSourceSplitEnumertor(context, config, sourceTables, null);
+        return new MilvusSourceSplitEnumerator(context, config, sourceTables, null);
     }
 
     @Override
@@ -74,7 +74,7 @@ public class MilvusSource
             SourceSplitEnumerator.Context<MilvusSourceSplit> context,
             MilvusSourceState checkpointState)
             throws Exception {
-        return new MilvusSourceSplitEnumertor(context, config, sourceTables, checkpointState);
+        return new MilvusSourceSplitEnumerator(context, config, sourceTables, checkpointState);
     }
 
     @Override

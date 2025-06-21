@@ -40,7 +40,7 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.catalog.VectorIndex;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 import org.apache.seatunnel.api.table.type.CommonOptions;
-import org.apache.seatunnel.connectors.seatunnel.milvus.catalog.MilvusOptions;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 import org.jetbrains.annotations.NotNull;
@@ -132,18 +132,18 @@ public class MilvusSourceConnectorUtils {
                                     .build();
 
         // build tableId
-        String CATALOG_NAME = MilvusOptions.MILVUS;
+        String CATALOG_NAME = MilvusConstants.MILVUS;
         TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, null, collection);
         // build options info
         Map<String, String> options = new HashMap<>();
-        options.put(MilvusOptions.ENABLE_DYNAMIC_FIELD, String.valueOf(describeCollectionResp.getEnableDynamicField()));
-        options.put(MilvusOptions.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
-        options.put(MilvusOptions.CONSISTENCY_LEVEL, String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
-        //options.put(MilvusOptions.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
+        options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD, String.valueOf(describeCollectionResp.getEnableDynamicField()));
+        options.put(MilvusConstants.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
+        options.put(MilvusConstants.CONSISTENCY_LEVEL, String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
+        //options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (existPartitionKeyField) {
-            options.put(MilvusOptions.PARTITION_KEY_FIELD, partitionKeyField);
+            options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
         }else {
-            options.put(MilvusOptions.PARTITION_NAMES, getPartitionNames(client, collection));
+            options.put(MilvusConstants.PARTITION_NAMES, getPartitionNames(client, collection));
         }
 
         return CatalogTable.of(tableId, tableSchema, options, new ArrayList<>(), describeCollectionResp.getDescription());
