@@ -118,9 +118,7 @@ public class SeaTunnelContainer extends AbstractTestContainer {
         copySeaTunnelStarterToContainer(server);
         server.setPortBindings(Arrays.asList("5801:5801", "8080:8080"));
         server.withCopyFileToContainer(
-                MountableFile.forHostPath(
-                        PROJECT_ROOT_PATH
-                                + "/seatunnel-e2e/seatunnel-engine-e2e/connector-seatunnel-e2e-base/src/test/resources/"),
+                MountableFile.forHostPath(PROJECT_ROOT_PATH + "/config/"),
                 Paths.get(SEATUNNEL_HOME, "config").toString());
 
         server.withCopyFileToContainer(
@@ -163,9 +161,7 @@ public class SeaTunnelContainer extends AbstractTestContainer {
         server.setExposedPorts(Collections.singletonList(5801));
 
         server.withCopyFileToContainer(
-                MountableFile.forHostPath(
-                        PROJECT_ROOT_PATH
-                                + "/seatunnel-e2e/seatunnel-engine-e2e/connector-seatunnel-e2e-base/src/test/resources/"),
+                MountableFile.forHostPath(PROJECT_ROOT_PATH + "/config/"),
                 Paths.get(SEATUNNEL_HOME, "config").toString());
 
         server.withCopyFileToContainer(
@@ -203,9 +199,7 @@ public class SeaTunnelContainer extends AbstractTestContainer {
                                 MountableFile.forHostPath(jar.getAbsolutePath()),
                                 Paths.get(SEATUNNEL_HOME, "connectors", jar.getName()).toString()));
         server.copyFileToContainer(
-                MountableFile.forHostPath(
-                        PROJECT_ROOT_PATH
-                                + "/seatunnel-e2e/seatunnel-engine-e2e/connector-seatunnel-e2e-base/src/test/resources/fake-and-inmemory/plugin-mapping.properties"),
+                MountableFile.forHostPath(PROJECT_ROOT_PATH + "/plugin-mapping.properties"),
                 Paths.get(SEATUNNEL_HOME, "connectors", "plugin-mapping.properties").toString());
         return server;
     }
