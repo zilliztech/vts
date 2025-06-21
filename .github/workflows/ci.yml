@@ -1,14 +1,17 @@
 name: CI Build
 
 on:
-  push:
-    branches: [ master, main, develop ]
   pull_request:
     branches: [ master, main, develop ]
 
+env:
+  MAVEN_OPTS: -Xmx4g
+
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      mvnd-cache-key: ${{ steps.mvnd-cache.outputs.cache-hit }}
     
     steps:
     - uses: actions/checkout@v4
@@ -29,17 +32,98 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
     
+    - name: Cache Maven Daemon
+      id: mvnd-cache
+      uses: actions/cache@v4
+      with:
+        path: /opt/mvnd
+        key: ${{ runner.os }}-mvnd-1.0.2
+    
     - name: Install Maven Daemon
+      if: steps.mvnd-cache.outputs.cache-hit != 'true'
       run: |
-        curl -s https://downloads.apache.org/maven/mvnd/1.0.2/maven-mvnd-1.0.2-linux-amd64.zip -o mvnd.zip
+        # Download with timeout and retry mechanism
+        for i in {1..3}; do
+          echo "Attempt $i: Downloading Maven Daemon..."
+          if curl --connect-timeout 30 --max-time 300 -L https://downloads.apache.org/maven/mvnd/1.0.2/maven-mvnd-1.0.2-linux-amd64.zip -o mvnd.zip; then
+            echo "Download successful"
+            break
+          else
+            echo "Download failed, attempt $i"
+            if [ $i -eq 3 ]; then
+              echo "All download attempts failed, falling back to regular Maven"
+              exit 1
+            fi
+            sleep 5
+          fi
+        done
+        
+        # Verify download
+        if [ ! -f mvnd.zip ] || [ ! -s mvnd.zip ]; then
+          echo "Downloaded file is missing or empty"
+          exit 1
+        fi
+        
+        # Extract and install
         unzip mvnd.zip
         sudo mv maven-mvnd-1.0.2-linux-amd64 /opt/mvnd
-        sudo ln -s /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
-        mvnd --version
     
-    - name: Build with Maven Daemon
+    - name: Setup Maven Command
       run: |
-        mvnd clean package \
+        if [ -d "/opt/mvnd" ]; then
+          echo "Using Maven Daemon"
+          sudo ln -sf /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
+          mvnd --version
+          echo "MAVEN_CMD=mvnd" >> $GITHUB_ENV
+        else
+          echo "Using regular Maven"
+          echo "MAVEN_CMD=./mvnw" >> $GITHUB_ENV
+        fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Restore Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Restore Maven Daemon
+      uses: actions/cache@v4
+      with:
+        path: /opt/mvnd
+        key: ${{ runner.os }}-mvnd-1.0.2
+    
+    - name: Setup Maven Command
+      run: |
+        if [ -d "/opt/mvnd" ]; then
+          echo "Using Maven Daemon"
+          sudo ln -sf /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
+          mvnd --version
+          echo "MAVEN_CMD=mvnd" >> $GITHUB_ENV
+        else
+          echo "Using regular Maven"
+          echo "MAVEN_CMD=./mvnw" >> $GITHUB_ENV
+        fi
+    
+    - name: Build with Maven
+      run: |
+        $MAVEN_CMD clean package \
           -pl :seatunnel-dist \
           -am \
           -D"skip.ui"=true \
@@ -47,5 +131,62 @@ jobs:
           -Prelease \
           --batch-mode \
           --no-transfer-progress
+
+  milvus-e2e:
+    runs-on: ubuntu-latest
+    needs: setup
+    
+    services:
+      docker:
+        image: docker:20.10.16-dind
+        options: --privileged
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Restore Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    - name: Restore Maven Daemon
+      uses: actions/cache@v4
+      with:
+        path: /opt/mvnd
+        key: ${{ runner.os }}-mvnd-1.0.2
+    
+    - name: Setup Maven Command
+      run: |
+        if [ -d "/opt/mvnd" ]; then
+          echo "Using Maven Daemon"
+          sudo ln -sf /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
+          mvnd --version
+          echo "MAVEN_CMD=mvnd" >> $GITHUB_ENV
+        else
+          echo "Using regular Maven"
+          echo "MAVEN_CMD=./mvnw" >> $GITHUB_ENV
+        fi
+    
+    - name: Build dependencies for Milvus E2E test
+      run: |
+        # Build all required dependencies first
+        $MAVEN_CMD install -pl seatunnel-e2e/seatunnel-e2e-common -am -Dmaven.test.skip=false --batch-mode --no-transfer-progress
+        $MAVEN_CMD install -pl seatunnel-connectors-v2/connector-milvus -am --batch-mode --no-transfer-progress
+        $MAVEN_CMD install -pl seatunnel-core/seatunnel-starter -am --batch-mode --no-transfer-progress
+    
+    - name: Run Milvus E2E Tests
+      run: |
+        $MAVEN_CMD test -pl seatunnel-e2e/seatunnel-connector-v2-e2e/connector-milvus-e2e --batch-mode --no-transfer-progress
       env:
-        MAVEN_OPTS: -Xmx4g
+        TESTCONTAINERS_RYUK_DISABLED: true
