@@ -46,7 +46,8 @@ public enum MilvusConnectionErrorCode implements SeaTunnelErrorCode {
     INIT_WRITER_ERROR("Milvus-24", "Init milvus writer error" ),
     INVALID_PARAM("Milvus-25", "Invalid param" ),
     IMPORT_JOB_FAILED("Milvus-26", "Import job failed" ),
-    COMPLETED_WITH_ERRORS("Milvus-27", "Completed with errors" );
+    COMPLETED_WITH_ERRORS("Milvus-27", "Completed with errors" ),
+    ERROR_ROWS_EXCEED_LIMIT("MILVUS-28", "error rows exceed limit");
 
     private final String code;
     private final String description;

@@ -65,7 +65,7 @@ public class MilvusBulkWriter implements MilvusWriter {
 
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
-        if(Objects.equals(stageBucket.getCloudId(), "az")){
+        if(Objects.equals(stageBucket.getCloudId(), "az") || Objects.equals(stageBucket.getCloudId(), "azure")){
             String connectionStr = "DefaultEndpointsProtocol=https;AccountName=" + stageBucket.getAccessKey() +
                     ";AccountKey=" + stageBucket.getSecretKey() + ";EndpointSuffix=core.windows.net";
             storageConnectParam = AzureConnectParam.newBuilder()

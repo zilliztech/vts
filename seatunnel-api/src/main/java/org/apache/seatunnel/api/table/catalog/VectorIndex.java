@@ -23,9 +23,10 @@ import lombok.Getter;
 import java.io.Serializable;
 
 /** Vector Database need special Index on its vector field. */
-@EqualsAndHashCode(callSuper = true)
 @Getter
-public class VectorIndex extends ConstraintKey.ConstraintKeyColumn implements Serializable {
+public class VectorIndex implements Serializable {
+
+    private final String fieldName;
 
     /** Vector index name */
     private final String indexName;
@@ -36,24 +37,11 @@ public class VectorIndex extends ConstraintKey.ConstraintKeyColumn implements Se
     /** Vector index metricType, such as L2, IP, COSINE */
     private final MetricType metricType;
 
-    public VectorIndex(String indexName, String columnName, String indexType, String metricType) {
-        super(columnName, null);
+    public VectorIndex(String fieldName, String indexName, String columnName, String indexType, String metricType) {
+        this.fieldName = fieldName;
         this.indexName = indexName;
         this.indexType = IndexType.of(indexType);
         this.metricType = MetricType.of(metricType);
-    }
-
-    public VectorIndex(
-            String indexName, String columnName, IndexType indexType, MetricType metricType) {
-        super(columnName, null);
-        this.indexName = indexName;
-        this.indexType = indexType;
-        this.metricType = metricType;
-    }
-
-    @Override
-    public ConstraintKey.ConstraintKeyColumn copy() {
-        return new VectorIndex(indexName, getColumnName(), indexType, metricType);
     }
 
     public enum IndexType {

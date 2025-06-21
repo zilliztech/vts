@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
-import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
@@ -123,7 +122,7 @@ public class MilvusSourceConnectorUtils {
         PrimaryKey primaryKey = buildPrimaryKey(schema.getFieldSchemaList());
 
         //vector info
-        ConstraintKey constraintKey = getConstraintKeyColumns(client, collection);
+        ConstraintKey constraintKey = getConstraintKey(client, collection);
 
         // build tableSchema
         TableSchema tableSchema = TableSchema.builder()
@@ -158,8 +157,8 @@ public class MilvusSourceConnectorUtils {
         return String.join(",", partitionNames);
     }
 
-    private static @NotNull ConstraintKey getConstraintKeyColumns(MilvusClientV2 client, String collection) {
-        List<ConstraintKey.ConstraintKeyColumn> constraintKeyColumns = new ArrayList<>();
+    private static @NotNull ConstraintKey getConstraintKey(MilvusClientV2 client, String collection) {
+        List<VectorIndex> vectorIndices = new ArrayList<>();
 
         List<String> indexes = client.listIndexes(ListIndexesReq.builder().collectionName(collection).build());
         for (String index : indexes) {
@@ -171,9 +170,9 @@ public class MilvusSourceConnectorUtils {
                 DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
                 for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
                     try {
-                        VectorIndex vectorIndex = new VectorIndex(indexDesc.getIndexName(), indexDesc.getFieldName(),
+                        VectorIndex vectorIndex = new VectorIndex(indexDesc.getFieldName(), indexDesc.getIndexName(), indexDesc.getFieldName(),
                                 indexDesc.getIndexType().getName(), indexDesc.getMetricType().name());
-                        constraintKeyColumns.add(vectorIndex);
+                        vectorIndices.add(vectorIndex);
                     }catch (Exception e){
                         log.info("invalid index, maybe scalar field{}", e.getMessage());
                     }
@@ -184,8 +183,8 @@ public class MilvusSourceConnectorUtils {
                 continue;
             }
         }
-        return ConstraintKey.of(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY,
-                "vector_index_key", constraintKeyColumns);
+        return new ConstraintKey(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY,
+                "vector_index_key", new ArrayList<>(), vectorIndices);
     }
 
     public static PrimaryKey buildPrimaryKey(List<CreateCollectionReq.FieldSchema> fields) {

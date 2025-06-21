@@ -29,7 +29,7 @@ public class SeaTunnelEngineClusterClientExample {
 
     public static void main(String[] args) throws Exception {
         String id = "834720088434147329";
-        String configurePath = "/examples/fake_to_console.conf";
+        String configurePath = "/examples/milvus_to_milvus.conf";
 
         submit(configurePath, id);
 

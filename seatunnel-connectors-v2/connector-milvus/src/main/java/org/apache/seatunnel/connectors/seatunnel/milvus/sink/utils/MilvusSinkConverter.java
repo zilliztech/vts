@@ -300,6 +300,10 @@ public class MilvusSinkConverter {
             case Float16Vector:
                 ByteBuffer binaryVector = (ByteBuffer) value;
                 return gson.toJsonTree(binaryVector.array());
+            case FloatVector:
+                ByteBuffer floatVectorBuffer = (ByteBuffer) value;
+                Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
+                return Arrays.stream(floats).collect(Collectors.toList());
             case SparseFloatVector:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
             default:

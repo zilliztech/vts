@@ -38,9 +38,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.ControllerAP
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.StageBucket;
 
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.JOB_ID;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.URL;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.STOP_ON_ERROR;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.VTSAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
@@ -73,7 +75,6 @@ public class MilvusSinkWriter
     private final String collection;
     private final ReadonlyConfig config;
     private final MilvusClientV2 milvusClient;
-    private final EventHelper eventHelper;
     private final Boolean useBulkWriter;
     private final StageBucket stageBucket;
     private final int stopOnError;
@@ -100,8 +101,6 @@ public class MilvusSinkWriter
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
         stopOnError = config.get(STOP_ON_ERROR);
-        String baseUrl = ControllerAPI.getControllerAPI(config.get(MilvusSourceConfig.URL));
-        eventHelper = new EventHelper(baseUrl, config.get(JOB_ID));
     }
 
     /**
@@ -166,7 +165,7 @@ public class MilvusSinkWriter
                 errorMap.put(element.toString(), e.getMessage());
                 if (errorMap.size() > stopOnError) {
                     log.error("stop on error, error: {}", e.getMessage());
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.ERROR_ROWS_EXCEED_LIMIT, "skipped rows exceed limit");
                 }
             }
         }
@@ -234,6 +233,8 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
-        eventHelper.noticeSuccess(errorMap);
+        if(!errorMap.isEmpty()){
+            log.info("some data are skipped in collection: {}, Error map: {}", this.collection, errorMap);
+        }
     }
 }

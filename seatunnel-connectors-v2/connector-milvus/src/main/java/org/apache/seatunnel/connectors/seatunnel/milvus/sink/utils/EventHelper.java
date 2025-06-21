@@ -14,25 +14,28 @@ import kong.unirest.Unirest;
 
 import org.apache.commons.lang3.StringUtils;
 import io.milvus.common.utils.JsonUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.common.VTSAPI;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.SentEventRequest;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.request.VTSJob;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSourceConfig;
 
 @Slf4j
 public class EventHelper {
     private final String baseUrl;
     private final String jobId;
     public EventHelper(String url, String jobId) {
-        this.baseUrl = url;
+        this.baseUrl = VTSAPI.getVTSAPI(url);
         this.jobId = jobId;
     }
 
-    public void noticeSuccess(Map<String, String> errorMap) {
+    public void noticeSuccess(String collectionName, Map<String, String> errorMap) {
         if(StringUtils.isEmpty(jobId)){
             log.error("jobId is empty");
             return;
         }
-        String requestURL = baseUrl + "/v2/vts/sent_event";
+        String requestURL = baseUrl + "/dm/v1/vts/sent_event";
         VTSJob vtsJob = VTSJob.builder()
+            .collectionName(collectionName)
             .skippedData(new ArrayList<>(errorMap.keySet()))
             .build();
         SentEventRequest sentEventRequest = SentEventRequest.builder()
