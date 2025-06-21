@@ -1,0 +1,82 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Multi-stage build with Maven Daemon for faster builds
+FROM azul/zulu-openjdk:17 as builder
+
+ARG MAVEN_DAEMON_VERSION=1.0.2
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y curl unzip git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Maven Daemon (mvnd)
+RUN curl -L "https://github.com/apache/maven-mvnd/releases/download/${MAVEN_DAEMON_VERSION}/maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64.zip" -o mvnd.zip && \
+    unzip mvnd.zip && \
+    mv maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64 /opt/mvnd && \
+    rm mvnd.zip
+
+ENV PATH="/opt/mvnd/bin:${PATH}"
+
+# Set build environment
+WORKDIR /workspace
+COPY . .
+
+# Build the project using mvnd with optimized settings
+RUN mvnd clean package \
+    -pl :seatunnel-dist \
+    -am \
+    -D"skip.ui"=true \
+    -Dmaven.test.skip=true \
+    -Prelease \
+    --batch-mode \
+    --no-transfer-progress
+
+# Runtime stage
+FROM azul/zulu-openjdk:11
+
+ARG VERSION=2.3.11-SNAPSHOT
+
+ENV DOCKER=true
+ENV TZ=Asia/Shanghai
+ENV SEATUNNEL_HOME=/opt/seatunnel
+
+RUN apt-get update && \
+    apt-get install -y curl vim sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy built distribution from builder stage
+COPY --from=builder /workspace/seatunnel-dist/target/apache-seatunnel-${VERSION}-bin.tar.gz /opt/
+WORKDIR /opt
+
+# Extract and setup SeaTunnel
+RUN tar -xzvf apache-seatunnel-${VERSION}-bin.tar.gz && \
+    mv apache-seatunnel-${VERSION} seatunnel && \
+    rm -f apache-seatunnel-${VERSION}-bin.tar.gz && \
+    # Configure logging for Docker environment
+    sed -i 's/#rootLogger.appenderRef.consoleStdout.ref/rootLogger.appenderRef.consoleStdout.ref/' seatunnel/config/log4j2.properties && \
+    sed -i 's/#rootLogger.appenderRef.consoleStderr.ref/rootLogger.appenderRef.consoleStderr.ref/' seatunnel/config/log4j2.properties && \
+    sed -i 's/rootLogger.appenderRef.file.ref/#rootLogger.appenderRef.file.ref/' seatunnel/config/log4j2.properties && \
+    # Setup cluster configuration
+    cp seatunnel/config/hazelcast-master.yaml seatunnel/config/hazelcast-worker.yaml
+
+WORKDIR /opt/seatunnel
+
+EXPOSE 5801
+
+CMD [ "/bin/bash", "./bin/seatunnel-cluster.sh"]

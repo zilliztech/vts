@@ -8,22 +8,22 @@ VTS (Vector Transport Service) is an open-source tool for moving vectors and uns
 
 ## Build Commands
 
-### Maven Build
+### Maven Build (mvnd recommended for faster builds)
 ```bash
+# Build distribution package (fastest, recommended)
+mvnd clean package -pl :seatunnel-dist -am -D"skip.ui"=true -Dmaven.test.skip=true -Prelease
+
 # Build the entire project
-./mvnw clean compile
+mvnd clean compile -Dmaven.test.skip=true
 
-# Build with tests
-./mvnw clean test
+# Build with tests (if needed)
+mvnd clean test -Dmaven.test.skip=false
 
-# Build without tests
-./mvnw clean compile -DskipTests
+# Build specific module
+mvnd clean package -pl seatunnel-connectors-v2/connector-milvus -am -Dmaven.test.skip=true
 
-# Build distribution package
-./mvnw clean package -DskipTests
-
-# Install to local repository
-./mvnw clean install -DskipTests
+# Using standard Maven (slower)
+./mvnw clean package -pl :seatunnel-dist -am -D"skip.ui"=true -Dmaven.test.skip=true -Prelease
 ```
 
 ### SeaTunnel Engine Commands

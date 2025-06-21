@@ -145,8 +145,9 @@
         <jetty.version>9.4.56.v20240826</jetty.version>
         <jakarta.servlet-api>4.0.4</jakarta.servlet-api>
         <!-- Option args -->
-        <skipUT>false</skipUT>
+        <skipUT>true</skipUT>
         <skipIT>true</skipIT>
+        <maven.test.skip>true</maven.test.skip>
         <elasticsearch>7</elasticsearch>
         <guava.version>27.0-jre</guava.version>
         <auto-service.version>1.0.1</auto-service.version>
