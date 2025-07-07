@@ -81,6 +81,10 @@ public class MilvusSourceConverter {
             }
             SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
             Object filedValues = fieldValuesMap.get(fieldNames[fieldIndex]);
+            if(filedValues == null){
+                seatunnelField[fieldIndex] = null;
+                continue;
+            }
             switch (seaTunnelDataType.getSqlType()) {
                 case STRING:
                     seatunnelField[fieldIndex] = filedValues.toString();
