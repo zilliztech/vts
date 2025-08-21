@@ -35,11 +35,11 @@ public abstract class MilvusCommonConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Milvus token for authentication");
-    public static final Option<String> SERVER_PEM_PATH =
-            Options.key("server_pem_path")
+    public static final Option<String> CLIENT_PEM_PATH =
+            Options.key("client_pem_path")
                     .stringType()
                     .noDefaultValue()
-                    .withDescription("Path to the PEM file for server certificate");
+                    .withDescription("Path to the PEM file for client certificate");
     public static final Option<String> CLIENT_KEY_PATH =
             Options.key("client_key_path")
                     .stringType()
