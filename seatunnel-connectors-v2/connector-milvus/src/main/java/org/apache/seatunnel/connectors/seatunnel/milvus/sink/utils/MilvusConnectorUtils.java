@@ -89,8 +89,8 @@ public class MilvusConnectorUtils {
                 .token(config.get(MilvusSourceConfig.TOKEN))
                 .dbName(config.get(MilvusSourceConfig.DATABASE))
                 .build();
-        if(config.get(MilvusCommonConfig.SERVER_PEM_PATH) != null){
-            connectConfig.setServerPemPath(config.get(MilvusCommonConfig.SERVER_PEM_PATH));
+        if(config.get(MilvusCommonConfig.CLIENT_PEM_PATH) != null){
+            connectConfig.setClientPemPath(config.get(MilvusCommonConfig.CLIENT_PEM_PATH));
         }
         if(config.get(MilvusCommonConfig.CLIENT_KEY_PATH) != null){
             connectConfig.setClientKeyPath(config.get(MilvusCommonConfig.CLIENT_KEY_PATH));
