@@ -156,11 +156,7 @@ public class MilvusSinkWriter
                 batchWriter.write(element);
             } catch (Exception e) {
                 log.error("write data to milvus failed, error: {}", e.getMessage());
-                errorMap.put(element.toString(), e.getMessage());
-                if (errorMap.size() > stopOnError) {
-                    log.error("stop on error, error: {}", e.getMessage());
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.ERROR_ROWS_EXCEED_LIMIT, "skipped rows exceed limit");
-                }
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
             }
         }
 
@@ -227,8 +223,5 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
-        if(!errorMap.isEmpty()){
-            log.info("some data are skipped in collection: {}, Error map: {}", this.collection, errorMap);
-        }
     }
 }

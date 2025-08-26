@@ -22,6 +22,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.milvus.common.clientenum.FunctionType;
 import io.milvus.grpc.DataType;
 import io.milvus.param.collection.CollectionSchemaParam;
 import io.milvus.param.collection.FieldType;
@@ -198,7 +199,17 @@ public class MilvusSinkConverter {
 
     public static CollectionSchemaParam convertToMilvusSchema(DescribeCollectionResp describeCollectionResp) {
         List<FieldType> fieldTypes = new ArrayList<>();
+        List<CreateCollectionReq.Function> functionList = describeCollectionResp.getCollectionSchema().getFunctionList();
+        List<String> bm25Sparse = new ArrayList<>();
+        for (CreateCollectionReq.Function function : functionList) {
+            if(function.getFunctionType() == FunctionType.BM25){
+                bm25Sparse.addAll(function.getOutputFieldNames());
+            }
+        }
         for(CreateCollectionReq.FieldSchema fieldSchema : describeCollectionResp.getCollectionSchema().getFieldSchemaList()){
+            if(fieldSchema.getDataType()== io.milvus.v2.common.DataType.SparseFloatVector && bm25Sparse.contains(fieldSchema.getName())){
+                continue;
+            }
             FieldType.Builder fieldType = FieldType.newBuilder()
                     .withName(fieldSchema.getName())
                     .withDataType(DataType.forNumber(fieldSchema.getDataType().getCode()))
