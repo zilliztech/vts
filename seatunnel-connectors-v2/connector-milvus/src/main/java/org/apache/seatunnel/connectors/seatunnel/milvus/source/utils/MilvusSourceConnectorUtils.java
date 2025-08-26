@@ -117,7 +117,7 @@ public class MilvusSourceConnectorUtils {
                             .build();
             columns.add(dynamicColumn);
         }
-
+        List<CreateCollectionReq.Function> functionList = describeCollectionResp.getCollectionSchema().getFunctionList();
         // primary key
         PrimaryKey primaryKey = buildPrimaryKey(schema.getFieldSchemaList());
 
@@ -139,7 +139,19 @@ public class MilvusSourceConnectorUtils {
         options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD, String.valueOf(describeCollectionResp.getEnableDynamicField()));
         options.put(MilvusConstants.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
         options.put(MilvusConstants.CONSISTENCY_LEVEL, String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
-        //options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
+        // Serialize functionList as JSON for proper reconstruction in sink
+        if (functionList != null && !functionList.isEmpty()) {
+            try {
+                com.google.gson.Gson gson = new com.google.gson.Gson();
+                options.put(MilvusConstants.FUNCTION_LIST, gson.toJson(functionList));
+            } catch (Exception e) {
+                log.warn("Failed to serialize functionList, setting empty list. Error: {}", e.getMessage());
+                options.put(MilvusConstants.FUNCTION_LIST, "[]");
+            }
+        } else {
+            options.put(MilvusConstants.FUNCTION_LIST, "[]");
+        }
+        options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
         }else {
