@@ -27,7 +27,25 @@ public class MilvusSchemaConverter {
                 .name(column.getName())
                 .dataType(milvusDataType)
                 .build();
-
+        if(column.getOptions()!=null && column.getOptions().containsKey(MilvusConstants.ENABLE_ANALYZER) && (Boolean) column.getOptions().get(MilvusConstants.ENABLE_ANALYZER)){
+            fieldSchema.setEnableAnalyzer(true);
+            // Set analyzer params if available
+            if (column.getOptions().containsKey(MilvusConstants.ANALYZER_PARAMS)) {
+                String analyzerParamsStr = (String) column.getOptions().get(MilvusConstants.ANALYZER_PARAMS);
+                if (analyzerParamsStr != null && !analyzerParamsStr.isEmpty()) {
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = 
+                            new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
+                        java.util.Map<String, Object> analyzerParams = gson.fromJson(analyzerParamsStr, typeToken.getType());
+                        fieldSchema.setAnalyzerParams(analyzerParams);
+                    } catch (Exception e) {
+                        // Log error but don't fail the field creation
+                        System.err.println("Failed to parse analyzer params: " + e.getMessage());
+                    }
+                }
+            }
+        }
         if (StringUtils.isNotEmpty(column.getComment())) {
             fieldSchema.setDescription(column.getComment());
         }

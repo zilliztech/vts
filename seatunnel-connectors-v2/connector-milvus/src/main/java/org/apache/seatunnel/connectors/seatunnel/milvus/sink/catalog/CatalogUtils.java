@@ -183,9 +183,26 @@ public class CatalogUtils {
         } else if (null != catalogTable.getComment()) {
             collectionDescription = catalogTable.getComment();
         }
+        List<CreateCollectionReq.Function> functionList = new ArrayList<>();
+        if(options.containsKey(MilvusConstants.FUNCTION_LIST)){
+            String functionListStr = options.get(MilvusConstants.FUNCTION_LIST);
+            if (StringUtils.isNotEmpty(functionListStr) && !functionListStr.equals("[]")) {
+                try {
+                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
+                    functionList = gson.fromJson(functionListStr, functionListType);
+                    if (functionList == null) {
+                        functionList = new ArrayList<>();
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse functionList from options: {}, error: {}", functionListStr, e.getMessage());
+                    functionList = new ArrayList<>();
+                }
+            }
+        }
         CreateCollectionReq.CollectionSchema collectionSchema = CreateCollectionReq.CollectionSchema.builder()
                 .fieldSchemaList(fieldSchemaList)
                 .enableDynamicField(enableDynamicField)
+                .functionList(functionList)
                 .build();
         CreateCollectionReq createCollectionReq =
                 CreateCollectionReq.builder()

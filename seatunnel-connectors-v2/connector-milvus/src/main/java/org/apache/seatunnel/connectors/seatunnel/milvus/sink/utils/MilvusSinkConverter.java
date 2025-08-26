@@ -188,6 +188,9 @@ public class MilvusSinkConverter {
                 continue;
             }
             Object object = convertByMilvusType(fieldSchema, value);
+            if(fieldSchema.getDataType() == io.milvus.v2.common.DataType.SparseFloatVector && object == null){
+                continue;
+            }
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;

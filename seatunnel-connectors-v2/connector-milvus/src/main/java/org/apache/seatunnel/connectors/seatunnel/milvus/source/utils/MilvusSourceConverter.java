@@ -232,7 +232,7 @@ public class MilvusSourceConverter {
                                 "Unexpected vector value: " + filedValues);
                     }
                 case SPARSE_FLOAT_VECTOR:
-                    if (filedValues instanceof Map) {
+                    if (filedValues instanceof Map || filedValues == null) {
                         seatunnelField[fieldIndex] = filedValues;
                         break;
                     } else {
@@ -286,6 +286,11 @@ public class MilvusSourceConverter {
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
                 optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
+                optionsMap.put(MilvusConstants.ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
+                if (fieldSchema.getAnalyzerParams() != null && !fieldSchema.getAnalyzerParams().isEmpty()) {
+                    com.google.gson.Gson gson = new com.google.gson.Gson();
+                    optionsMap.put(MilvusConstants.ANALYZER_PARAMS, gson.toJson(fieldSchema.getAnalyzerParams()));
+                }
                 builder.options(optionsMap);
                 break;
             case String:
