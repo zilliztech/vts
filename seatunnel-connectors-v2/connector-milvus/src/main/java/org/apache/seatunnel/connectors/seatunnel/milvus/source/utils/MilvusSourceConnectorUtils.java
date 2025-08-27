@@ -121,14 +121,10 @@ public class MilvusSourceConnectorUtils {
         // primary key
         PrimaryKey primaryKey = buildPrimaryKey(schema.getFieldSchemaList());
 
-        //vector info
-        ConstraintKey constraintKey = getConstraintKey(client, collection);
-
         // build tableSchema
         TableSchema tableSchema = TableSchema.builder()
                                     .columns(columns)
                                     .primaryKey(primaryKey)
-                                    .constraintKey(constraintKey)
                                     .build();
 
         // build tableId
@@ -151,6 +147,37 @@ public class MilvusSourceConnectorUtils {
         } else {
             options.put(MilvusConstants.FUNCTION_LIST, "[]");
         }
+        
+        // Serialize vector index info as JSON for proper reconstruction in sink
+        List<Object> indexList = new ArrayList<>();
+        try {
+            List<String> indexes = client.listIndexes(ListIndexesReq.builder().collectionName(collection).build());
+            for (String index : indexes) {
+                DescribeIndexReq describeIndexReq = DescribeIndexReq.builder()
+                        .collectionName(collection)
+                        .indexName(index)
+                        .build();
+                try {
+                    DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
+                    for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
+                        Map<String, String> indexInfo = new HashMap<>();
+                        indexInfo.put("fieldName", indexDesc.getFieldName());
+                        indexInfo.put("indexName", indexDesc.getIndexName());
+                        indexInfo.put("indexType", indexDesc.getIndexType().getName());
+                        indexInfo.put("metricType", indexDesc.getMetricType().name());
+                        indexList.add(indexInfo);
+                    }
+                } catch (Exception e) {
+                    log.info("describe index error, maybe index not exist {}", e.getMessage());
+                    continue;
+                }
+            }
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            options.put(MilvusConstants.INDEX_LIST, gson.toJson(indexList));
+        } catch (Exception e) {
+            log.warn("Failed to get index info, setting empty list. Error: {}", e.getMessage());
+            options.put(MilvusConstants.INDEX_LIST, "[]");
+        }
         options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
@@ -167,36 +194,6 @@ public class MilvusSourceConnectorUtils {
                 .build();
         List<String> partitionNames = client.listPartitions(listPartitionsReq);
         return String.join(",", partitionNames);
-    }
-
-    private static @NotNull ConstraintKey getConstraintKey(MilvusClientV2 client, String collection) {
-        List<VectorIndex> vectorIndices = new ArrayList<>();
-
-        List<String> indexes = client.listIndexes(ListIndexesReq.builder().collectionName(collection).build());
-        for (String index : indexes) {
-            DescribeIndexReq describeIndexReq = DescribeIndexReq.builder()
-                    .collectionName(collection)
-                    .indexName(index)
-                    .build();
-            try {
-                DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
-                for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
-                    try {
-                        VectorIndex vectorIndex = new VectorIndex(indexDesc.getFieldName(), indexDesc.getIndexName(), indexDesc.getFieldName(),
-                                indexDesc.getIndexType().getName(), indexDesc.getMetricType().name());
-                        vectorIndices.add(vectorIndex);
-                    }catch (Exception e){
-                        log.info("invalid index, maybe scalar field{}", e.getMessage());
-                    }
-
-                }
-            }catch (Exception e){
-                log.info("describe index error, maybe index not exist {}", e.getMessage());
-                continue;
-            }
-        }
-        return new ConstraintKey(ConstraintKey.ConstraintType.VECTOR_INDEX_KEY,
-                "vector_index_key", new ArrayList<>(), vectorIndices);
     }
 
     public static PrimaryKey buildPrimaryKey(List<CreateCollectionReq.FieldSchema> fields) {

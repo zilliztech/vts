@@ -80,7 +80,12 @@ public class MilvusSourceConverter {
                 continue;
             }
             SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
-            Object filedValues = fieldValuesMap.get(fieldNames[fieldIndex]);
+            String fieldName =  fieldNames[fieldIndex];
+            Object filedValues = fieldValuesMap.get(fieldName);
+            if(filedValues == null){
+                seatunnelField[fieldIndex] = null;
+                continue;
+            }
             switch (seaTunnelDataType.getSqlType()) {
                 case STRING:
                     seatunnelField[fieldIndex] = filedValues.toString();
@@ -287,6 +292,7 @@ public class MilvusSourceConverter {
                 builder.dataType(BasicType.STRING_TYPE);
                 optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
                 optionsMap.put(MilvusConstants.ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
+                optionsMap.put(MilvusConstants.ENABLE_MATCH, fieldSchema.getEnableMatch());
                 if (fieldSchema.getAnalyzerParams() != null && !fieldSchema.getAnalyzerParams().isEmpty()) {
                     com.google.gson.Gson gson = new com.google.gson.Gson();
                     optionsMap.put(MilvusConstants.ANALYZER_PARAMS, gson.toJson(fieldSchema.getAnalyzerParams()));

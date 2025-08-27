@@ -173,7 +173,7 @@ public class MilvusCatalog implements Catalog {
         catalogUtils.createTableInternal(tablePath, catalogTable);
         log.info("create table: {} success", tablePath.getTableName());
         log.info("create index for table: {}", tablePath.getTableName());
-        catalogUtils.createIndex(tablePath, tableSchema);
+        catalogUtils.createIndex(tablePath, catalogTable);
         log.info("create index for table: {} success", tablePath.getTableName());
     }
 
