@@ -291,11 +291,19 @@ public class MilvusSourceConverter {
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
                 optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
-                optionsMap.put(MilvusConstants.ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
-                optionsMap.put(MilvusConstants.ENABLE_MATCH, fieldSchema.getEnableMatch());
+                if (fieldSchema.getEnableAnalyzer() != null) {
+                    optionsMap.put(MilvusConstants.ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
+                }
+                if (fieldSchema.getEnableMatch() != null) {
+                    optionsMap.put(MilvusConstants.ENABLE_MATCH, fieldSchema.getEnableMatch());
+                }
                 if (fieldSchema.getAnalyzerParams() != null && !fieldSchema.getAnalyzerParams().isEmpty()) {
                     com.google.gson.Gson gson = new com.google.gson.Gson();
                     optionsMap.put(MilvusConstants.ANALYZER_PARAMS, gson.toJson(fieldSchema.getAnalyzerParams()));
+                }
+                if (fieldSchema.getMultiAnalyzerParams() != null && !fieldSchema.getMultiAnalyzerParams().isEmpty()) {
+                    com.google.gson.Gson gson = new com.google.gson.Gson();
+                    optionsMap.put(MilvusConstants.MULTI_ANALYZER_PARAMS, gson.toJson(fieldSchema.getMultiAnalyzerParams()));
                 }
                 builder.options(optionsMap);
                 break;

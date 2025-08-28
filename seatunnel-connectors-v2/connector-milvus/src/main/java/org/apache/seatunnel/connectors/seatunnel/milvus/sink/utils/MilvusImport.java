@@ -1,7 +1,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.google.gson.reflect.TypeToken;
-import io.milvus.bulkwriter.BulkImport;
+import io.milvus.bulkwriter.restful.BulkImportUtils;
 import io.milvus.bulkwriter.request.describe.CloudDescribeImportRequest;
 import io.milvus.bulkwriter.response.BulkImportResponse;
 import io.milvus.bulkwriter.response.RestfulResponse;
@@ -112,7 +112,7 @@ public class MilvusImport {
                             .clusterId(clusterId)
                             .jobId(jobId)
                             .build();
-            String body = BulkImport.getImportProgress(this.baseUrl, importProgress);
+            String body = BulkImportUtils.getImportProgress(this.baseUrl, importProgress);
             RestfulResponse<GetImportProgressResp> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<GetImportProgressResp>>() {
             }).getType());
             if(response.getData().getState().equals("Completed")) {

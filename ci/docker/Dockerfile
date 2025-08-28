@@ -15,28 +15,56 @@
 # limitations under the License.
 #
 
-FROM azul/zulu-openjdk:11
+###############################
+# Builder stage: package distribution with Maven Daemon
+###############################
+FROM maven:3.9.7-eclipse-temurin-17 AS builder
 
-ARG VERSION
+ENV MAVEN_OPTS="-Xmx8g -Xms1g"
 
-ENV DOCKER true
-ENV TZ Asia/Shanghai
-ENV SEATUNNEL_HOME /opt/seatunnel
+WORKDIR /workspace
+COPY . .
+
+# Install mvnd (Maven Daemon) for faster builds
+RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/* && \
+    curl -L https://github.com/apache/maven-mvnd/releases/download/1.0.0/maven-mvnd-1.0.0-linux-amd64.zip -o mvnd.zip && \
+    unzip mvnd.zip && \
+    mv maven-mvnd-1.0.0-linux-amd64 /opt/mvnd && \
+    rm mvnd.zip && \
+    ln -s /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
+
+# Package only the distribution to produce apache-seatunnel-*-bin.tar.gz
+RUN mvnd -B clean package \
+    -pl seatunnel-dist -am \
+    -D"skip.ui"=true \
+    -Dmaven.test.skip=true \
+    -D"skip.spotless"=true \
+    -Prelease \
+    --no-transfer-progress
+
+###############################
+# Runtime image: include built distribution
+###############################
+FROM azul/zulu-openjdk:17
+
+ENV DOCKER=true \
+    TZ=Asia/Shanghai \
+    SEATUNNEL_HOME=/opt/seatunnel
 
 RUN apt-get update && \
-    apt-get install -y curl vim sudo && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# add seatunnel
-COPY ./apache-seatunnel-${VERSION}-bin.tar.gz /opt/apache-seatunnel-${VERSION}-bin.tar.gz
+# Copy built distribution from builder
+COPY --from=builder /workspace/seatunnel-dist/target/apache-seatunnel-*-bin.tar.gz /opt/
+
 WORKDIR /opt
-RUN tar -xzvf apache-seatunnel-${VERSION}-bin.tar.gz
-RUN mv apache-seatunnel-${VERSION} seatunnel
-RUN rm -f /opt/apache-seatunnel-${VERSION}-bin.tar.gz
+RUN mkdir seatunnel && \
+    tar -xzf apache-seatunnel-*-bin.tar.gz -C seatunnel --strip-components=1 && \
+    rm -f /opt/apache-seatunnel-*-bin.tar.gz
+
 WORKDIR /opt/seatunnel
 
 EXPOSE 5801
 
-CMD [ "/bin/bash", "./bin/seatunnel-cluster.sh"]
-
-#CMD [ "/bin/bash"]
+CMD [ "/bin/bash", "./bin/seatunnel-cluster.sh" ]

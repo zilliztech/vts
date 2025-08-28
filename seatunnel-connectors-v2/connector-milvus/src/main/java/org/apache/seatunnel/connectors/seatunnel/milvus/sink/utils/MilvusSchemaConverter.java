@@ -49,6 +49,21 @@ public class MilvusSchemaConverter {
                         System.err.println("Failed to parse analyzer params: " + e.getMessage());
                     }
                 }
+                
+                // Set multi-analyzer params if available
+                String multiAnalyzerParamsStr = (String) options.get(MilvusConstants.MULTI_ANALYZER_PARAMS);
+                if (multiAnalyzerParamsStr != null && !multiAnalyzerParamsStr.isEmpty()) {
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = 
+                            new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
+                        java.util.Map<String, Object> multiAnalyzerParams = gson.fromJson(multiAnalyzerParamsStr, typeToken.getType());
+                        fieldSchema.setMultiAnalyzerParams(multiAnalyzerParams);
+                    } catch (Exception e) {
+                        // Log error but don't fail the field creation
+                        System.err.println("Failed to parse multi-analyzer params: " + e.getMessage());
+                    }
+                }
             }
             
             // Handle match settings

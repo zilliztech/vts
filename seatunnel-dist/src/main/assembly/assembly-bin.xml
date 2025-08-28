@@ -196,6 +196,12 @@
             <includes>
                 <include>org.apache.seatunnel:connector-fake:jar</include>
                 <include>org.apache.seatunnel:connector-console:jar</include>
+                <include>org.apache.seatunnel:connector-milvus:jar</include>
+                <include>org.apache.seatunnel:connector-jdbc:jar</include>
+                <include>org.apache.seatunnel:connector-elasticsearch:jar</include>
+                <include>org.apache.seatunnel:connector-pinecone:jar</include>
+                <include>org.apache.seatunnel:connector-qdrant:jar</include>
+                <include>org.apache.seatunnel:connector-tencent-vectordb:jar</include>
                 <include>org.apache.seatunnel:seatunnel-transforms-v2:jar</include>
             </includes>
             <outputDirectory>/connectors</outputDirectory>
