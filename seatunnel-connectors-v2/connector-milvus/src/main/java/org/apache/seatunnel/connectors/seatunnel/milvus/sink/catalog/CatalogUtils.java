@@ -45,25 +45,54 @@ public class CatalogUtils {
         this.config = config;
     }
 
-    void createIndex(TablePath tablePath, TableSchema tableSchema){
-        
-        List<Column> vectorColumns = tableSchema.getColumns().stream()
-                    .filter(column -> column.getDataType().getSqlType().equals(SqlType.FLOAT_VECTOR))
-                    .collect(Collectors.toList());
-        if(vectorColumns.size() == 0){
-            log.info("no vector index, skip create index");
-            return;
-        }
+    void createIndex(TablePath tablePath, CatalogTable catalogTable){
+        TableSchema tableSchema = catalogTable.getTableSchema();
+        Map<String, String> options = catalogTable.getOptions();
+
         List<IndexParam> indexParams = new ArrayList<>();
-        for(Column column : vectorColumns){
-            IndexParam indexParam = IndexParam.builder()
-                    .fieldName(column.getName())
-                    .metricType(IndexParam.MetricType.COSINE)
-                    .indexType(IndexParam.IndexType.AUTOINDEX)
-                    .indexName(column.getName())
-                    .build();
-            indexParams.add(indexParam);
-        }        
+        
+        // Check if there are existing indexes from source metadata in options
+        if (options.containsKey(MilvusConstants.INDEX_LIST)) {
+            String indexListStr = options.get(MilvusConstants.INDEX_LIST);
+            if (StringUtils.isNotEmpty(indexListStr) && !indexListStr.equals("[]")) {
+                try {
+                    Gson gson = new Gson();
+                    Type indexListType = new TypeToken<List<Map<String, String>>>(){}.getType();
+                    List<Map<String, String>> indexes = gson.fromJson(indexListStr, indexListType);
+                    
+                    if (indexes != null && !indexes.isEmpty()) {
+                        for (Map<String, String> indexInfo : indexes) {
+                            IndexParam.MetricType metricType;
+                            try {
+                                metricType = IndexParam.MetricType.valueOf(indexInfo.get("metricType"));
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Unknown metric type: {}, using default COSINE", indexInfo.get("metricType"));
+                                metricType = IndexParam.MetricType.COSINE;
+                            }
+                            
+                            IndexParam.IndexType indexType;
+                            try {
+                                indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
+                                indexType = IndexParam.IndexType.AUTOINDEX;
+                            }
+                            
+                            IndexParam indexParam = IndexParam.builder()
+                                    .fieldName(indexInfo.get("fieldName"))
+                                    .metricType(metricType)
+                                    .indexType(indexType)
+                                    .indexName(indexInfo.get("indexName"))
+                                    .build();
+                            indexParams.add(indexParam);
+                            log.info("Using existing index from source: {}", indexInfo);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse index list from options: {}, error: {}", indexListStr, e.getMessage());
+                }
+            }
+        }
         
         log.info("indexParams: {}", indexParams);
         // create index

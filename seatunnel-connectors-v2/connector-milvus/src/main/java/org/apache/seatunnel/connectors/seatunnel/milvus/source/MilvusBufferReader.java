@@ -104,7 +104,7 @@ public class MilvusBufferReader {
                     }
                 }
             } catch (Exception e) {
-                if (e.getMessage().contains("rate limit exceeded")) {
+                if (e.getMessage()!=null && e.getMessage().contains("rate limit exceeded")) {
                     maxFailRetry--;
                     log.warn("Rate limit exceeded. Retrying in 30 seconds. Retries left: {}", maxFailRetry);
                     Thread.sleep(30000);

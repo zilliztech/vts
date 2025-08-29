@@ -34,6 +34,9 @@ public class MilvusConstants {
     public static final String MAX_CAPACITY = "maxCapacity";
     public static final String MAX_LENGTH = "maxLength";
     public static final String FUNCTION_LIST = "functionList";
+    public static final String INDEX_LIST = "indexList";
     public static final String ENABLE_ANALYZER = "enable_analyzer";
+    public static final String ENABLE_MATCH = "enable_match";
     public static final String ANALYZER_PARAMS = "analyzer_params";
+    public static final String MULTI_ANALYZER_PARAMS = "multi_analyzer_params";
 }

@@ -13,6 +13,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class MilvusSchemaConverter {
@@ -27,11 +28,15 @@ public class MilvusSchemaConverter {
                 .name(column.getName())
                 .dataType(milvusDataType)
                 .build();
-        if(column.getOptions()!=null && column.getOptions().containsKey(MilvusConstants.ENABLE_ANALYZER) && (Boolean) column.getOptions().get(MilvusConstants.ENABLE_ANALYZER)){
-            fieldSchema.setEnableAnalyzer(true);
-            // Set analyzer params if available
-            if (column.getOptions().containsKey(MilvusConstants.ANALYZER_PARAMS)) {
-                String analyzerParamsStr = (String) column.getOptions().get(MilvusConstants.ANALYZER_PARAMS);
+        // Handle column options safely
+        Map<String, Object> options = column.getOptions();
+        if (options != null) {
+            // Handle analyzer settings
+            Boolean enableAnalyzer = (Boolean) options.get(MilvusConstants.ENABLE_ANALYZER);
+            if (Boolean.TRUE.equals(enableAnalyzer)) {
+                fieldSchema.setEnableAnalyzer(true);
+                // Set analyzer params if available
+                String analyzerParamsStr = (String) options.get(MilvusConstants.ANALYZER_PARAMS);
                 if (analyzerParamsStr != null && !analyzerParamsStr.isEmpty()) {
                     try {
                         com.google.gson.Gson gson = new com.google.gson.Gson();
@@ -44,6 +49,27 @@ public class MilvusSchemaConverter {
                         System.err.println("Failed to parse analyzer params: " + e.getMessage());
                     }
                 }
+                
+                // Set multi-analyzer params if available
+                String multiAnalyzerParamsStr = (String) options.get(MilvusConstants.MULTI_ANALYZER_PARAMS);
+                if (multiAnalyzerParamsStr != null && !multiAnalyzerParamsStr.isEmpty()) {
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = 
+                            new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
+                        java.util.Map<String, Object> multiAnalyzerParams = gson.fromJson(multiAnalyzerParamsStr, typeToken.getType());
+                        fieldSchema.setMultiAnalyzerParams(multiAnalyzerParams);
+                    } catch (Exception e) {
+                        // Log error but don't fail the field creation
+                        System.err.println("Failed to parse multi-analyzer params: " + e.getMessage());
+                    }
+                }
+            }
+            
+            // Handle match settings
+            Boolean enableMatch = (Boolean) options.get(MilvusConstants.ENABLE_MATCH);
+            if (Boolean.TRUE.equals(enableMatch)) {
+                fieldSchema.setEnableMatch(true);
             }
         }
         if (StringUtils.isNotEmpty(column.getComment())) {
