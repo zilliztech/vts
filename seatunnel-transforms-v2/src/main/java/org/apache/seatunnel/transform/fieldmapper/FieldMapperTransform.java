@@ -32,6 +32,10 @@ import org.apache.seatunnel.transform.common.AbstractCatalogSupportMapTransform;
 import org.apache.seatunnel.transform.exception.TransformCommonError;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+
+import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -126,6 +130,9 @@ public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
                     needReaderColIndex.add(fieldIndex);
                 });
 
+        // Update function field names if present in catalog table options
+        updateFunctionFieldNames(fieldMapper);
+
         final Set<String> originalColumnNames = fieldMapper.keySet();
 
         List<ConstraintKey> outputConstraintKeys =
@@ -183,5 +190,63 @@ public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
     @Override
     protected TableIdentifier transformTableIdentifier() {
         return inputCatalogTable.getTableId().copy();
+    }
+
+    private void updateFunctionFieldNames(Map<String, String> fieldMapper) {
+        Map<String, String> options = inputCatalogTable.getOptions();
+        if (options == null || !options.containsKey("functionList")) {
+            return;
+        }
+
+        String functionListStr = options.get("functionList");
+        if (StringUtils.isEmpty(functionListStr) || functionListStr.equals("[]")) {
+            return;
+        }
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            TypeReference<List<Map<String, Object>>> typeReference = new TypeReference<List<Map<String, Object>>>() {};
+            List<Map<String, Object>> functionList = objectMapper.readValue(functionListStr, typeReference);
+            
+            if (functionList != null && !functionList.isEmpty()) {
+                boolean updated = false;
+                for (Map<String, Object> function : functionList) {
+                    // Update inputFieldNames
+                    if (function.containsKey("inputFieldNames")) {
+                        @SuppressWarnings("unchecked")
+                        List<String> inputFieldNames = (List<String>) function.get("inputFieldNames");
+                        List<String> newInputFieldNames = inputFieldNames.stream()
+                                .map(fieldName -> fieldMapper.getOrDefault(fieldName, fieldName))
+                                .collect(Collectors.toList());
+                        if (!newInputFieldNames.equals(inputFieldNames)) {
+                            function.put("inputFieldNames", newInputFieldNames);
+                            updated = true;
+                        }
+                    }
+                    
+                    // Update outputFieldNames
+                    if (function.containsKey("outputFieldNames")) {
+                        @SuppressWarnings("unchecked")
+                        List<String> outputFieldNames = (List<String>) function.get("outputFieldNames");
+                        List<String> newOutputFieldNames = outputFieldNames.stream()
+                                .map(fieldName -> fieldMapper.getOrDefault(fieldName, fieldName))
+                                .collect(Collectors.toList());
+                        if (!newOutputFieldNames.equals(outputFieldNames)) {
+                            function.put("outputFieldNames", newOutputFieldNames);
+                            updated = true;
+                        }
+                    }
+                }
+                
+                if (updated) {
+                    // Update the options with the modified function list
+                    String updatedFunctionListStr = objectMapper.writeValueAsString(functionList);
+                    options.put("functionList", updatedFunctionListStr);
+                    log.info("Updated function field names for field mapping: {}", fieldMapper);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to update function field names during field mapping. Error: {}", e.getMessage());
+        }
     }
 }

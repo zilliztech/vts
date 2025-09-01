@@ -222,6 +222,7 @@ public class CatalogUtils {
                     if (functionList == null) {
                         functionList = new ArrayList<>();
                     }
+                    log.info("Loaded {} functions from options", functionList.size());
                 } catch (Exception e) {
                     log.warn("Failed to parse functionList from options: {}, error: {}", functionListStr, e.getMessage());
                     functionList = new ArrayList<>();
