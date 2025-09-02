@@ -53,7 +53,6 @@
         <module>seatunnel-e2e</module>
         <module>seatunnel-shade</module>
         <module>seatunnel-ci-tools</module>
-        <module>seatunnel-connectors-v2/connector-weaviate</module>
     </modules>
 
     <properties>
