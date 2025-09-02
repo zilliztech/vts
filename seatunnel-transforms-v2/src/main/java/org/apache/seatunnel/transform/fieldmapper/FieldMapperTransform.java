@@ -132,6 +132,9 @@ public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
 
         // Update function field names if present in catalog table options
         updateFunctionFieldNames(fieldMapper);
+        
+        // Update index field names if present in catalog table options
+        updateIndexFieldNames(fieldMapper);
 
         final Set<String> originalColumnNames = fieldMapper.keySet();
 
@@ -247,6 +250,50 @@ public class FieldMapperTransform extends AbstractCatalogSupportMapTransform {
             }
         } catch (Exception e) {
             log.warn("Failed to update function field names during field mapping. Error: {}", e.getMessage());
+        }
+    }
+
+    private void updateIndexFieldNames(Map<String, String> fieldMapper) {
+        Map<String, String> options = inputCatalogTable.getOptions();
+        if (options == null || !options.containsKey("indexList")) {
+            return;
+        }
+
+        String indexListStr = options.get("indexList");
+        if (StringUtils.isEmpty(indexListStr) || indexListStr.equals("[]")) {
+            return;
+        }
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            TypeReference<List<Map<String, Object>>> typeReference = new TypeReference<List<Map<String, Object>>>() {};
+            List<Map<String, Object>> indexList = objectMapper.readValue(indexListStr, typeReference);
+            
+            if (indexList != null && !indexList.isEmpty()) {
+                boolean updated = false;
+                for (Map<String, Object> index : indexList) {
+                    // Update fieldName in index
+                    if (index.containsKey("fieldName")) {
+                        String oldFieldName = (String) index.get("fieldName");
+                        if (fieldMapper.containsKey(oldFieldName)) {
+                            String newFieldName = fieldMapper.get(oldFieldName);
+                            index.put("fieldName", newFieldName);
+                            updated = true;
+                            log.info("Updated index field name from '{}' to '{}' in index: {}", 
+                                oldFieldName, newFieldName, index.get("indexName"));
+                        }
+                    }
+                }
+                
+                if (updated) {
+                    // Update the options with the modified index list
+                    String updatedIndexListStr = objectMapper.writeValueAsString(indexList);
+                    options.put("indexList", updatedIndexListStr);
+                    log.info("Updated index field names for field mapping: {}", fieldMapper);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to update index field names during field mapping. Error: {}", e.getMessage());
         }
     }
 }
