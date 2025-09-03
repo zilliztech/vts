@@ -130,6 +130,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-s3-vector</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.3</version>

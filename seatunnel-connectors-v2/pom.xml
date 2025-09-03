@@ -44,6 +44,7 @@
         <module>connector-qdrant</module>
         <module>connector-tencent-vectordb</module>
         <module>connector-weaviate</module>
+        <module>connector-s3-vector</module>
     </modules>
 
     <dependencyManagement>
