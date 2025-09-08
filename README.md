@@ -116,8 +116,8 @@ VTS supports various connectors for data migration:
 - [Qdrant](docs/zilliz/Qdrant.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/qdrant.conf))
 - [Postgres Vector](docs/zilliz/Postgres%20Vector.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pg_to_milvus.conf))
 - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/tencent.conf))
-- [Weaviate](docs/zilliz/Weaviate.md)([example config]([docs/zilliz/Weaviate.md](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/weaviate_to_milvus.conf)))
-- [S3 Vector](docs/zilliz/S3Vector.md)([example config]([docs/zilliz/S3.md](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/s3-vector_to_milvus.conf)))
+- [Weaviate](docs/zilliz/Weaviate.md)([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/weaviate_to_milvus.conf))
+- [S3 Vector](docs/zilliz/S3Vector.md)([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/s3-vector_to_milvus.conf))
 
 ## Advanced Features
 
