@@ -202,6 +202,8 @@
                 <include>org.apache.seatunnel:connector-pinecone:jar</include>
                 <include>org.apache.seatunnel:connector-qdrant:jar</include>
                 <include>org.apache.seatunnel:connector-tencent-vectordb:jar</include>
+                <include>org.apache.seatunnel:connector-s3-vector:jar</include>
+                <include>org.apache.seatunnel:connector-weaviate:jar</include>
                 <include>org.apache.seatunnel:seatunnel-transforms-v2:jar</include>
             </includes>
             <outputDirectory>/connectors</outputDirectory>
