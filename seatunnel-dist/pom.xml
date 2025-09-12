@@ -611,6 +611,12 @@
                     <classifier>optional</classifier>
                     <scope>provided</scope>
                 </dependency>
+                <!-- PostgreSQL JDBC driver -->
+                <dependency>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                    <version>42.4.3</version>
+                </dependency>
             </dependencies>
             <build>
                 <finalName>apache-seatunnel-${project.version}</finalName>
