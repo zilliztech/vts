@@ -187,6 +187,18 @@
             <scope>provided</scope>
         </dependencySet>
 
+        <!-- ============ PostgreSQL JDBC Driver for pgvector ============  -->
+        <dependencySet>
+            <useProjectArtifact>false</useProjectArtifact>
+            <useTransitiveDependencies>false</useTransitiveDependencies>
+            <unpack>false</unpack>
+            <includes>
+                <!-- PostgreSQL with pgvector support -->
+                <include>org.postgresql:postgresql:jar</include>
+            </includes>
+            <outputDirectory>/lib</outputDirectory>
+        </dependencySet>
+
         <!-- ============ Connectors Jars And Transforms V2 Jar ============  -->
         <!-- SeaTunnel connectors for Demo -->
         <dependencySet>
