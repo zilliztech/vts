@@ -587,6 +587,18 @@
                     <version>${project.version}</version>
                     <scope>provided</scope>
                 </dependency>
+                <dependency>
+                    <groupId>org.apache.seatunnel</groupId>
+                    <artifactId>connector-s3-vector</artifactId>
+                    <version>${project.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.seatunnel</groupId>
+                    <artifactId>connector-weaviate</artifactId>
+                    <version>${project.version}</version>
+                    <scope>provided</scope>
+                </dependency>
 
                 <!-- transforms v2 -->
                 <dependency>

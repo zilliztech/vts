@@ -47,13 +47,13 @@ Future developments include:
 ### Quick Start
 
 1. **Pull the VTS Image**
+Fetch the prebuilt VTS container (built on Apache SeaTunnel) and open an interactive shell inside the image so you can run jobs without building from source.
 ```bash
 docker pull zilliz/vector-transport-service:latest
 docker run -it zilliz/vector-transport-service:latest /bin/bash
 ```
 
-2. **Configure Your Migration**
-Create a configuration file (e.g., `migration.conf`):
+2. **Configure Your Migration** Create a job configuration (e.g., `migration.conf`) that declares the execution env, a source connector, and a sink connector. Start with small batches and a single collection/table to validate connectivity before scaling up.
 ```yaml
 env {
   parallelism = 1
@@ -83,6 +83,7 @@ sink {
 ```
 
 3. **Run the Migration**
+Run in cluster mode for production‑like workloads, or local mode for quick validation. Watch the console output to confirm progress.
 
 Cluster Mode (Recommended):
 ```bash
@@ -115,6 +116,8 @@ VTS supports various connectors for data migration:
 - [Qdrant](docs/zilliz/Qdrant.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/qdrant.conf))
 - [Postgres Vector](docs/zilliz/Postgres%20Vector.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/pg_to_milvus.conf))
 - [Tencent VectorDB](docs/zilliz/Tencent%20VectorDB.md) ([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/tencent.conf))
+- [Weaviate](docs/zilliz/Weaviate.md)([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/weaviate_to_milvus.conf))
+- [S3 Vector](docs/zilliz/S3Vector.md)([example config](seatunnel-examples/seatunnel-engine-examples/src/main/resources/examples/s3-vector_to_milvus.conf))
 
 ## Advanced Features
 
