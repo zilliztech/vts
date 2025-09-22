@@ -25,16 +25,8 @@ ENV MAVEN_OPTS="-Xmx8g -Xms1g"
 WORKDIR /workspace
 COPY . .
 
-# Install mvnd (Maven Daemon) for faster builds
-RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/* && \
-    curl -L https://github.com/apache/maven-mvnd/releases/download/1.0.0/maven-mvnd-1.0.0-linux-amd64.zip -o mvnd.zip && \
-    unzip mvnd.zip && \
-    mv maven-mvnd-1.0.0-linux-amd64 /opt/mvnd && \
-    rm mvnd.zip && \
-    ln -s /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
-
-# Package only the distribution to produce apache-seatunnel-*-bin.tar.gz
-RUN mvnd -B clean package \
+# Package the distribution to produce apache-seatunnel-*-bin.tar.gz
+RUN mvn -B clean package \
     -pl seatunnel-dist -am \
     -D"skip.ui"=true \
     -Dmaven.test.skip=true \
