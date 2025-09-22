@@ -67,7 +67,7 @@ public class ConverterUtils {
                 Map<Long, Float> sparseMap = new HashMap<>();
                 int count = vector.getSparseValues().getIndicesCount();
                 for (int i = 0; i < count; i++) {
-                    long index = vector.getSparseValues().getIndices(i);
+                    long index = Integer.toUnsignedLong(vector.getSparseValues().getIndices(i));
                     float value = vector.getSparseValues().getValues(i);
                     sparseMap.put(index, value);
                 }
