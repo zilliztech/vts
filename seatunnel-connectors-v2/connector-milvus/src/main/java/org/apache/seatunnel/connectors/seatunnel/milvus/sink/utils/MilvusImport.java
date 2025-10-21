@@ -90,7 +90,8 @@ public class MilvusImport {
         BulkImportResponse importResponse = importToCloud(baseUrl, importRequest);
 
         objectUrlsMap.put(objectUrl, importResponse.getJobId());
-        log.info("import objectUrl: " + objectUrl + " success");
+        log.info("[MILVUS_IMPORT_JOB] collection={}, partition={}, objectUrl={}, milvusImportJobId={}",
+                collectionName, partitionName, objectUrl, importResponse.getJobId());
     }
 
     public void waitImportFinish() {
@@ -156,5 +157,36 @@ public class MilvusImport {
         }
 
         return header;
+    }
+
+    /**
+     * Get all Milvus import job IDs mapped to their object URLs
+     * @return Map of object URL to Milvus import job ID
+     */
+    public Map<String, String> getImportJobIds() {
+        return new HashMap<>(objectUrlsMap);
+    }
+
+    /**
+     * Get the count of import jobs
+     * @return Number of import jobs
+     */
+    public int getImportJobCount() {
+        return objectUrlsMap.size();
+    }
+
+    /**
+     * Get import jobs as a formatted string for logging
+     * @return Formatted string of import jobs
+     */
+    public String getImportJobsInfo() {
+        if (objectUrlsMap.isEmpty()) {
+            return "No import jobs";
+        }
+        StringBuilder sb = new StringBuilder();
+        objectUrlsMap.forEach((url, jobId) ->
+            sb.append(String.format("url=%s,jobId=%s;", url, jobId))
+        );
+        return sb.toString();
     }
 }

@@ -142,6 +142,13 @@ public class MilvusBulkWriter implements MilvusWriter {
             String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
             String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
             milvusImport.importFolder(objectFolder);
+
+            // Log import job information in structured format for retrieval via logs API
+            log.info("[MILVUS_IMPORT_SUMMARY] collection={}, partition={}, importJobCount={}, importJobs={}",
+                    catalogTable.getTablePath().getTableName(),
+                    describeCollectionResp.getCollectionName(),
+                    milvusImport.getImportJobCount(),
+                    milvusImport.getImportJobsInfo());
         }
     }
 
@@ -153,7 +160,31 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void waitJobFinish() {
         if(stageBucket.getAutoImport()) {
+            log.info("Waiting for Milvus import jobs to complete...");
             milvusImport.waitImportFinish();
+            log.info("[MILVUS_IMPORT_COMPLETE] All import jobs completed. Total jobs: {}", milvusImport.getImportJobCount());
         }
+    }
+
+    /**
+     * Get Milvus import job information (only available for bulk writer with auto-import enabled)
+     * @return Map of object URL to Milvus import job ID, or empty map if not applicable
+     */
+    public Map<String, String> getImportJobIds() {
+        if (stageBucket.getAutoImport() && milvusImport != null) {
+            return milvusImport.getImportJobIds();
+        }
+        return new HashMap<>();
+    }
+
+    /**
+     * Get the count of Milvus import jobs
+     * @return Number of import jobs, or 0 if not applicable
+     */
+    public int getImportJobCount() {
+        if (stageBucket.getAutoImport() && milvusImport != null) {
+            return milvusImport.getImportJobCount();
+        }
+        return 0;
     }
 }
