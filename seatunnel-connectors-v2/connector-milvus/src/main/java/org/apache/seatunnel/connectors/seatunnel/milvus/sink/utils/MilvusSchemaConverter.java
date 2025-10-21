@@ -17,8 +17,16 @@ import java.util.Map;
 import java.util.Objects;
 
 public class MilvusSchemaConverter {
+    /**
+     * Convert column from source to Milvus FieldSchema.
+     * This creates the base field schema from source data, which can be later overridden by config.
+     *
+     * @param column Source column definition
+     * @param primaryKey Primary key from source (optional)
+     * @return Field schema based on source column definition
+     */
     public static CreateCollectionReq.FieldSchema convertToFieldType(
-            Column column, PrimaryKey primaryKey, String partitionKeyField, Boolean autoId) {
+            Column column, PrimaryKey primaryKey) {
 
         SeaTunnelDataType<?> seaTunnelDataType = column.getDataType();
 
@@ -28,10 +36,10 @@ public class MilvusSchemaConverter {
                 .name(column.getName())
                 .dataType(milvusDataType)
                 .build();
-        // Handle column options safely
+        // Handle column options safely - these come from source metadata
         Map<String, Object> options = column.getOptions();
         if (options != null) {
-            // Handle analyzer settings
+            // Handle analyzer settings from source
             Boolean enableAnalyzer = (Boolean) options.get(MilvusConstants.ENABLE_ANALYZER);
             if (Boolean.TRUE.equals(enableAnalyzer)) {
                 fieldSchema.setEnableAnalyzer(true);
@@ -40,7 +48,7 @@ public class MilvusSchemaConverter {
                 if (analyzerParamsStr != null && !analyzerParamsStr.isEmpty()) {
                     try {
                         com.google.gson.Gson gson = new com.google.gson.Gson();
-                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = 
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken =
                             new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
                         java.util.Map<String, Object> analyzerParams = gson.fromJson(analyzerParamsStr, typeToken.getType());
                         fieldSchema.setAnalyzerParams(analyzerParams);
@@ -49,13 +57,13 @@ public class MilvusSchemaConverter {
                         System.err.println("Failed to parse analyzer params: " + e.getMessage());
                     }
                 }
-                
+
                 // Set multi-analyzer params if available
                 String multiAnalyzerParamsStr = (String) options.get(MilvusConstants.MULTI_ANALYZER_PARAMS);
                 if (multiAnalyzerParamsStr != null && !multiAnalyzerParamsStr.isEmpty()) {
                     try {
                         com.google.gson.Gson gson = new com.google.gson.Gson();
-                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = 
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken =
                             new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
                         java.util.Map<String, Object> multiAnalyzerParams = gson.fromJson(multiAnalyzerParamsStr, typeToken.getType());
                         fieldSchema.setMultiAnalyzerParams(multiAnalyzerParams);
@@ -65,11 +73,35 @@ public class MilvusSchemaConverter {
                     }
                 }
             }
-            
-            // Handle match settings
+
+            // Handle match settings from source
             Boolean enableMatch = (Boolean) options.get(MilvusConstants.ENABLE_MATCH);
             if (Boolean.TRUE.equals(enableMatch)) {
                 fieldSchema.setEnableMatch(true);
+            }
+
+            // Handle partition key from source metadata
+            Boolean isPartitionKey = (Boolean) options.get(MilvusConstants.IS_PARTITION_KEY);
+            if (Boolean.TRUE.equals(isPartitionKey)) {
+                fieldSchema.setIsPartitionKey(true);
+            }
+
+            // Handle auto ID from source metadata
+            Boolean autoId = (Boolean) options.get(MilvusConstants.AUTO_ID);
+            if (autoId != null) {
+                fieldSchema.setAutoID(autoId);
+            }
+
+            // Handle nullable from source metadata
+            Boolean isNullable = (Boolean) options.get(MilvusConstants.IS_NULLABLE);
+            if (isNullable != null) {
+                fieldSchema.setIsNullable(isNullable);
+            }
+
+            // Handle default value from source metadata
+            Object defaultValue = options.get(MilvusConstants.DEFAULT_VALUE);
+            if (defaultValue != null) {
+                fieldSchema.setDefaultValue(defaultValue);
             }
         }
         if (StringUtils.isNotEmpty(column.getComment())) {
@@ -125,8 +157,8 @@ public class MilvusSchemaConverter {
                 break;
         }
 
-        // check is primaryKey
-        // only override primarykey when primary key num is 1
+        // Set primary key from source schema if defined
+        // Only set primarykey when primary key num is 1
         if (null != primaryKey && primaryKey.getColumnNames().size() == 1 && primaryKey.getColumnNames().contains(column.getName())) {
             fieldSchema.setIsPrimaryKey(true);
             List<SqlType> integerTypes = new ArrayList<>();
@@ -140,12 +172,6 @@ public class MilvusSchemaConverter {
                 fieldSchema.setDataType(io.milvus.v2.common.DataType.VarChar);
                 fieldSchema.setMaxLength(65535);
             }
-            fieldSchema.setAutoID(autoId);
-        }
-
-        // check is partitionKey
-        if (column.getName().equals(partitionKeyField)) {
-            fieldSchema.setIsPartitionKey(true);
         }
 
         return fieldSchema;

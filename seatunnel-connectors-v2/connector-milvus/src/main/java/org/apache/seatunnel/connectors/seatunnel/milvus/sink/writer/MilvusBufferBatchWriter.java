@@ -32,15 +32,18 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
+
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BATCH_SIZE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
@@ -60,7 +63,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
 
-    private final List<MilvusField> milvusFields;
+    private final Map<String, String> milvusFieldMapper;
 
     public MilvusBufferBatchWriter (CatalogTable catalogTable, ReadonlyConfig config,
                                     MilvusClientV2 milvusClient,
@@ -79,8 +82,20 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(describeCollectionResp);
         this.descriptionCollectionResp = describeCollectionResp;
         Gson gson = new Gson();
-        Type type = new TypeToken<List<MilvusField>>() {}.getType();
-        this.milvusFields = gson.fromJson(gson.toJson(config.get(EXTRACT_DYNAMIC)), type);
+        Type type = new TypeToken<List<MilvusFieldSchema>>() {}.getType();
+        List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(gson.toJson(config.get(FIELD_SCHEMA)), type);
+
+        // Convert list to map with sourceFieldName as key for faster lookups
+        this.milvusFieldMapper = new HashMap<>();
+        if (fieldSchemaList != null) {
+            for (MilvusFieldSchema field : fieldSchemaList) {
+                // Use source_field_name as key if available, otherwise use field_name
+                String sourceFieldName = field.getSourceFieldName();
+                if (sourceFieldName != null) {
+                    milvusFieldMapper.put(sourceFieldName, field.getFieldName());
+                }
+            }
+        }
     }
 
     @Override
@@ -88,7 +103,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         // put data to cache by partition
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
-                        catalogTable, descriptionCollectionResp, milvusFields, element);
+                        catalogTable, descriptionCollectionResp, milvusFieldMapper, element);
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();

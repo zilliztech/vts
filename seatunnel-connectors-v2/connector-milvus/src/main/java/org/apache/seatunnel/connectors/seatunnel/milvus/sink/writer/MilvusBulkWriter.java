@@ -18,17 +18,19 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.URL;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusImport;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,7 +45,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     private final CatalogTable catalogTable;
     private final ReadonlyConfig config;
     private final StageBucket stageBucket;
-    private final List<MilvusField> milvusFields;
+    private final Map<String, String> milvusFieldMapper;
 
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
@@ -60,8 +62,21 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.describeCollectionResp = describeCollectionResp;
 
         Gson gson = new Gson();
-        Type type = new TypeToken<List<MilvusField>>() {}.getType();
-        this.milvusFields = gson.fromJson(gson.toJson(config.get(EXTRACT_DYNAMIC)), type);
+        Type type = new TypeToken<List<MilvusFieldSchema>>() {}.getType();
+        List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(gson.toJson(config.get(FIELD_SCHEMA)), type);
+
+        // Convert list to map with sourceFieldName as key for faster lookups
+        // Convert list to map with sourceFieldName as key for faster lookups
+        this.milvusFieldMapper = new HashMap<>();
+        if (fieldSchemaList != null) {
+            for (MilvusFieldSchema field : fieldSchemaList) {
+                // Use source_field_name as key if available, otherwise use field_name
+                String sourceFieldName = field.getSourceFieldName();
+                if (sourceFieldName != null) {
+                    milvusFieldMapper.put(sourceFieldName, field.getFieldName());
+                }
+            }
+        }
 
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
@@ -103,7 +118,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp, milvusFields, element);
+                        catalogTable, describeCollectionResp, milvusFieldMapper, element);
         remoteBulkWriter.appendRow(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
