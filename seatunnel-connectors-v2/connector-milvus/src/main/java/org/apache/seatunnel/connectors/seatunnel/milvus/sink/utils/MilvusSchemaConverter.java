@@ -113,8 +113,10 @@ public class MilvusSchemaConverter {
                 break;
             case DATE:
             case TIME:
-            case TIMESTAMP:
                 fieldSchema.setMaxLength(50);
+                break;
+            case TIMESTAMP:
+                // TIMESTAMP maps to Timestamptz in Milvus, no maxLength needed
                 break;
             case STRING:
                 if (column.getOptions() != null
@@ -132,7 +134,16 @@ public class MilvusSchemaConverter {
                 fieldSchema.setDataType(io.milvus.v2.common.DataType.Array);
                 ArrayType arrayType = (ArrayType) column.getDataType();
                 SeaTunnelDataType elementType = arrayType.getElementType();
-                fieldSchema.setElementType(convertSqlTypeToDataType(elementType.getSqlType()));
+                // Check if Array[Struct] - map to Array[Struct] in Milvus
+                if (elementType.getSqlType() == SqlType.ROW) {
+                    fieldSchema.setElementType(io.milvus.v2.common.DataType.Struct);
+                } else if (column.getOptions() != null
+                        && Boolean.TRUE.equals(column.getOptions().get(CommonOptions.JSON.getName()))) {
+                    // Array with JSON flag means Array[Struct]
+                    fieldSchema.setElementType(io.milvus.v2.common.DataType.Struct);
+                } else {
+                    fieldSchema.setElementType(convertSqlTypeToDataType(elementType.getSqlType()));
+                }
                 fieldSchema.setMaxCapacity(4096);
                 if (Objects.requireNonNull(elementType.getSqlType()) == SqlType.STRING) {
                     fieldSchema.setMaxLength(65535);
@@ -211,10 +222,13 @@ public class MilvusSchemaConverter {
                 return io.milvus.v2.common.DataType.SparseFloatVector;
             case DATE:
             case TIME:
-            case TIMESTAMP:
                 return io.milvus.v2.common.DataType.VarChar;
+            case TIMESTAMP:
+                return io.milvus.v2.common.DataType.Timestamptz;
             case ROW:
                 return io.milvus.v2.common.DataType.JSON;
+            case GEOMETRY:
+                return io.milvus.v2.common.DataType.Geometry;
         }
         throw new CatalogException(
                 String.format("Not support convert to milvus type, sqlType is %s", sqlType));

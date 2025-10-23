@@ -284,6 +284,33 @@ public class CatalogUtils {
                 return defaultValue.toString();
             case JSON:
                 return defaultValue.toString();
+            case Struct:
+                // Struct type - handle as JSON string
+                if (defaultValue instanceof String) {
+                    return defaultValue.toString();
+                } else {
+                    // Convert object to JSON string
+                    Gson gson = new Gson();
+                    return gson.toJson(defaultValue);
+                }
+            case Geometry:
+                // Geometry type doesn't support default values in Milvus
+                log.warn("GEOMETRY type does not support default values, ignoring default value: {}", defaultValue);
+                return null;
+            case Timestamptz:
+                // Timestamptz expects Long (Unix timestamp in microseconds)
+                if (defaultValue instanceof Long) {
+                    return defaultValue;
+                } else {
+                    try {
+                        // Try to parse as timestamp string and convert to microseconds
+                        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(defaultValue.toString());
+                        return ts.getTime() * 1000;
+                    } catch (Exception e) {
+                        log.error("Failed to convert TIMESTAMP default value: {}", defaultValue);
+                        return null;
+                    }
+                }
             default:
                     return defaultValue;
         }} catch (Exception e) {
@@ -416,17 +443,6 @@ public class CatalogUtils {
         }
     }
 
-    private void setupFieldProperty(CreateCollectionReq.FieldSchema fieldSchema) {
-        String fieldName = fieldSchema.getName();
-
-        // Apply field schema configuration if exists
-        if (fieldSchemaMap.containsKey(fieldName)) {
-            MilvusFieldSchema schema = fieldSchemaMap.get(fieldName);
-            applyFieldProperties(fieldSchema, schema);
-            log.debug("Applied field schema config for field: {}", fieldName);
-        }
-    }
-
     /**
      * Get enable_dynamic_field setting: source first, then config override
      */
@@ -512,7 +528,7 @@ public class CatalogUtils {
                     Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
                     List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr, functionListType);
                     if (functionsFromSource != null) {
-                        functionList.addAll(functionsFromSource);
+                        functionList = functionsFromSource;
                         log.info("Loaded {} functions from source", functionsFromSource.size());
                     }
                 } catch (Exception e) {
@@ -529,7 +545,7 @@ public class CatalogUtils {
                 String functionListStr = gson.toJson(functionsFromConfigRaw);
                 List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr, functionListType);
                 if (functionsFromConfig != null) {
-                    functionList.addAll(functionsFromConfig);
+                    functionList = functionsFromConfig;
                     log.info("Added {} functions from config, total: {}", functionsFromConfig.size(), functionList.size());
                 }
             } catch (Exception e) {

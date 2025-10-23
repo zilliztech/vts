@@ -102,8 +102,14 @@ public class MilvusSinkConverter {
                 return Double.parseDouble(value.toString());
             case TIME:
             case DATE:
-            case TIMESTAMP:
                 return value.toString();
+            case TIMESTAMP:
+                // Convert java.sql.Timestamp to Long (Unix timestamp in microseconds for Milvus)
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).getTime() * 1000;
+                } else {
+                    return value.toString();
+                }
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 switch (arrayType.getElementType().getSqlType()) {
@@ -145,6 +151,9 @@ public class MilvusSinkConverter {
                 return data;
             case MAP:
                 return JsonUtils.toJsonString(value);
+            case GEOMETRY:
+                // Handle Geometry - pass through ByteBuffer directly
+                return value;
             default:
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
@@ -192,6 +201,9 @@ public class MilvusSinkConverter {
             FieldSchema fieldSchema = describeCollectionResp.getCollectionSchema().getField(fieldName);
 
             // Convert value using Milvus type
+            if(fieldSchema == null){
+                continue;
+            }
             Object object = convertByMilvusType(fieldSchema, value);
             if(fieldSchema.getDataType() == io.milvus.v2.common.DataType.SparseFloatVector && object == null){
                 continue;
@@ -306,6 +318,19 @@ public class MilvusSinkConverter {
                     case VarChar:
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
+                    case Struct:
+                        // Handle Array[Struct] - convert JSON strings to JsonObjects
+                        String[] structArray = (String[]) value;
+                        List<JsonObject> jsonObjects = new ArrayList<>();
+                        for (String structJsonStr : structArray) {
+                            if (structJsonStr != null && !"null".equalsIgnoreCase(structJsonStr.trim())) {
+                                JsonElement el = JsonParser.parseString(structJsonStr);
+                                if (el.isJsonObject()) {
+                                    jsonObjects.add(el.getAsJsonObject());
+                                }
+                            }
+                        }
+                        return jsonObjects;
                     default:
                         return value;
                 }
@@ -320,6 +345,35 @@ public class MilvusSinkConverter {
                 return Arrays.stream(floats).collect(Collectors.toList());
             case SparseFloatVector:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
+            case Struct:
+                // Handle Struct - convert JSON string to JsonObject
+                if (value instanceof String) {
+                    String structJson = value.toString();
+                    if (!"null".equalsIgnoreCase(structJson.trim())) {
+                        JsonElement el = JsonParser.parseString(structJson);
+                        if (el.isJsonObject()) {
+                            return el.getAsJsonObject();
+                        } else {
+                            return el;
+                        }
+                    } else {
+                        return JsonNull.INSTANCE;
+                    }
+                }
+                return value;
+            case Geometry:
+                // Handle Geometry - pass through ByteBuffer directly
+                return value;
+            case Timestamptz:
+                // Handle Timestamptz - convert java.sql.Timestamp to Long (Unix timestamp in microseconds)
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).getTime() * 1000;
+                } else if (value instanceof Long) {
+                    return value;
+                } else {
+                    // Parse string to timestamp and convert to microseconds
+                    return java.sql.Timestamp.valueOf(value.toString()).getTime() * 1000;
+                }
             default:
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, fieldSchema.getDataType().name());
         }

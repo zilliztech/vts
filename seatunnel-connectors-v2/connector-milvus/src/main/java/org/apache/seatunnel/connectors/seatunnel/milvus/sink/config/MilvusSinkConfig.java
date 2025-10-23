@@ -131,7 +131,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
      * Functions from config will be merged with functions from source metadata.
      */
     public static final Option<List<Object>> functionList =
-            Options.key("functionList")
+            Options.key("function_list")
                     .listType(Object.class)
                     .defaultValue(new ArrayList<>())
                     .withDescription("List of Milvus functions. Each function should contain: name, description, functionType, inputFieldNames, outputFieldNames, and params");
