@@ -343,17 +343,17 @@ public class CatalogUtils {
         }
 
         // Set max capacity for Array fields
-        if (milvusFieldSchema.getMaxCapacity() != null) {
+        if (milvusFieldSchema.getMaxCapacity() != null && milvusFieldSchema.getMaxCapacity() != 0) {
             fieldSchema.setMaxCapacity(milvusFieldSchema.getMaxCapacity());
         }
 
         // Set max length for VarChar/String fields
-        if (milvusFieldSchema.getMaxLength() != null) {
+        if (milvusFieldSchema.getMaxLength() != null && milvusFieldSchema.getMaxLength() != 0) {
             fieldSchema.setMaxLength(milvusFieldSchema.getMaxLength());
         }
 
         // Set dimension for vector fields
-        if (milvusFieldSchema.getDimension() != null) {
+        if (milvusFieldSchema.getDimension() != null && milvusFieldSchema.getDimension() != 0) {
             fieldSchema.setDimension(milvusFieldSchema.getDimension());
         }
 
@@ -396,51 +396,6 @@ public class CatalogUtils {
         }
 
         return fieldSchema;
-    }
-
-    /**
-     * Apply field properties from MilvusFieldSchema to a FieldSchema.
-     * Config settings override source settings.
-     */
-    private void applyFieldProperties(CreateCollectionReq.FieldSchema fieldSchema, MilvusFieldSchema schema) {
-        // Override nullable setting if specified in config
-        if (schema.getIsNullable() != null) {
-            fieldSchema.setIsNullable(schema.getIsNullable());
-        }
-
-        // Override default value if specified in config
-        if (schema.getDefaultValue() != null) {
-            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(), schema.getDefaultValue());
-            fieldSchema.setDefaultValue(defaultValue);
-        }
-
-        // Override primary key setting if specified in confi g
-        if (schema.getIsPrimaryKey() != null) {
-            fieldSchema.setIsPrimaryKey(schema.getIsPrimaryKey());
-            // Override auto ID if specified in config
-            if (schema.getIsPrimaryKey() && schema.getAutoId() != null) {
-                fieldSchema.setAutoID(schema.getAutoId());
-            }
-        }
-
-        // Override partition key setting if specified in config
-        if (schema.getIsPartitionKey() != null) {
-            fieldSchema.setIsPartitionKey(schema.getIsPartitionKey());
-        }
-
-        // Override analyzer settings if specified in config
-        if (schema.getEnableAnalyzer() != null) {
-            fieldSchema.setEnableAnalyzer(schema.getEnableAnalyzer());
-        }
-
-        if (schema.getAnalyzerParams() != null) {
-            fieldSchema.setAnalyzerParams(schema.getAnalyzerParams());
-        }
-
-        // Override match setting if specified in config
-        if (schema.getEnableMatch() != null) {
-            fieldSchema.setEnableMatch(schema.getEnableMatch());
-        }
     }
 
     /**
