@@ -97,12 +97,23 @@ public class MilvusSourceConnectorUtils {
         boolean existPartitionKeyField = false;
         String partitionKeyField = null;
 
+        // Convert regular fields
         for (CreateCollectionReq.FieldSchema fieldSchema : schema.getFieldSchemaList()) {
             PhysicalColumn physicalColumn = MilvusSourceConverter.convertColumn(fieldSchema);
             columns.add(physicalColumn);
             if (fieldSchema.getIsPartitionKey()) {
                 existPartitionKeyField = true;
                 partitionKeyField = fieldSchema.getName();
+            }
+        }
+
+        // Convert struct fields (Array[Struct] fields are stored separately)
+        List<CreateCollectionReq.StructFieldSchema> schemaStructFields = schema.getStructFields();
+        if (schemaStructFields != null && !schemaStructFields.isEmpty()) {
+            for (CreateCollectionReq.StructFieldSchema structFieldSchema : schemaStructFields) {
+                PhysicalColumn structColumn = MilvusSourceConverter.convertStructFieldToColumn(structFieldSchema);
+                columns.add(structColumn);
+                log.info("Converted struct field to column: {}", structFieldSchema.getName());
             }
         }
         if (describeCollectionResp.getEnableDynamicField()) {
@@ -147,7 +158,9 @@ public class MilvusSourceConnectorUtils {
         } else {
             options.put(MilvusConstants.FUNCTION_LIST, "[]");
         }
-        
+
+        // Note: struct fields are serialized per-column in MilvusSourceConverter, not at schema level
+
         // Serialize vector index info as JSON for proper reconstruction in sink
         List<Object> indexList = new ArrayList<>();
         try {

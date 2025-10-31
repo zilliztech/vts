@@ -269,14 +269,8 @@ public class MilvusSourceConverter {
                                 "Unexpected vector value: " + filedValues);
                     }
                 case GEOMETRY:
-                    if (filedValues instanceof ByteBuffer) {
-                        seatunnelField[fieldIndex] = filedValues;
-                        break;
-                    } else {
-                        throw new MilvusConnectorException(
-                                CommonErrorCode.UNSUPPORTED_DATA_TYPE,
-                                "Unexpected geometry value: " + filedValues);
-                    }
+                    seatunnelField[fieldIndex] = filedValues;
+                    break;
                 case TIMESTAMP:
                     // Milvus Timestamptz returns Long (Unix timestamp in microseconds)
                     if (filedValues instanceof Long) {
@@ -379,6 +373,7 @@ public class MilvusSourceConverter {
                     // Array[Struct] - map to Array[String] with JSON flag
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
                     optionsMap.put(CommonOptions.JSON.getName(), true);
+                    // Note: struct fields are extracted at schema level in MilvusSourceConnectorUtils
                 }else {
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
                 }
@@ -434,5 +429,32 @@ public class MilvusSourceConverter {
             }
         }
         return dynamicField;
+    }
+
+    /**
+     * Convert StructFieldSchema to PhysicalColumn (Array[Struct] field)
+     */
+    public static PhysicalColumn convertStructFieldToColumn(CreateCollectionReq.StructFieldSchema structFieldSchema) {
+        PhysicalColumn.PhysicalColumnBuilder builder = PhysicalColumn.builder();
+        builder.name(structFieldSchema.getName());
+        builder.sourceType("Array[Struct]");
+        builder.comment(structFieldSchema.getDescription());
+
+        // Map to Array[String] with JSON flag for SeaTunnel
+        builder.dataType(ArrayType.STRING_ARRAY_TYPE);
+
+        Map<String, Object> optionsMap = new HashMap<>();
+        optionsMap.put(CommonOptions.JSON.getName(), true);
+        optionsMap.put(MilvusConstants.ELEMENT_TYPE, DataType.Struct.getCode());
+        optionsMap.put(MilvusConstants.MAX_CAPACITY, structFieldSchema.getMaxCapacity());
+
+        // Serialize the nested fields for sink reconstruction
+        if (structFieldSchema.getFields() != null && !structFieldSchema.getFields().isEmpty()) {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            optionsMap.put(MilvusConstants.STRUCT_FIELDS, gson.toJson(structFieldSchema.getFields()));
+        }
+
+        builder.options(optionsMap);
+        return builder.build();
     }
 }

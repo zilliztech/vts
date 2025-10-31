@@ -45,4 +45,5 @@ public class MilvusConstants {
     public static final String AUTO_ID = "auto_id";
     public static final String IS_NULLABLE = "is_nullable";
     public static final String DEFAULT_VALUE = "default_value";
+    public static final String STRUCT_FIELDS = "struct_fields";
 }

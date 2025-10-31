@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -62,13 +63,6 @@ public class MilvusFieldSchema {
 
     @SerializedName("enable_match")
     private Boolean enableMatch;
-
-    /**
-     * Check if this is a dynamic field extraction (has source_field_name or data_type specified)
-     */
-    public boolean isDynamicExtraction() {
-        return sourceFieldName != null || dataType != null;
-    }
 
     /**
      * Get the effective field name (field_name if specified, otherwise source_field_name)

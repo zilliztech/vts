@@ -152,8 +152,12 @@ public class CatalogUtils {
             log.info("Added field from config: {}", fieldSchema.getName());
         }
 
+        // Extract struct fields from columns (if any) and merge with config
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = getStructFieldsFromColumnsAndConfig(
+                catalogTable, new Gson());
+
         // Create collection with configured schema
-        createCollection(tablePath, catalogTable, fieldSchemaList);
+        createCollection(tablePath, catalogTable, fieldSchemaList, structFieldsList);
     }
 
     /**
@@ -166,6 +170,7 @@ public class CatalogUtils {
         Map<String, String> options = catalogTable.getOptions();
         TableSchema tableSchema = catalogTable.getTableSchema();
         List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
+        Gson gson = new Gson();
 
         if ((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1)) {
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
@@ -177,7 +182,7 @@ public class CatalogUtils {
             fieldSchemaList.add(fieldSchema);
         }
 
-        // Convert all source columns to field schemas
+        // Convert all source columns to field schemas (skip struct fields)
         for (Column column : tableSchema.getColumns()) {
             if (column.getOptions() != null
                     && column.getOptions().containsKey(CommonOptions.METADATA.getName())
@@ -185,21 +190,35 @@ public class CatalogUtils {
                 // skip dynamic field
                 continue;
             }
-            CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
-                    column,
-                    tableSchema.getPrimaryKey());
-            fieldSchemaList.add(fieldSchema);
+
+            // Check if this is an Array[Struct] field
+            boolean isArrayStruct = column.getOptions() != null
+                    && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS);
+
+            if (!isArrayStruct) {
+                // Regular field - add to fieldSchemaList
+                CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
+                        column,
+                        tableSchema.getPrimaryKey());
+                fieldSchemaList.add(fieldSchema);
+            }
         }
 
+        // Extract struct fields from columns and merge with config
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = getStructFieldsFromColumnsAndConfig(
+                catalogTable, gson);
+
         // Create collection with source schema
-        createCollection(tablePath, catalogTable, fieldSchemaList);
+        createCollection(tablePath, catalogTable, fieldSchemaList, structFieldsList);
     }
 
     /**
-     * Common logic to create a Milvus collection with the given field schema list.
+     * Common logic to create a Milvus collection with the given field schema list and struct fields.
      * Pattern: Use settings from source first, then override with sink config if provided.
      */
-    private void createCollection(TablePath tablePath, CatalogTable catalogTable, List<CreateCollectionReq.FieldSchema> fieldSchemaList) {
+    private void createCollection(TablePath tablePath, CatalogTable catalogTable,
+                                   List<CreateCollectionReq.FieldSchema> fieldSchemaList,
+                                   List<CreateCollectionReq.StructFieldSchema> structFields) {
         Map<String, String> options = catalogTable.getOptions();
         Gson gson = new Gson();
 
@@ -215,12 +234,16 @@ public class CatalogUtils {
         // 4. Function List - source first, then merge/add from config
         List<CreateCollectionReq.Function> functionList = getFunctionList(options, gson);
 
-        // 5. Shard Number - source first, then config override (handled later in createCollectionReq)
+        // 5. Struct Fields - passed from caller (already collected from source/config)
+        log.info("Creating collection with {} struct fields", structFields.size());
+
+        // 6. Shard Number - source first, then config override (handled later in createCollectionReq)
         // Build collection schema
         CreateCollectionReq.CollectionSchema collectionSchema = CreateCollectionReq.CollectionSchema.builder()
                 .fieldSchemaList(fieldSchemaList)
                 .enableDynamicField(enableDynamicField)
                 .functionList(functionList)
+                .structFields(structFields)
                 .build();
 
         // Build create collection request
@@ -395,6 +418,9 @@ public class CatalogUtils {
             fieldSchema.setEnableMatch(true);
         }
 
+        // Note: struct fields are handled at CollectionSchema level, not individual field level
+        // See getStructFields() method
+
         return fieldSchema;
     }
 
@@ -509,6 +535,70 @@ public class CatalogUtils {
         }
 
         return functionList;
+    }
+
+    /**
+     * Extract struct fields from columns and merge with struct_fields config.
+     * This is used for both source schema and field_schema config scenarios.
+     */
+    private List<CreateCollectionReq.StructFieldSchema> getStructFieldsFromColumnsAndConfig(
+            CatalogTable catalogTable, Gson gson) {
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = new ArrayList<>();
+
+        // 1. Extract struct fields from columns (source metadata)
+        TableSchema tableSchema = catalogTable.getTableSchema();
+        for (Column column : tableSchema.getColumns()) {
+            if (column.getOptions() != null && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS)) {
+                String structFieldsJson = (String) column.getOptions().get(MilvusConstants.STRUCT_FIELDS);
+                if (StringUtils.isNotEmpty(structFieldsJson) && !structFieldsJson.equals("[]")) {
+                    try {
+                        // Parse the nested fields from the struct
+                        Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>(){}.getType();
+                        List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson, nestedFieldsType);
+
+                        if (nestedFields != null && !nestedFields.isEmpty()) {
+                            // Create a StructFieldSchema for this Array[Struct] field
+                            CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema.builder()
+                                    .name(column.getName())
+                                    .description(column.getComment() != null ? column.getComment() : "")
+                                    .fields(nestedFields)
+                                    .build();
+
+                            // Set maxCapacity if available
+                            if (column.getOptions().containsKey(MilvusConstants.MAX_CAPACITY)) {
+                                Integer maxCapacity = (Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY);
+                                structFieldSchema.setMaxCapacity(maxCapacity);
+                            }
+
+                            structFieldsList.add(structFieldSchema);
+                            log.info("Extracted struct field from column: {} with {} nested fields",
+                                     column.getName(), nestedFields.size());
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to parse struct fields from column {}: {}", column.getName(), e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // 2. Filter struct fields based on struct_fields config (if specified)
+        List<String> allowedStructFields = config.get(MilvusSinkConfig.structFieldsList);
+        if (allowedStructFields != null && !allowedStructFields.isEmpty()) {
+            // Filter to only include specified struct field names
+            List<CreateCollectionReq.StructFieldSchema> filteredList = new ArrayList<>();
+            for (CreateCollectionReq.StructFieldSchema structField : structFieldsList) {
+                if (allowedStructFields.contains(structField.getName())) {
+                    filteredList.add(structField);
+                    log.info("Including struct field from config filter: {}", structField.getName());
+                } else {
+                    log.info("Excluding struct field not in config filter: {}", structField.getName());
+                }
+            }
+            return filteredList;
+        }
+
+        // If struct_fields config is empty, include all struct fields from source
+        return structFieldsList;
     }
 
     /**

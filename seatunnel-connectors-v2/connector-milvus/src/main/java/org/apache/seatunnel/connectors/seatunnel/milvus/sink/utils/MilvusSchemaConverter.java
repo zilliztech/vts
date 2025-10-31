@@ -158,6 +158,7 @@ public class MilvusSchemaConverter {
                     if (column.getOptions().get(MilvusConstants.ELEMENT_TYPE) != null) {
                         fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber((Integer) column.getOptions().get(MilvusConstants.ELEMENT_TYPE)));
                     }
+                    // Note: struct fields are handled at CollectionSchema level in CatalogUtils, not per-field
                 }
                 break;
             case BINARY_VECTOR:

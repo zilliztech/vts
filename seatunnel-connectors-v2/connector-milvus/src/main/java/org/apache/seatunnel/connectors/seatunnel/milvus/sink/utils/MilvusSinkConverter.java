@@ -198,7 +198,8 @@ public class MilvusSinkConverter {
             }
 
             // Get field schema from target collection (using target field name)
-            FieldSchema fieldSchema = describeCollectionResp.getCollectionSchema().getField(fieldName);
+            // Check both regular fields and struct fields
+            FieldSchema fieldSchema = getFieldSchema(describeCollectionResp, fieldName);
 
             // Convert value using Milvus type
             if(fieldSchema == null){
@@ -213,6 +214,37 @@ public class MilvusSinkConverter {
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
+    }
+
+    /**
+     * Get field schema from either regular fields or struct fields
+     */
+    private FieldSchema getFieldSchema(DescribeCollectionResp describeCollectionResp, String fieldName) {
+        // First check regular fields
+        FieldSchema fieldSchema = describeCollectionResp.getCollectionSchema().getField(fieldName);
+        if (fieldSchema != null) {
+            return fieldSchema;
+        }
+
+        // Check struct fields (Array[Struct] fields are stored separately)
+        List<CreateCollectionReq.StructFieldSchema> structFields = describeCollectionResp.getCollectionSchema().getStructFields();
+        if (structFields != null) {
+            for (CreateCollectionReq.StructFieldSchema structFieldSchema : structFields) {
+                if (structFieldSchema.getName().equals(fieldName)) {
+                    // Create a synthetic FieldSchema for Array[Struct]
+                    FieldSchema syntheticSchema = FieldSchema.builder()
+                            .name(structFieldSchema.getName())
+                            .description(structFieldSchema.getDescription())
+                            .dataType(io.milvus.v2.common.DataType.Array)
+                            .elementType(io.milvus.v2.common.DataType.Struct)
+                            .maxCapacity(structFieldSchema.getMaxCapacity())
+                            .build();
+                    return syntheticSchema;
+                }
+            }
+        }
+
+        return null;
     }
 
     public static CollectionSchemaParam convertToMilvusSchema(DescribeCollectionResp describeCollectionResp) {

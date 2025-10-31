@@ -136,6 +136,28 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                     .defaultValue(new ArrayList<>())
                     .withDescription("List of Milvus functions. Each function should contain: name, description, functionType, inputFieldNames, outputFieldNames, and params");
 
+    /**
+     * Struct fields configuration for Array[Struct] type support.
+     *
+     * This is a simple list of struct field names to include from the source schema.
+     * Struct field definitions (nested fields, max_capacity, etc.) are automatically
+     * extracted from the source metadata.
+     *
+     * If empty (default), all struct fields from source will be included.
+     * If specified, only the listed struct field names will be included.
+     *
+     * Example:
+     * struct_fields = ["clips", "videos", "segments"]
+     *
+     * This acts as a filter to control which Array[Struct] fields are migrated
+     * from source to sink collection.
+     */
+    public static final Option<List<String>> structFieldsList =
+            Options.key("struct_fields")
+                    .listType(String.class)
+                    .defaultValue(new ArrayList<>())
+                    .withDescription("List of struct field names to include from source. Empty means include all.");
+
     public static final Option<Boolean> ENABLE_DYNAMIC_FIELD =
             Options.key("enable_dynamic_field")
                     .booleanType()
