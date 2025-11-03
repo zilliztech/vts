@@ -18,17 +18,19 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig.URL;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusImport;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,7 +45,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     private final CatalogTable catalogTable;
     private final ReadonlyConfig config;
     private final StageBucket stageBucket;
-    private final List<MilvusField> milvusFields;
+    private final Map<String, String> milvusFieldMapper;
 
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
@@ -60,8 +62,21 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.describeCollectionResp = describeCollectionResp;
 
         Gson gson = new Gson();
-        Type type = new TypeToken<List<MilvusField>>() {}.getType();
-        this.milvusFields = gson.fromJson(gson.toJson(config.get(EXTRACT_DYNAMIC)), type);
+        Type type = new TypeToken<List<MilvusFieldSchema>>() {}.getType();
+        List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(gson.toJson(config.get(FIELD_SCHEMA)), type);
+
+        // Convert list to map with sourceFieldName as key for faster lookups
+        // Convert list to map with sourceFieldName as key for faster lookups
+        this.milvusFieldMapper = new HashMap<>();
+        if (fieldSchemaList != null) {
+            for (MilvusFieldSchema field : fieldSchemaList) {
+                // Use source_field_name as key if available, otherwise use field_name
+                String sourceFieldName = field.getSourceFieldName();
+                if (sourceFieldName != null) {
+                    milvusFieldMapper.put(sourceFieldName, field.getFieldName());
+                }
+            }
+        }
 
         String collectionName = catalogTable.getTablePath().getTableName();
         StorageConnectParam storageConnectParam;
@@ -103,7 +118,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp, milvusFields, element);
+                        catalogTable, describeCollectionResp, milvusFieldMapper, element);
         remoteBulkWriter.appendRow(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
@@ -127,6 +142,13 @@ public class MilvusBulkWriter implements MilvusWriter {
             String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
             String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
             milvusImport.importFolder(objectFolder);
+
+            // Log import job information in structured format for retrieval via logs API
+            log.info("[MILVUS_IMPORT_SUMMARY] collection={}, partition={}, importJobCount={}, importJobs={}",
+                    catalogTable.getTablePath().getTableName(),
+                    describeCollectionResp.getCollectionName(),
+                    milvusImport.getImportJobCount(),
+                    milvusImport.getImportJobsInfo());
         }
     }
 
@@ -138,7 +160,31 @@ public class MilvusBulkWriter implements MilvusWriter {
     @Override
     public void waitJobFinish() {
         if(stageBucket.getAutoImport()) {
+            log.info("Waiting for Milvus import jobs to complete...");
             milvusImport.waitImportFinish();
+            log.info("[MILVUS_IMPORT_COMPLETE] All import jobs completed. Total jobs: {}", milvusImport.getImportJobCount());
         }
+    }
+
+    /**
+     * Get Milvus import job information (only available for bulk writer with auto-import enabled)
+     * @return Map of object URL to Milvus import job ID, or empty map if not applicable
+     */
+    public Map<String, String> getImportJobIds() {
+        if (stageBucket.getAutoImport() && milvusImport != null) {
+            return milvusImport.getImportJobIds();
+        }
+        return new HashMap<>();
+    }
+
+    /**
+     * Get the count of Milvus import jobs
+     * @return Number of import jobs, or 0 if not applicable
+     */
+    public int getImportJobCount() {
+        if (stageBucket.getAutoImport() && milvusImport != null) {
+            return milvusImport.getImportJobCount();
+        }
+        return 0;
     }
 }

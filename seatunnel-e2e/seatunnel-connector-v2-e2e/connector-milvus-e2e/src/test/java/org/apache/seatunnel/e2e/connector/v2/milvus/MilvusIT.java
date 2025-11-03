@@ -30,6 +30,8 @@ import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistExcepti
 import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.VectorType;
+import org.apache.seatunnel.api.table.type.GeometryType;
+import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusCatalog;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
@@ -90,7 +92,8 @@ import java.util.stream.Stream;
 public class MilvusIT extends TestSuiteBase implements TestResource {
 
     private static final String HOST = "milvus-e2e";
-    private static final String MILVUS_IMAGE = "milvusdb/milvus:2.4-20240711-7e2a9d6b";
+    // Using Milvus 2.6+ for GEOMETRY and Timestamptz support
+    private static final String MILVUS_IMAGE = "milvusdb/milvus:v2.6-latest";
     private static final String TOKEN = "root:Milvus";
     private MilvusContainer container;
     private MilvusServiceClient milvusClient;
@@ -99,6 +102,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
     private static final String COLLECTION_NAME_2 = "simple_example_2";
     private static final String COLLECTION_NAME_WITH_PARTITIONKEY =
             "simple_example_with_partitionkey";
+    private static final String COLLECTION_NAME_NEW_TYPES = "test_new_types";
     private static final String ID_FIELD = "book_id";
     private static final String VECTOR_FIELD = "book_intro";
     private static final String VECTOR_FIELD2 = "book_kind";
@@ -437,5 +441,152 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         Assertions.assertTrue(fileds.contains(VECTOR_FIELD3));
         Assertions.assertTrue(fileds.contains(VECTOR_FIELD4));
         Assertions.assertTrue(fileds.contains(TITLE_FIELD));
+    }
+
+    @TestTemplate
+    public void testNewTypesInCatalog(TestContainer container)
+            throws TableAlreadyExistException, DatabaseAlreadyExistException,
+                    TableNotExistException {
+        // Test GEOMETRY, TIMESTAMP, and Struct types support in catalog
+
+        // Create a table with new types
+        TablePath tablePath = TablePath.of("default", COLLECTION_NAME_NEW_TYPES);
+
+        // Create columns with GEOMETRY, TIMESTAMP, and Struct types
+        PhysicalColumn idColumn =
+                PhysicalColumn.builder()
+                        .name("id")
+                        .dataType(BasicType.LONG_TYPE)
+                        .nullable(false)
+                        .build();
+
+        PhysicalColumn geometryColumn =
+                PhysicalColumn.builder()
+                        .name("location")
+                        .dataType(GeometryType.GEOMETRY_TYPE)
+                        .nullable(true)
+                        .comment("Geometry field for spatial data")
+                        .build();
+
+        PhysicalColumn timestampColumn =
+                PhysicalColumn.builder()
+                        .name("created_at")
+                        .dataType(LocalTimeType.LOCAL_DATE_TIME_TYPE)
+                        .nullable(true)
+                        .comment("Timestamp field")
+                        .build();
+
+        PhysicalColumn structColumn =
+                PhysicalColumn.builder()
+                        .name("metadata")
+                        .dataType(BasicType.STRING_TYPE)
+                        .nullable(true)
+                        .comment("Struct field stored as JSON")
+                        .options(
+                                Collections.singletonMap(
+                                        org.apache.seatunnel.api.table.type.CommonOptions.JSON
+                                                .getName(),
+                                        true))
+                        .build();
+
+        PhysicalColumn vectorColumn =
+                PhysicalColumn.builder()
+                        .name("embedding")
+                        .dataType(VectorType.VECTOR_FLOAT_TYPE)
+                        .scale(4)
+                        .nullable(true)
+                        .build();
+
+        TableSchema tableSchema =
+                TableSchema.builder()
+                        .columns(
+                                Arrays.asList(
+                                        idColumn,
+                                        geometryColumn,
+                                        timestampColumn,
+                                        structColumn,
+                                        vectorColumn))
+                        .primaryKey(PrimaryKey.of("pk", Collections.singletonList("id")))
+                        .build();
+
+        CatalogTable catalogTable =
+                CatalogTable.of(
+                        TableIdentifier.of(
+                                "milvus",
+                                tablePath.getDatabaseName(),
+                                tablePath.getTableName()),
+                        tableSchema,
+                        Collections.emptyMap(),
+                        Collections.emptyList(),
+                        "Test table with new types");
+
+        // Create the table
+        catalog.createTable(tablePath, catalogTable, false);
+
+        // Verify the table was created
+        R<Boolean> hasCollectionResponse =
+                this.milvusClient.hasCollection(
+                        HasCollectionParam.newBuilder()
+                                .withDatabaseName("default")
+                                .withCollectionName(COLLECTION_NAME_NEW_TYPES)
+                                .build());
+        Assertions.assertTrue(
+                hasCollectionResponse.getData(),
+                "Collection should exist after creation");
+
+        // Verify the schema
+        R<DescribeCollectionResponse> describeResponse =
+                this.milvusClient.describeCollection(
+                        DescribeCollectionParam.newBuilder()
+                                .withDatabaseName("default")
+                                .withCollectionName(COLLECTION_NAME_NEW_TYPES)
+                                .build());
+
+        Assertions.assertEquals(
+                R.Status.Success.getCode(),
+                describeResponse.getStatus(),
+                "Should successfully describe collection");
+
+        DescribeCollectionResponse response = describeResponse.getData();
+        List<FieldSchema> fields = response.getSchema().getFieldsList();
+
+        // Verify fields
+        Map<String, DataType> fieldMap =
+                fields.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        FieldSchema::getName, FieldSchema::getDataType));
+
+        Assertions.assertTrue(fieldMap.containsKey("id"), "Should have id field");
+        Assertions.assertEquals(
+                DataType.Int64, fieldMap.get("id"), "ID field should be Int64");
+
+        Assertions.assertTrue(fieldMap.containsKey("location"), "Should have location field");
+        Assertions.assertEquals(
+                DataType.Geometry,
+                fieldMap.get("location"),
+                "Location field should be Geometry type");
+
+        Assertions.assertTrue(
+                fieldMap.containsKey("created_at"), "Should have created_at field");
+        Assertions.assertEquals(
+                DataType.Timestamptz,
+                fieldMap.get("created_at"),
+                "Created_at field should be Timestamptz type");
+
+        Assertions.assertTrue(fieldMap.containsKey("metadata"), "Should have metadata field");
+        Assertions.assertEquals(
+                DataType.Struct, fieldMap.get("metadata"), "Metadata field should be Struct type");
+
+        Assertions.assertTrue(fieldMap.containsKey("embedding"), "Should have embedding field");
+        Assertions.assertEquals(
+                DataType.FloatVector,
+                fieldMap.get("embedding"),
+                "Embedding field should be FloatVector type");
+
+        // Clean up - drop the test collection
+        catalog.dropTable(tablePath, false);
+
+        log.info("Test for GEOMETRY, TIMESTAMP, and Struct types completed successfully");
     }
 }

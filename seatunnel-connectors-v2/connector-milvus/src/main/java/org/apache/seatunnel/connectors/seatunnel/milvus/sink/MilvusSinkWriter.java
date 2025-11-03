@@ -37,7 +37,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.STOP_ON_ERROR;
 
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
@@ -71,8 +70,6 @@ public class MilvusSinkWriter
     private final MilvusClientV2 milvusClient;
     private final Boolean useBulkWriter;
     private final StageBucket stageBucket;
-    private final int stopOnError;
-    private final Map<String, String> errorMap = new ConcurrentHashMap<>();
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
@@ -94,7 +91,6 @@ public class MilvusSinkWriter
         useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
-        stopOnError = config.get(STOP_ON_ERROR);
     }
 
     /**

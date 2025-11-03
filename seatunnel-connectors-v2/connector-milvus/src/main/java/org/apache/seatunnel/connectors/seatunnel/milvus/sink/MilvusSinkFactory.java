@@ -43,9 +43,9 @@ public class MilvusSinkFactory implements TableSinkFactory {
                 .required(MilvusSinkConfig.URL, MilvusSinkConfig.TOKEN)
                 .optional(
                         MilvusSinkConfig.ENABLE_DYNAMIC_FIELD,
-                        MilvusSinkConfig.ENABLE_AUTO_ID,
                         MilvusSinkConfig.SCHEMA_SAVE_MODE,
-                        MilvusSinkConfig.DATA_SAVE_MODE)
+                        MilvusSinkConfig.DATA_SAVE_MODE,
+                        MilvusSinkConfig.FIELD_SCHEMA)
                 .build();
     }
 

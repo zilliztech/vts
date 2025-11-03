@@ -155,6 +155,8 @@ public final class SeaTunnelRow implements Serializable {
                 return 0;
             case BYTES:
                 return ((byte[]) v).length;
+            case GEOMETRY:
+                return ((String) v).length();
             case DATE:
                 return 24;
             case TIME:

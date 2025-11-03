@@ -39,4 +39,11 @@ public class MilvusConstants {
     public static final String ENABLE_MATCH = "enable_match";
     public static final String ANALYZER_PARAMS = "analyzer_params";
     public static final String MULTI_ANALYZER_PARAMS = "multi_analyzer_params";
+
+    // Field properties from source metadata
+    public static final String IS_PARTITION_KEY = "is_partition_key";
+    public static final String AUTO_ID = "auto_id";
+    public static final String IS_NULLABLE = "is_nullable";
+    public static final String DEFAULT_VALUE = "default_value";
+    public static final String STRUCT_FIELDS = "struct_fields";
 }

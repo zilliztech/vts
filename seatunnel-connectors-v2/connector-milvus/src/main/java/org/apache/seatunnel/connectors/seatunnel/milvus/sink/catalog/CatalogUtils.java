@@ -21,11 +21,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.Auto_ID_NAME;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DEFAULT_VALUE;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.EXTRACT_DYNAMIC;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.ENABLE_DYNAMIC_FIELD;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.IS_NULLABLE;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaConverter;
 
 import java.lang.reflect.Type;
@@ -39,14 +36,41 @@ import java.util.stream.Collectors;
 public class CatalogUtils {
     private final MilvusClientV2 client;
     private final ReadonlyConfig config;
+    private final Map<String, MilvusFieldSchema> fieldSchemaMap;
 
     CatalogUtils(MilvusClientV2 client, ReadonlyConfig config) {
         this.client = client;
         this.config = config;
+        this.fieldSchemaMap = parseFieldSchemaConfig();
+    }
+
+    private Map<String, MilvusFieldSchema> parseFieldSchemaConfig() {
+        Map<String, MilvusFieldSchema> schemaMap = new java.util.HashMap<>();
+
+        if (config.get(FIELD_SCHEMA) != null && !config.get(FIELD_SCHEMA).isEmpty()) {
+            Gson gson = new Gson();
+            for (Object field : config.get(FIELD_SCHEMA)) {
+                try {
+                    Type type = new TypeToken<MilvusFieldSchema>(){}.getType();
+                    String json = gson.toJson(field);
+                    MilvusFieldSchema fieldSchema = gson.fromJson(json, type);
+                    if (fieldSchema != null) {
+                        String key = fieldSchema.getEffectiveFieldName();
+                        if (key != null) {
+                            schemaMap.put(key, fieldSchema);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse field schema: {}, error: {}", field, e.getMessage());
+                }
+            }
+            log.info("Loaded field_schema config for {} fields", schemaMap.size());
+        }
+
+        return schemaMap;
     }
 
     void createIndex(TablePath tablePath, CatalogTable catalogTable){
-        TableSchema tableSchema = catalogTable.getTableSchema();
         Map<String, String> options = catalogTable.getOptions();
 
         List<IndexParam> indexParams = new ArrayList<>();
@@ -104,68 +128,61 @@ public class CatalogUtils {
     }
 
     void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
+        // Delegate to specific method based on whether field_schema is configured
+        if (!fieldSchemaMap.isEmpty()) {
+            createTableFromFieldSchema(tablePath, catalogTable);
+        } else {
+            createTableFromSource(tablePath, catalogTable);
+        }
+    }
+
+    /**
+     * Create collection schema from field_schema config only.
+     * Schema is built entirely from configuration.
+     */
+    private void createTableFromFieldSchema(TablePath tablePath, CatalogTable catalogTable) {
+        log.info("Creating collection from field_schema config, {} fields defined", fieldSchemaMap.size());
+
+        List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
+
+        // Build all fields from config
+        for (MilvusFieldSchema milvusFieldSchema : fieldSchemaMap.values()) {
+            CreateCollectionReq.FieldSchema fieldSchema = createFieldSchemaFromConfig(milvusFieldSchema);
+            fieldSchemaList.add(fieldSchema);
+            log.info("Added field from config: {}", fieldSchema.getName());
+        }
+
+        // Extract struct fields from columns (if any) and merge with config
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = getStructFieldsFromColumnsAndConfig(
+                catalogTable, new Gson());
+
+        // Create collection with configured schema
+        createCollection(tablePath, catalogTable, fieldSchemaList, structFieldsList);
+    }
+
+    /**
+     * Create collection schema from source schema.
+     * This is the default behavior when field_schema is not configured.
+     */
+    private void createTableFromSource(TablePath tablePath, CatalogTable catalogTable) {
+        log.info("Creating collection from source schema");
+
         Map<String, String> options = catalogTable.getOptions();
-
-        // partition key logic
-        String partitionKeyField = null;
-        if(options.containsKey(MilvusConstants.PARTITION_KEY_FIELD)){
-            partitionKeyField = options.get(MilvusConstants.PARTITION_KEY_FIELD);
-        }
-        // if partition key is set in config, use the one in config
-        if (StringUtils.isNotEmpty(config.get(MilvusSinkConfig.PARTITION_KEY))) {
-            partitionKeyField = config.get(MilvusSinkConfig.PARTITION_KEY);
-        }
-
         TableSchema tableSchema = catalogTable.getTableSchema();
         List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
-        Boolean enableAutoId = false;
-        if(options.containsKey(MilvusConstants.ENABLE_AUTO_ID)){
-            enableAutoId = Boolean.valueOf(options.get(MilvusConstants.ENABLE_AUTO_ID));
-        }
-        if(config.get(MilvusSinkConfig.ENABLE_AUTO_ID) != null){
-            enableAutoId = config.get(MilvusSinkConfig.ENABLE_AUTO_ID);
-        }
-        if((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1)){
+        Gson gson = new Gson();
+
+        if ((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1)) {
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
-                            .name(config.get(Auto_ID_NAME))
+                            .name("Auto_id")
                             .isPrimaryKey(true)
                             .autoID(true)
                             .dataType(DataType.Int64)
                             .build();
             fieldSchemaList.add(fieldSchema);
         }
-        Gson gson = new Gson();
-        for(Object field : config.get(EXTRACT_DYNAMIC)){
-            Type type = new TypeToken<MilvusField>(){}.getType();
-            String json = gson.toJson(field);
-            MilvusField milvusField = gson.fromJson(json, type);
 
-            CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
-                    .name(milvusField.getTargetFieldName() == null ? milvusField.getSourceFieldName() : milvusField.getTargetFieldName())
-                    .dataType(DataType.forNumber(milvusField.getDataType()))
-                    .isNullable(true)
-                    .build();
-            if(milvusField.getDataType() == DataType.Array.getCode()) {
-                fieldSchema.setMaxCapacity(4096);
-                if (milvusField.getElementType() != null) {
-                    fieldSchema.setElementType(DataType.forNumber(milvusField.getElementType()));
-                }
-            }
-            if(milvusField.getDataType() == DataType.VarChar.getCode()){
-                fieldSchema.setMaxLength(65535);
-            }
-            if(milvusField.getIsNullable() != null){
-                fieldSchema.setIsNullable(milvusField.getIsNullable());
-            }
-            if(milvusField.getDefaultValue() != null){
-                Object defaultValue = convertDefault(milvusField.getDataType(), milvusField.getDefaultValue());
-                fieldSchema.setDefaultValue(defaultValue);
-            }
-            if(fieldSchema.getName().equals(partitionKeyField)){
-                fieldSchema.setIsPartitionKey(true);
-            }
-            fieldSchemaList.add(fieldSchema);
-        }
+        // Convert all source columns to field schemas (skip struct fields)
         for (Column column : tableSchema.getColumns()) {
             if (column.getOptions() != null
                     && column.getOptions().containsKey(CommonOptions.METADATA.getName())
@@ -173,67 +190,63 @@ public class CatalogUtils {
                 // skip dynamic field
                 continue;
             }
-            CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
-                    column,
-                    tableSchema.getPrimaryKey(),
-                    partitionKeyField,
-                    enableAutoId);
-            setupFieldProperty(fieldSchema);
-            fieldSchemaList.add(fieldSchema);
-        }
 
-        Boolean enableDynamicField = true;
+            // Check if this is an Array[Struct] field
+            boolean isArrayStruct = column.getOptions() != null
+                    && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS);
 
-        if(options.containsKey(MilvusConstants.ENABLE_DYNAMIC_FIELD)) {
-            enableDynamicField = Boolean.valueOf(options.get(MilvusConstants.ENABLE_DYNAMIC_FIELD));
-        }
-        // if enable_dynamic_field is set in config, use the one in config
-        if(config.get(ENABLE_DYNAMIC_FIELD) != null){
-            enableDynamicField = config.get(ENABLE_DYNAMIC_FIELD);
-        }
-
-        // consistency level
-        ConsistencyLevel consistencyLevel = ConsistencyLevel.BOUNDED;
-        if(options.containsKey(MilvusConstants.CONSISTENCY_LEVEL)){
-            consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusConstants.CONSISTENCY_LEVEL).toUpperCase());
-        }
-        if(config.get(MilvusSinkConfig.CONSISTENCY_LEVEL) != null){
-            consistencyLevel = config.get(MilvusSinkConfig.CONSISTENCY_LEVEL);
-        }
-
-        String collectionDescription = "";
-        if (config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION) != null
-                && config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION)
-                .containsKey(tablePath.getTableName())) {
-            // use description from config first
-            collectionDescription =
-                    config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION)
-                            .get(tablePath.getTableName());
-        } else if (null != catalogTable.getComment()) {
-            collectionDescription = catalogTable.getComment();
-        }
-        List<CreateCollectionReq.Function> functionList = new ArrayList<>();
-        if(options.containsKey(MilvusConstants.FUNCTION_LIST)){
-            String functionListStr = options.get(MilvusConstants.FUNCTION_LIST);
-            if (StringUtils.isNotEmpty(functionListStr) && !functionListStr.equals("[]")) {
-                try {
-                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
-                    functionList = gson.fromJson(functionListStr, functionListType);
-                    if (functionList == null) {
-                        functionList = new ArrayList<>();
-                    }
-                    log.info("Loaded {} functions from options", functionList.size());
-                } catch (Exception e) {
-                    log.warn("Failed to parse functionList from options: {}, error: {}", functionListStr, e.getMessage());
-                    functionList = new ArrayList<>();
-                }
+            if (!isArrayStruct) {
+                // Regular field - add to fieldSchemaList
+                CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
+                        column,
+                        tableSchema.getPrimaryKey());
+                fieldSchemaList.add(fieldSchema);
             }
         }
+
+        // Extract struct fields from columns and merge with config
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = getStructFieldsFromColumnsAndConfig(
+                catalogTable, gson);
+
+        // Create collection with source schema
+        createCollection(tablePath, catalogTable, fieldSchemaList, structFieldsList);
+    }
+
+    /**
+     * Common logic to create a Milvus collection with the given field schema list and struct fields.
+     * Pattern: Use settings from source first, then override with sink config if provided.
+     */
+    private void createCollection(TablePath tablePath, CatalogTable catalogTable,
+                                   List<CreateCollectionReq.FieldSchema> fieldSchemaList,
+                                   List<CreateCollectionReq.StructFieldSchema> structFields) {
+        Map<String, String> options = catalogTable.getOptions();
+        Gson gson = new Gson();
+
+        // 1. Enable Dynamic Field - source first, then config override
+        Boolean enableDynamicField = getEnableDynamicField(options);
+
+        // 2. Consistency Level - source first, then config override
+        ConsistencyLevel consistencyLevel = getConsistencyLevel(options);
+
+        // 3. Collection Description - source first, then config override
+        String collectionDescription = getCollectionDescription(tablePath, catalogTable);
+
+        // 4. Function List - source first, then merge/add from config
+        List<CreateCollectionReq.Function> functionList = getFunctionList(options, gson);
+
+        // 5. Struct Fields - passed from caller (already collected from source/config)
+        log.info("Creating collection with {} struct fields", structFields.size());
+
+        // 6. Shard Number - source first, then config override (handled later in createCollectionReq)
+        // Build collection schema
         CreateCollectionReq.CollectionSchema collectionSchema = CreateCollectionReq.CollectionSchema.builder()
                 .fieldSchemaList(fieldSchemaList)
                 .enableDynamicField(enableDynamicField)
                 .functionList(functionList)
+                .structFields(structFields)
                 .build();
+
+        // Build create collection request
         CreateCollectionReq createCollectionReq =
                 CreateCollectionReq.builder()
                         .collectionName(tablePath.getTableName())
@@ -242,16 +255,17 @@ public class CatalogUtils {
                         .enableDynamicField(enableDynamicField)
                         .consistencyLevel(consistencyLevel)
                         .build();
-        if (StringUtils.isNotEmpty(options.get(MilvusConstants.SHARDS_NUM))) {
-            createCollectionReq.setNumShards(Integer.parseInt(options.get(MilvusConstants.SHARDS_NUM)));
-        }
-        if(config.get(MilvusSinkConfig.SHARDS_NUM) != null){
-            createCollectionReq.setNumShards(config.get(MilvusSinkConfig.SHARDS_NUM));
+
+        // Set shard number - source first, then config override
+        Integer shardNum = getShardNum(options);
+        if (shardNum != null) {
+            createCollectionReq.setNumShards(shardNum);
         }
         int retry = 5;
         while (retry > 0){
             try {
                 client.createCollection(createCollectionReq);
+                TimeUnit.SECONDS.sleep(5);
                 break;
             } catch (Exception e) {
                 log.error("create collection failed, retry: {}", retry);
@@ -293,6 +307,33 @@ public class CatalogUtils {
                 return defaultValue.toString();
             case JSON:
                 return defaultValue.toString();
+            case Struct:
+                // Struct type - handle as JSON string
+                if (defaultValue instanceof String) {
+                    return defaultValue.toString();
+                } else {
+                    // Convert object to JSON string
+                    Gson gson = new Gson();
+                    return gson.toJson(defaultValue);
+                }
+            case Geometry:
+                // Geometry type doesn't support default values in Milvus
+                log.warn("GEOMETRY type does not support default values, ignoring default value: {}", defaultValue);
+                return null;
+            case Timestamptz:
+                // Timestamptz expects Long (Unix timestamp in microseconds)
+                if (defaultValue instanceof Long) {
+                    return defaultValue;
+                } else {
+                    try {
+                        // Try to parse as timestamp string and convert to microseconds
+                        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(defaultValue.toString());
+                        return ts.getTime() * 1000;
+                    } catch (Exception e) {
+                        log.error("Failed to convert TIMESTAMP default value: {}", defaultValue);
+                        return null;
+                    }
+                }
             default:
                     return defaultValue;
         }} catch (Exception e) {
@@ -302,13 +343,286 @@ public class CatalogUtils {
         }
     }
 
-    private void setupFieldProperty(CreateCollectionReq.FieldSchema fieldSchema) {
-        if(config.get(IS_NULLABLE).contains(fieldSchema.getName())){
-            fieldSchema.setIsNullable(true);
+    /**
+     * Create a field schema entirely from MilvusFieldSchema config.
+     * This is used when field_schema is supplied - all field definitions come from config.
+     */
+    private CreateCollectionReq.FieldSchema createFieldSchemaFromConfig(MilvusFieldSchema milvusFieldSchema) {
+        // Validate that data_type is provided
+        if (milvusFieldSchema.getDataType() == null) {
+            throw new MilvusConnectorException(
+                    MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR,
+                    "data_type is required in field_schema for field: " + milvusFieldSchema.getEffectiveFieldName());
         }
-        if(config.get(DEFAULT_VALUE).containsKey(fieldSchema.getName())){
-            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(), config.get(DEFAULT_VALUE).get(fieldSchema.getName()));
+
+        CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
+                .name(milvusFieldSchema.getEffectiveFieldName())
+                .dataType(DataType.forNumber(milvusFieldSchema.getDataType()))
+                .build();
+
+        // Set element type for Array fields
+        if (milvusFieldSchema.getElementType() != null) {
+            fieldSchema.setElementType(DataType.forNumber(milvusFieldSchema.getElementType()));
+        }
+
+        // Set max capacity for Array fields
+        if (milvusFieldSchema.getMaxCapacity() != null && milvusFieldSchema.getMaxCapacity() != 0) {
+            fieldSchema.setMaxCapacity(milvusFieldSchema.getMaxCapacity());
+        }
+
+        // Set max length for VarChar/String fields
+        if (milvusFieldSchema.getMaxLength() != null && milvusFieldSchema.getMaxLength() != 0) {
+            fieldSchema.setMaxLength(milvusFieldSchema.getMaxLength());
+        }
+
+        // Set dimension for vector fields
+        if (milvusFieldSchema.getDimension() != null && milvusFieldSchema.getDimension() != 0) {
+            fieldSchema.setDimension(milvusFieldSchema.getDimension());
+        }
+
+        // Set nullable (default to true if not specified)
+        if (milvusFieldSchema.getIsNullable() != null) {
+            fieldSchema.setIsNullable(milvusFieldSchema.getIsNullable());
+        }
+
+        // Set default value if specified
+        if (milvusFieldSchema.getDefaultValue() != null) {
+            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(), milvusFieldSchema.getDefaultValue());
             fieldSchema.setDefaultValue(defaultValue);
         }
+
+        // Set primary key
+        if (milvusFieldSchema.getIsPrimaryKey() != null && milvusFieldSchema.getIsPrimaryKey()) {
+            fieldSchema.setIsPrimaryKey(true);
+            // Set auto ID if specified
+            if (milvusFieldSchema.getAutoId() != null) {
+                fieldSchema.setAutoID(milvusFieldSchema.getAutoId());
+            }
+        }
+
+        // Set partition key
+        if (milvusFieldSchema.getIsPartitionKey() != null && milvusFieldSchema.getIsPartitionKey()) {
+            fieldSchema.setIsPartitionKey(true);
+        }
+
+        // Set analyzer settings
+        if (milvusFieldSchema.getEnableAnalyzer() != null && milvusFieldSchema.getEnableAnalyzer()) {
+            fieldSchema.setEnableAnalyzer(true);
+            if (milvusFieldSchema.getAnalyzerParams() != null) {
+                fieldSchema.setAnalyzerParams(milvusFieldSchema.getAnalyzerParams());
+            }
+        }
+
+        // Set match setting
+        if (milvusFieldSchema.getEnableMatch() != null && milvusFieldSchema.getEnableMatch()) {
+            fieldSchema.setEnableMatch(true);
+        }
+
+        // Note: struct fields are handled at CollectionSchema level, not individual field level
+        // See getStructFields() method
+
+        return fieldSchema;
+    }
+
+    /**
+     * Get enable_dynamic_field setting: source first, then config override
+     */
+    private Boolean getEnableDynamicField(Map<String, String> options) {
+        // Default value
+        Boolean enableDynamicField = true;
+
+        // Use source value if available
+        if (options.containsKey(MilvusConstants.ENABLE_DYNAMIC_FIELD)) {
+            enableDynamicField = Boolean.valueOf(options.get(MilvusConstants.ENABLE_DYNAMIC_FIELD));
+            log.debug("Using enable_dynamic_field from source: {}", enableDynamicField);
+        }
+
+        // Override with config value if provided
+        if (config.get(ENABLE_DYNAMIC_FIELD) != null) {
+            enableDynamicField = config.get(ENABLE_DYNAMIC_FIELD);
+            log.debug("Overriding enable_dynamic_field with config: {}", enableDynamicField);
+        }
+
+        return enableDynamicField;
+    }
+
+    /**
+     * Get consistency level: source first, then config override
+     */
+    private ConsistencyLevel getConsistencyLevel(Map<String, String> options) {
+        // Default value
+        ConsistencyLevel consistencyLevel = ConsistencyLevel.BOUNDED;
+
+        // Use source value if available
+        if (options.containsKey(MilvusConstants.CONSISTENCY_LEVEL)) {
+            try {
+                consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusConstants.CONSISTENCY_LEVEL).toUpperCase());
+                log.debug("Using consistency_level from source: {}", consistencyLevel);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid consistency level from source: {}, using default BOUNDED", options.get(MilvusConstants.CONSISTENCY_LEVEL));
+            }
+        }
+
+        // Override with config value if provided
+        if (config.get(MilvusSinkConfig.CONSISTENCY_LEVEL) != null) {
+            consistencyLevel = config.get(MilvusSinkConfig.CONSISTENCY_LEVEL);
+            log.debug("Overriding consistency_level with config: {}", consistencyLevel);
+        }
+
+        return consistencyLevel;
+    }
+
+    /**
+     * Get collection description: source first, then config override
+     */
+    private String getCollectionDescription(TablePath tablePath, CatalogTable catalogTable) {
+        // Default value
+        String description = "";
+
+        // Use source comment if available
+        if (catalogTable.getComment() != null) {
+            description = catalogTable.getComment();
+            log.debug("Using description from source comment: {}", description);
+        }
+
+        // Override with config value if provided
+        if (config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION) != null
+                && config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION).containsKey(tablePath.getTableName())) {
+            description = config.get(MilvusSinkConfig.COLLECTION_DESCRIPTION).get(tablePath.getTableName());
+            log.debug("Overriding description with config: {}", description);
+        }
+
+        return description;
+    }
+
+    /**
+     * Get function list: source first, then merge/add from config
+     */
+    private List<CreateCollectionReq.Function> getFunctionList(Map<String, String> options, Gson gson) {
+        List<CreateCollectionReq.Function> functionList = new ArrayList<>();
+
+        // Load functions from source if available
+        if (options.containsKey(MilvusConstants.FUNCTION_LIST)) {
+            String functionListStr = options.get(MilvusConstants.FUNCTION_LIST);
+            if (StringUtils.isNotEmpty(functionListStr) && !functionListStr.equals("[]")) {
+                try {
+                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
+                    List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr, functionListType);
+                    if (functionsFromSource != null) {
+                        functionList = functionsFromSource;
+                        log.info("Loaded {} functions from source", functionsFromSource.size());
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse functionList from source: {}, error: {}", functionListStr, e.getMessage());
+                }
+            }
+        }
+
+        // Merge/add functions from config (additive, not override)
+        if (config.get(MilvusSinkConfig.functionList) != null && !config.get(MilvusSinkConfig.functionList).isEmpty()) {
+            try {
+                List<Object> functionsFromConfigRaw = config.get(MilvusSinkConfig.functionList);
+                Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
+                String functionListStr = gson.toJson(functionsFromConfigRaw);
+                List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr, functionListType);
+                if (functionsFromConfig != null) {
+                    functionList = functionsFromConfig;
+                    log.info("Added {} functions from config, total: {}", functionsFromConfig.size(), functionList.size());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse functionList from config, error: {}", e.getMessage());
+            }
+        }
+
+        return functionList;
+    }
+
+    /**
+     * Extract struct fields from columns and merge with struct_fields config.
+     * This is used for both source schema and field_schema config scenarios.
+     */
+    private List<CreateCollectionReq.StructFieldSchema> getStructFieldsFromColumnsAndConfig(
+            CatalogTable catalogTable, Gson gson) {
+        List<CreateCollectionReq.StructFieldSchema> structFieldsList = new ArrayList<>();
+
+        // 1. Extract struct fields from columns (source metadata)
+        TableSchema tableSchema = catalogTable.getTableSchema();
+        for (Column column : tableSchema.getColumns()) {
+            if (column.getOptions() != null && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS)) {
+                String structFieldsJson = (String) column.getOptions().get(MilvusConstants.STRUCT_FIELDS);
+                if (StringUtils.isNotEmpty(structFieldsJson) && !structFieldsJson.equals("[]")) {
+                    try {
+                        // Parse the nested fields from the struct
+                        Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>(){}.getType();
+                        List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson, nestedFieldsType);
+
+                        if (nestedFields != null && !nestedFields.isEmpty()) {
+                            // Create a StructFieldSchema for this Array[Struct] field
+                            CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema.builder()
+                                    .name(column.getName())
+                                    .description(column.getComment() != null ? column.getComment() : "")
+                                    .fields(nestedFields)
+                                    .build();
+
+                            // Set maxCapacity if available
+                            if (column.getOptions().containsKey(MilvusConstants.MAX_CAPACITY)) {
+                                Integer maxCapacity = (Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY);
+                                structFieldSchema.setMaxCapacity(maxCapacity);
+                            }
+
+                            structFieldsList.add(structFieldSchema);
+                            log.info("Extracted struct field from column: {} with {} nested fields",
+                                     column.getName(), nestedFields.size());
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to parse struct fields from column {}: {}", column.getName(), e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // 2. Filter struct fields based on struct_fields config (if specified)
+        List<String> allowedStructFields = config.get(MilvusSinkConfig.structFieldsList);
+        if (allowedStructFields != null && !allowedStructFields.isEmpty()) {
+            // Filter to only include specified struct field names
+            List<CreateCollectionReq.StructFieldSchema> filteredList = new ArrayList<>();
+            for (CreateCollectionReq.StructFieldSchema structField : structFieldsList) {
+                if (allowedStructFields.contains(structField.getName())) {
+                    filteredList.add(structField);
+                    log.info("Including struct field from config filter: {}", structField.getName());
+                } else {
+                    log.info("Excluding struct field not in config filter: {}", structField.getName());
+                }
+            }
+            return filteredList;
+        }
+
+        // If struct_fields config is empty, include all struct fields from source
+        return structFieldsList;
+    }
+
+    /**
+     * Get shard number: source first, then config override
+     */
+    private Integer getShardNum(Map<String, String> options) {
+        Integer shardNum = null;
+
+        // Use source value if available
+        if (StringUtils.isNotEmpty(options.get(MilvusConstants.SHARDS_NUM))) {
+            try {
+                shardNum = Integer.parseInt(options.get(MilvusConstants.SHARDS_NUM));
+                log.debug("Using shard_num from source: {}", shardNum);
+            } catch (NumberFormatException e) {
+                log.warn("Invalid shard_num from source: {}", options.get(MilvusConstants.SHARDS_NUM));
+            }
+        }
+
+        // Override with config value if provided
+        if (config.get(MilvusSinkConfig.SHARDS_NUM) != null) {
+            shardNum = config.get(MilvusSinkConfig.SHARDS_NUM);
+            log.debug("Overriding shard_num with config: {}", shardNum);
+        }
+
+        return shardNum;
     }
 }

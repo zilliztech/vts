@@ -88,6 +88,7 @@ public class MilvusConnectorUtils {
                 .uri(config.get(MilvusSourceConfig.URL))
                 .token(config.get(MilvusSourceConfig.TOKEN))
                 .dbName(config.get(MilvusSourceConfig.DATABASE))
+                .connectTimeoutMs(30000)
                 .build();
         if(config.get(MilvusCommonConfig.CLIENT_PEM_PATH) != null){
             connectConfig.setClientPemPath(config.get(MilvusCommonConfig.CLIENT_PEM_PATH));

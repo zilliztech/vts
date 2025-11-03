@@ -40,12 +40,13 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -101,8 +102,14 @@ public class MilvusSinkConverter {
                 return Double.parseDouble(value.toString());
             case TIME:
             case DATE:
-            case TIMESTAMP:
                 return value.toString();
+            case TIMESTAMP:
+                // Convert java.sql.Timestamp to Long (Unix timestamp in microseconds for Milvus)
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).getTime() * 1000;
+                } else {
+                    return value.toString();
+                }
             case ARRAY:
                 ArrayType<?, ?> arrayType = (ArrayType<?, ?>) fieldType;
                 switch (arrayType.getElementType().getSqlType()) {
@@ -144,6 +151,9 @@ public class MilvusSinkConverter {
                 return data;
             case MAP:
                 return JsonUtils.toJsonString(value);
+            case GEOMETRY:
+                // Handle Geometry - pass through ByteBuffer directly
+                return value;
             default:
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
@@ -153,21 +163,25 @@ public class MilvusSinkConverter {
     public JsonObject buildMilvusData(
             CatalogTable catalogTable,
             DescribeCollectionResp describeCollectionResp,
-            List<MilvusField> milvusFields,
+            Map<String, String> milvusFieldsMap,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         JsonObject data = new JsonObject();
         Gson gson = new Gson();
+
+        // Build source-to-target field name mapping from field_schema config
+        // This allows renaming: source_field_name (old name) -> field_name (new name)
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
-            String fieldName = seaTunnelRowType.getFieldNames()[i];
+            String sourceFieldName = seaTunnelRowType.getFieldNames()[i];
+            String fieldName = milvusFieldsMap.getOrDefault(sourceFieldName, sourceFieldName);
+            // Skip auto-ID primary key fields
             if (describeCollectionResp.getAutoID() && fieldName.equals(describeCollectionResp.getPrimaryFieldName())) {
-                continue; // if create table open AutoId, then don't need insert data with
-                // primaryKey field.
+                continue;
             }
 
-            FieldSchema fieldSchema = describeCollectionResp.getCollectionSchema().getField(fieldName);
             Object value = element.getField(i);
-            // if the field is dynamic field, then parse the dynamic field
+
+            // Handle dynamic field extraction
             if (Objects.equals(fieldName, CommonOptions.METADATA.getName())
                     && describeCollectionResp.getEnableDynamicField()) {
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
@@ -176,25 +190,61 @@ public class MilvusSinkConverter {
                         .forEach(
                                 entry -> {
                                     String entryKey = entry.getKey();
-                                    List<MilvusField> matches = milvusFields.stream().filter(a -> a.getSourceFieldName().equals(entryKey)).collect(Collectors.toList());
-                                    if(!matches.isEmpty()) {
-                                        if (matches.get(0).getSourceFieldName().equals(entryKey)) {
-                                            data.add(matches.get(0).getTargetFieldName(), entry.getValue());
-                                        }
-
-                                    }else {
-                                        data.add(entry.getKey(), entry.getValue());
-                                    }
+                                    // Direct lookup using entryKey
+                                    String matchedField = milvusFieldsMap.getOrDefault(entryKey, entryKey);
+                                    data.add(matchedField, entry.getValue());
                                 });
+                continue;
+            }
+
+            // Get field schema from target collection (using target field name)
+            // Check both regular fields and struct fields
+            FieldSchema fieldSchema = getFieldSchema(describeCollectionResp, fieldName);
+
+            // Convert value using Milvus type
+            if(fieldSchema == null){
                 continue;
             }
             Object object = convertByMilvusType(fieldSchema, value);
             if(fieldSchema.getDataType() == io.milvus.v2.common.DataType.SparseFloatVector && object == null){
                 continue;
             }
+
+            // Add to data using target field name
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
+    }
+
+    /**
+     * Get field schema from either regular fields or struct fields
+     */
+    private FieldSchema getFieldSchema(DescribeCollectionResp describeCollectionResp, String fieldName) {
+        // First check regular fields
+        FieldSchema fieldSchema = describeCollectionResp.getCollectionSchema().getField(fieldName);
+        if (fieldSchema != null) {
+            return fieldSchema;
+        }
+
+        // Check struct fields (Array[Struct] fields are stored separately)
+        List<CreateCollectionReq.StructFieldSchema> structFields = describeCollectionResp.getCollectionSchema().getStructFields();
+        if (structFields != null) {
+            for (CreateCollectionReq.StructFieldSchema structFieldSchema : structFields) {
+                if (structFieldSchema.getName().equals(fieldName)) {
+                    // Create a synthetic FieldSchema for Array[Struct]
+                    FieldSchema syntheticSchema = FieldSchema.builder()
+                            .name(structFieldSchema.getName())
+                            .description(structFieldSchema.getDescription())
+                            .dataType(io.milvus.v2.common.DataType.Array)
+                            .elementType(io.milvus.v2.common.DataType.Struct)
+                            .maxCapacity(structFieldSchema.getMaxCapacity())
+                            .build();
+                    return syntheticSchema;
+                }
+            }
+        }
+
+        return null;
     }
 
     public static CollectionSchemaParam convertToMilvusSchema(DescribeCollectionResp describeCollectionResp) {
@@ -300,6 +350,19 @@ public class MilvusSinkConverter {
                     case VarChar:
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
+                    case Struct:
+                        // Handle Array[Struct] - convert JSON strings to JsonObjects
+                        String[] structArray = (String[]) value;
+                        List<JsonObject> jsonObjects = new ArrayList<>();
+                        for (String structJsonStr : structArray) {
+                            if (structJsonStr != null && !"null".equalsIgnoreCase(structJsonStr.trim())) {
+                                JsonElement el = JsonParser.parseString(structJsonStr);
+                                if (el.isJsonObject()) {
+                                    jsonObjects.add(el.getAsJsonObject());
+                                }
+                            }
+                        }
+                        return jsonObjects;
                     default:
                         return value;
                 }
@@ -314,6 +377,35 @@ public class MilvusSinkConverter {
                 return Arrays.stream(floats).collect(Collectors.toList());
             case SparseFloatVector:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
+            case Struct:
+                // Handle Struct - convert JSON string to JsonObject
+                if (value instanceof String) {
+                    String structJson = value.toString();
+                    if (!"null".equalsIgnoreCase(structJson.trim())) {
+                        JsonElement el = JsonParser.parseString(structJson);
+                        if (el.isJsonObject()) {
+                            return el.getAsJsonObject();
+                        } else {
+                            return el;
+                        }
+                    } else {
+                        return JsonNull.INSTANCE;
+                    }
+                }
+                return value;
+            case Geometry:
+                // Handle Geometry - pass through ByteBuffer directly
+                return value;
+            case Timestamptz:
+                // Handle Timestamptz - convert java.sql.Timestamp to Long (Unix timestamp in microseconds)
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).getTime() * 1000;
+                } else if (value instanceof Long) {
+                    return value;
+                } else {
+                    // Parse string to timestamp and convert to microseconds
+                    return java.sql.Timestamp.valueOf(value.toString()).getTime() * 1000;
+                }
             default:
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, fieldSchema.getDataType().name());
         }
