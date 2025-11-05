@@ -56,8 +56,6 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.config = config;
         this.stageBucket = stageBucket;
 
-        CollectionSchemaParam collectionSchemaParam = MilvusSinkConverter.convertToMilvusSchema(describeCollectionResp);
-
         this.milvusSinkConverter = new MilvusSinkConverter();
         this.describeCollectionResp = describeCollectionResp;
 
@@ -99,7 +97,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         }
 
         RemoteBulkWriterParam remoteBulkWriterParam = RemoteBulkWriterParam.newBuilder()
-                .withCollectionSchema(collectionSchemaParam)
+                .withCollectionSchema(describeCollectionResp.getCollectionSchema())
                 .withConnectParam(storageConnectParam)
                 .withChunkSize(stageBucket.getChunkSize() * 1024 * 1024)
                 .withRemotePath(stageBucket.getPrefix() + "/" + collectionName + "/" + partitionName)
