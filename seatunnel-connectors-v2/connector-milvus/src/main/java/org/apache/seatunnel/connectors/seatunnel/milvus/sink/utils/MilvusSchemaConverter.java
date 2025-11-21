@@ -19,9 +19,10 @@ import java.util.Objects;
 public class MilvusSchemaConverter {
     /**
      * Convert column from source to Milvus FieldSchema.
-     * This creates the base field schema from source data, which can be later overridden by config.
+     * This creates the base field schema from source data, which can be later
+     * overridden by config.
      *
-     * @param column Source column definition
+     * @param column     Source column definition
      * @param primaryKey Primary key from source (optional)
      * @return Field schema based on source column definition
      */
@@ -47,10 +48,13 @@ public class MilvusSchemaConverter {
                 String analyzerParamsStr = (String) options.get(MilvusConstants.ANALYZER_PARAMS);
                 if (analyzerParamsStr != null && !analyzerParamsStr.isEmpty()) {
                     try {
-                        com.google.gson.Gson gson = new com.google.gson.Gson();
-                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken =
-                            new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
-                        java.util.Map<String, Object> analyzerParams = gson.fromJson(analyzerParamsStr, typeToken.getType());
+                        com.google.gson.Gson gson = new com.google.gson.GsonBuilder()
+                                .setObjectToNumberStrategy(com.google.gson.ToNumberPolicy.LONG_OR_DOUBLE)
+                                .create();
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>() {
+                        };
+                        java.util.Map<String, Object> analyzerParams = gson.fromJson(analyzerParamsStr,
+                                typeToken.getType());
                         fieldSchema.setAnalyzerParams(analyzerParams);
                     } catch (Exception e) {
                         // Log error but don't fail the field creation
@@ -62,10 +66,13 @@ public class MilvusSchemaConverter {
                 String multiAnalyzerParamsStr = (String) options.get(MilvusConstants.MULTI_ANALYZER_PARAMS);
                 if (multiAnalyzerParamsStr != null && !multiAnalyzerParamsStr.isEmpty()) {
                     try {
-                        com.google.gson.Gson gson = new com.google.gson.Gson();
-                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken =
-                            new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>(){};
-                        java.util.Map<String, Object> multiAnalyzerParams = gson.fromJson(multiAnalyzerParamsStr, typeToken.getType());
+                        com.google.gson.Gson gson = new com.google.gson.GsonBuilder()
+                                .setObjectToNumberStrategy(com.google.gson.ToNumberPolicy.LONG_OR_DOUBLE)
+                                .create();
+                        com.google.gson.reflect.TypeToken<java.util.Map<String, Object>> typeToken = new com.google.gson.reflect.TypeToken<java.util.Map<String, Object>>() {
+                        };
+                        java.util.Map<String, Object> multiAnalyzerParams = gson.fromJson(multiAnalyzerParamsStr,
+                                typeToken.getType());
                         fieldSchema.setMultiAnalyzerParams(multiAnalyzerParams);
                     } catch (Exception e) {
                         // Log error but don't fail the field creation
@@ -124,7 +131,7 @@ public class MilvusSchemaConverter {
                         && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
                     // check if is json
                     fieldSchema.setDataType(io.milvus.v2.common.DataType.JSON);
-                } else if (column.getOptions()!= null && column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
+                } else if (column.getOptions() != null && column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
                     fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusConstants.MAX_LENGTH));
                 } else {
                     fieldSchema.setMaxLength(65535);
@@ -148,7 +155,7 @@ public class MilvusSchemaConverter {
                 if (Objects.requireNonNull(elementType.getSqlType()) == SqlType.STRING) {
                     fieldSchema.setMaxLength(65535);
                 }
-                if(column.getOptions()!= null){
+                if (column.getOptions() != null) {
                     if (column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
                         fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusConstants.MAX_LENGTH));
                     }
@@ -156,9 +163,11 @@ public class MilvusSchemaConverter {
                         fieldSchema.setMaxCapacity((Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY));
                     }
                     if (column.getOptions().get(MilvusConstants.ELEMENT_TYPE) != null) {
-                        fieldSchema.setElementType(io.milvus.v2.common.DataType.forNumber((Integer) column.getOptions().get(MilvusConstants.ELEMENT_TYPE)));
+                        fieldSchema.setElementType(io.milvus.v2.common.DataType
+                                .forNumber((Integer) column.getOptions().get(MilvusConstants.ELEMENT_TYPE)));
                     }
-                    // Note: struct fields are handled at CollectionSchema level in CatalogUtils, not per-field
+                    // Note: struct fields are handled at CollectionSchema level in CatalogUtils,
+                    // not per-field
                 }
                 break;
             case BINARY_VECTOR:
@@ -171,7 +180,8 @@ public class MilvusSchemaConverter {
 
         // Set primary key from source schema if defined
         // Only set primarykey when primary key num is 1
-        if (null != primaryKey && primaryKey.getColumnNames().size() == 1 && primaryKey.getColumnNames().contains(column.getName())) {
+        if (null != primaryKey && primaryKey.getColumnNames().size() == 1
+                && primaryKey.getColumnNames().contains(column.getName())) {
             fieldSchema.setIsPrimaryKey(true);
             List<SqlType> integerTypes = new ArrayList<>();
             integerTypes.add(SqlType.INT);
