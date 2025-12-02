@@ -2,6 +2,8 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog;
 
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.ConsistencyLevel;
 import io.milvus.v2.common.DataType;
@@ -48,10 +50,11 @@ public class CatalogUtils {
         Map<String, MilvusFieldSchema> schemaMap = new java.util.HashMap<>();
 
         if (config.get(FIELD_SCHEMA) != null && !config.get(FIELD_SCHEMA).isEmpty()) {
-            Gson gson = new Gson();
+            Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
             for (Object field : config.get(FIELD_SCHEMA)) {
                 try {
-                    Type type = new TypeToken<MilvusFieldSchema>(){}.getType();
+                    Type type = new TypeToken<MilvusFieldSchema>() {
+                    }.getType();
                     String json = gson.toJson(field);
                     MilvusFieldSchema fieldSchema = gson.fromJson(json, type);
                     if (fieldSchema != null) {
@@ -70,20 +73,21 @@ public class CatalogUtils {
         return schemaMap;
     }
 
-    void createIndex(TablePath tablePath, CatalogTable catalogTable){
+    void createIndex(TablePath tablePath, CatalogTable catalogTable) {
         Map<String, String> options = catalogTable.getOptions();
 
         List<IndexParam> indexParams = new ArrayList<>();
-        
+
         // Check if there are existing indexes from source metadata in options
         if (options.containsKey(MilvusConstants.INDEX_LIST)) {
             String indexListStr = options.get(MilvusConstants.INDEX_LIST);
             if (StringUtils.isNotEmpty(indexListStr) && !indexListStr.equals("[]")) {
                 try {
-                    Gson gson = new Gson();
-                    Type indexListType = new TypeToken<List<Map<String, String>>>(){}.getType();
+                    Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
+                    Type indexListType = new TypeToken<List<Map<String, String>>>() {
+                    }.getType();
                     List<Map<String, String>> indexes = gson.fromJson(indexListStr, indexListType);
-                    
+
                     if (indexes != null && !indexes.isEmpty()) {
                         for (Map<String, String> indexInfo : indexes) {
                             IndexParam.MetricType metricType;
@@ -93,7 +97,7 @@ public class CatalogUtils {
                                 log.warn("Unknown metric type: {}, using default COSINE", indexInfo.get("metricType"));
                                 metricType = IndexParam.MetricType.COSINE;
                             }
-                            
+
                             IndexParam.IndexType indexType;
                             try {
                                 indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
@@ -101,7 +105,7 @@ public class CatalogUtils {
                                 log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
                                 indexType = IndexParam.IndexType.AUTOINDEX;
                             }
-                            
+
                             IndexParam indexParam = IndexParam.builder()
                                     .fieldName(indexInfo.get("fieldName"))
                                     .metricType(metricType)
@@ -117,7 +121,7 @@ public class CatalogUtils {
                 }
             }
         }
-        
+
         log.info("indexParams: {}", indexParams);
         // create index
         CreateIndexReq createIndexReq = CreateIndexReq.builder()
@@ -154,7 +158,7 @@ public class CatalogUtils {
 
         // Extract struct fields from columns (if any) and merge with config
         List<CreateCollectionReq.StructFieldSchema> structFieldsList = getStructFieldsFromColumnsAndConfig(
-                catalogTable, new Gson());
+                catalogTable, new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create());
 
         // Create collection with configured schema
         createCollection(tablePath, catalogTable, fieldSchemaList, structFieldsList);
@@ -170,15 +174,15 @@ public class CatalogUtils {
         Map<String, String> options = catalogTable.getOptions();
         TableSchema tableSchema = catalogTable.getTableSchema();
         List<CreateCollectionReq.FieldSchema> fieldSchemaList = new ArrayList<>();
-        Gson gson = new Gson();
+        Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
 
         if ((tableSchema.getPrimaryKey() == null || tableSchema.getPrimaryKey().getColumnNames().size() > 1)) {
             CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
-                            .name("Auto_id")
-                            .isPrimaryKey(true)
-                            .autoID(true)
-                            .dataType(DataType.Int64)
-                            .build();
+                    .name("Auto_id")
+                    .isPrimaryKey(true)
+                    .autoID(true)
+                    .dataType(DataType.Int64)
+                    .build();
             fieldSchemaList.add(fieldSchema);
         }
 
@@ -213,14 +217,16 @@ public class CatalogUtils {
     }
 
     /**
-     * Common logic to create a Milvus collection with the given field schema list and struct fields.
-     * Pattern: Use settings from source first, then override with sink config if provided.
+     * Common logic to create a Milvus collection with the given field schema list
+     * and struct fields.
+     * Pattern: Use settings from source first, then override with sink config if
+     * provided.
      */
     private void createCollection(TablePath tablePath, CatalogTable catalogTable,
-                                   List<CreateCollectionReq.FieldSchema> fieldSchemaList,
-                                   List<CreateCollectionReq.StructFieldSchema> structFields) {
+            List<CreateCollectionReq.FieldSchema> fieldSchemaList,
+            List<CreateCollectionReq.StructFieldSchema> structFields) {
         Map<String, String> options = catalogTable.getOptions();
-        Gson gson = new Gson();
+        Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
 
         // 1. Enable Dynamic Field - source first, then config override
         Boolean enableDynamicField = getEnableDynamicField(options);
@@ -237,7 +243,8 @@ public class CatalogUtils {
         // 5. Struct Fields - passed from caller (already collected from source/config)
         log.info("Creating collection with {} struct fields", structFields.size());
 
-        // 6. Shard Number - source first, then config override (handled later in createCollectionReq)
+        // 6. Shard Number - source first, then config override (handled later in
+        // createCollectionReq)
         // Build collection schema
         CreateCollectionReq.CollectionSchema collectionSchema = CreateCollectionReq.CollectionSchema.builder()
                 .fieldSchemaList(fieldSchemaList)
@@ -247,14 +254,13 @@ public class CatalogUtils {
                 .build();
 
         // Build create collection request
-        CreateCollectionReq createCollectionReq =
-                CreateCollectionReq.builder()
-                        .collectionName(tablePath.getTableName())
-                        .description(collectionDescription)
-                        .collectionSchema(collectionSchema)
-                        .enableDynamicField(enableDynamicField)
-                        .consistencyLevel(consistencyLevel)
-                        .build();
+        CreateCollectionReq createCollectionReq = CreateCollectionReq.builder()
+                .collectionName(tablePath.getTableName())
+                .description(collectionDescription)
+                .collectionSchema(collectionSchema)
+                .enableDynamicField(enableDynamicField)
+                .consistencyLevel(consistencyLevel)
+                .build();
 
         // Set shard number - source first, then config override
         Integer shardNum = getShardNum(options);
@@ -262,7 +268,7 @@ public class CatalogUtils {
             createCollectionReq.setNumShards(shardNum);
         }
         int retry = 5;
-        while (retry > 0){
+        while (retry > 0) {
             try {
                 client.createCollection(createCollectionReq);
                 TimeUnit.SECONDS.sleep(5);
@@ -270,8 +276,9 @@ public class CatalogUtils {
             } catch (Exception e) {
                 log.error("create collection failed, retry: {}", retry);
                 retry--;
-                if(retry == 0){
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR, e.getMessage());
+                if (retry == 0) {
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR,
+                            e.getMessage());
                 }
                 try {
                     TimeUnit.SECONDS.sleep(1);
@@ -288,55 +295,56 @@ public class CatalogUtils {
         }
         DataType dataTypeEnum = DataType.forNumber(dataType);
         try {
-        switch (dataTypeEnum){
-            case Int8:
-            case Int16:
-                return Short.valueOf(defaultValue.toString());
-            case Int32:
-                return Integer.valueOf(defaultValue.toString());
-            case Int64:
-                return Long.valueOf(defaultValue.toString());
-            case Bool:
-                return Boolean.valueOf(defaultValue.toString());
-            case Float:
-                return Float.valueOf(defaultValue.toString());
-            case Double:
-                return Double.valueOf(defaultValue.toString());
-            case VarChar:
-            case String:
-                return defaultValue.toString();
-            case JSON:
-                return defaultValue.toString();
-            case Struct:
-                // Struct type - handle as JSON string
-                if (defaultValue instanceof String) {
+            switch (dataTypeEnum) {
+                case Int8:
+                case Int16:
+                    return Short.valueOf(defaultValue.toString());
+                case Int32:
+                    return Integer.valueOf(defaultValue.toString());
+                case Int64:
+                    return Long.valueOf(defaultValue.toString());
+                case Bool:
+                    return Boolean.valueOf(defaultValue.toString());
+                case Float:
+                    return Float.valueOf(defaultValue.toString());
+                case Double:
+                    return Double.valueOf(defaultValue.toString());
+                case VarChar:
+                case String:
                     return defaultValue.toString();
-                } else {
-                    // Convert object to JSON string
-                    Gson gson = new Gson();
-                    return gson.toJson(defaultValue);
-                }
-            case Geometry:
-                // Geometry type doesn't support default values in Milvus
-                log.warn("GEOMETRY type does not support default values, ignoring default value: {}", defaultValue);
-                return null;
-            case Timestamptz:
-                // Timestamptz expects Long (Unix timestamp in microseconds)
-                if (defaultValue instanceof Long) {
-                    return defaultValue;
-                } else {
-                    try {
-                        // Try to parse as timestamp string and convert to microseconds
-                        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(defaultValue.toString());
-                        return ts.getTime() * 1000;
-                    } catch (Exception e) {
-                        log.error("Failed to convert TIMESTAMP default value: {}", defaultValue);
-                        return null;
+                case JSON:
+                    return defaultValue.toString();
+                case Struct:
+                    // Struct type - handle as JSON string
+                    if (defaultValue instanceof String) {
+                        return defaultValue.toString();
+                    } else {
+                        // Convert object to JSON string
+                        Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
+                        return gson.toJson(defaultValue);
                     }
-                }
-            default:
+                case Geometry:
+                    // Geometry type doesn't support default values in Milvus
+                    log.warn("GEOMETRY type does not support default values, ignoring default value: {}", defaultValue);
+                    return null;
+                case Timestamptz:
+                    // Timestamptz expects Long (Unix timestamp in microseconds)
+                    if (defaultValue instanceof Long) {
+                        return defaultValue;
+                    } else {
+                        try {
+                            // Try to parse as timestamp string and convert to microseconds
+                            java.sql.Timestamp ts = java.sql.Timestamp.valueOf(defaultValue.toString());
+                            return ts.getTime() * 1000;
+                        } catch (Exception e) {
+                            log.error("Failed to convert TIMESTAMP default value: {}", defaultValue);
+                            return null;
+                        }
+                    }
+                default:
                     return defaultValue;
-        }} catch (Exception e) {
+            }
+        } catch (Exception e) {
             log.error("convert default value failed, dataType: {}, defaultValue: {}", dataTypeEnum, defaultValue);
             // if the default value is not valid, return null
             return null;
@@ -345,7 +353,8 @@ public class CatalogUtils {
 
     /**
      * Create a field schema entirely from MilvusFieldSchema config.
-     * This is used when field_schema is supplied - all field definitions come from config.
+     * This is used when field_schema is supplied - all field definitions come from
+     * config.
      */
     private CreateCollectionReq.FieldSchema createFieldSchemaFromConfig(MilvusFieldSchema milvusFieldSchema) {
         // Validate that data_type is provided
@@ -387,7 +396,8 @@ public class CatalogUtils {
 
         // Set default value if specified
         if (milvusFieldSchema.getDefaultValue() != null) {
-            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(), milvusFieldSchema.getDefaultValue());
+            Object defaultValue = convertDefault(fieldSchema.getDataType().getCode(),
+                    milvusFieldSchema.getDefaultValue());
             fieldSchema.setDefaultValue(defaultValue);
         }
 
@@ -418,7 +428,8 @@ public class CatalogUtils {
             fieldSchema.setEnableMatch(true);
         }
 
-        // Note: struct fields are handled at CollectionSchema level, not individual field level
+        // Note: struct fields are handled at CollectionSchema level, not individual
+        // field level
         // See getStructFields() method
 
         return fieldSchema;
@@ -456,10 +467,12 @@ public class CatalogUtils {
         // Use source value if available
         if (options.containsKey(MilvusConstants.CONSISTENCY_LEVEL)) {
             try {
-                consistencyLevel = ConsistencyLevel.valueOf(options.get(MilvusConstants.CONSISTENCY_LEVEL).toUpperCase());
+                consistencyLevel = ConsistencyLevel
+                        .valueOf(options.get(MilvusConstants.CONSISTENCY_LEVEL).toUpperCase());
                 log.debug("Using consistency_level from source: {}", consistencyLevel);
             } catch (IllegalArgumentException e) {
-                log.warn("Invalid consistency level from source: {}, using default BOUNDED", options.get(MilvusConstants.CONSISTENCY_LEVEL));
+                log.warn("Invalid consistency level from source: {}, using default BOUNDED",
+                        options.get(MilvusConstants.CONSISTENCY_LEVEL));
             }
         }
 
@@ -506,14 +519,17 @@ public class CatalogUtils {
             String functionListStr = options.get(MilvusConstants.FUNCTION_LIST);
             if (StringUtils.isNotEmpty(functionListStr) && !functionListStr.equals("[]")) {
                 try {
-                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
-                    List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr, functionListType);
+                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
+                    }.getType();
+                    List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr,
+                            functionListType);
                     if (functionsFromSource != null) {
                         functionList = functionsFromSource;
                         log.info("Loaded {} functions from source", functionsFromSource.size());
                     }
                 } catch (Exception e) {
-                    log.warn("Failed to parse functionList from source: {}, error: {}", functionListStr, e.getMessage());
+                    log.warn("Failed to parse functionList from source: {}, error: {}", functionListStr,
+                            e.getMessage());
                 }
             }
         }
@@ -522,12 +538,15 @@ public class CatalogUtils {
         if (config.get(MilvusSinkConfig.functionList) != null && !config.get(MilvusSinkConfig.functionList).isEmpty()) {
             try {
                 List<Object> functionsFromConfigRaw = config.get(MilvusSinkConfig.functionList);
-                Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>(){}.getType();
+                Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
+                }.getType();
                 String functionListStr = gson.toJson(functionsFromConfigRaw);
-                List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr, functionListType);
+                List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr,
+                        functionListType);
                 if (functionsFromConfig != null) {
                     functionList = functionsFromConfig;
-                    log.info("Added {} functions from config, total: {}", functionsFromConfig.size(), functionList.size());
+                    log.info("Added {} functions from config, total: {}", functionsFromConfig.size(),
+                            functionList.size());
                 }
             } catch (Exception e) {
                 log.warn("Failed to parse functionList from config, error: {}", e.getMessage());
@@ -553,12 +572,15 @@ public class CatalogUtils {
                 if (StringUtils.isNotEmpty(structFieldsJson) && !structFieldsJson.equals("[]")) {
                     try {
                         // Parse the nested fields from the struct
-                        Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>(){}.getType();
-                        List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson, nestedFieldsType);
+                        Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>() {
+                        }.getType();
+                        List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson,
+                                nestedFieldsType);
 
                         if (nestedFields != null && !nestedFields.isEmpty()) {
                             // Create a StructFieldSchema for this Array[Struct] field
-                            CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema.builder()
+                            CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema
+                                    .builder()
                                     .name(column.getName())
                                     .description(column.getComment() != null ? column.getComment() : "")
                                     .fields(nestedFields)
@@ -572,7 +594,7 @@ public class CatalogUtils {
 
                             structFieldsList.add(structFieldSchema);
                             log.info("Extracted struct field from column: {} with {} nested fields",
-                                     column.getName(), nestedFields.size());
+                                    column.getName(), nestedFields.size());
                         }
                     } catch (Exception e) {
                         log.warn("Failed to parse struct fields from column {}: {}", column.getName(), e.getMessage());
