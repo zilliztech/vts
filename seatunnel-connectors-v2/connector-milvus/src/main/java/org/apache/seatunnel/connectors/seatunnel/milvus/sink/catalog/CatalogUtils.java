@@ -90,18 +90,14 @@ public class CatalogUtils {
 
                     if (indexes != null && !indexes.isEmpty()) {
                         for (Map<String, String> indexInfo : indexes) {
-                            IndexParam.MetricType metricType;
-                            try {
-                                metricType = IndexParam.MetricType.valueOf(indexInfo.get("metricType"));
-                            } catch (IllegalArgumentException e) {
-                                log.warn("Unknown metric type: {}, using default COSINE", indexInfo.get("metricType"));
-                                metricType = IndexParam.MetricType.COSINE;
-                            }
+
+                            IndexParam.MetricType metricType = indexInfo.containsKey("metricType") ?
+                                    IndexParam.MetricType.valueOf(indexInfo.get("metricType")) : null;
 
                             IndexParam.IndexType indexType;
                             try {
                                 indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
-                            } catch (IllegalArgumentException e) {
+                            } catch (Exception e) {
                                 log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
                                 indexType = IndexParam.IndexType.AUTOINDEX;
                             }

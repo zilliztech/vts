@@ -53,19 +53,18 @@ public class MilvusSourceConverter {
     private Gson gson = new Gson();
 
     public MilvusSourceConverter(TableSchema tableSchema) {
-        this.existField =
-                tableSchema.getColumns().stream()
-                        .filter(
-                                column ->
-                                        column.getOptions() == null
-                                                || !column.getOptions()
-                                                        .containsValue(CommonOptions.METADATA))
-                        .map(Column::getName)
-                        .collect(Collectors.toList());
+        this.existField = tableSchema.getColumns().stream()
+                .filter(
+                        column -> column.getOptions() == null
+                                || !column.getOptions()
+                                        .containsValue(CommonOptions.METADATA))
+                .map(Column::getName)
+                .collect(Collectors.toList());
     }
 
     public SeaTunnelRow convertToSeaTunnelRow(
-            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, String collectionName, String partitionName) {
+            QueryResultsWrapper.RowRecord record, TableSchema tableSchema, String collectionName,
+            String partitionName) {
         // get field names and types
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         String[] fieldNames = typeInfo.getFieldNames();
@@ -82,9 +81,9 @@ public class MilvusSourceConverter {
                 continue;
             }
             SeaTunnelDataType<?> seaTunnelDataType = typeInfo.getFieldType(fieldIndex);
-            String fieldName =  fieldNames[fieldIndex];
+            String fieldName = fieldNames[fieldIndex];
             Object filedValues = fieldValuesMap.get(fieldName);
-            if(filedValues == null){
+            if (filedValues == null) {
                 seatunnelField[fieldIndex] = null;
                 continue;
             }
@@ -272,12 +271,8 @@ public class MilvusSourceConverter {
                     seatunnelField[fieldIndex] = filedValues;
                     break;
                 case TIMESTAMP:
-                    // Milvus Timestamptz returns Long (Unix timestamp in microseconds)
-                    if (filedValues instanceof Long) {
-                        seatunnelField[fieldIndex] = new java.sql.Timestamp((Long) filedValues / 1000);
-                    } else {
-                        seatunnelField[fieldIndex] = java.sql.Timestamp.valueOf(filedValues.toString());
-                    }
+                    // Support ISO8601 string or other format, pass directly to sink
+                    seatunnelField[fieldIndex] = filedValues.toString();
                     break;
                 default:
                     throw new MilvusConnectorException(
@@ -287,7 +282,7 @@ public class MilvusSourceConverter {
         }
 
         SeaTunnelRow seaTunnelRow = new SeaTunnelRow(seatunnelField);
-        seaTunnelRow.setTableId(collectionName+"_"+partitionName);
+        seaTunnelRow.setTableId(collectionName + "_" + partitionName);
         seaTunnelRow.setPartitionName(partitionName);
         seaTunnelRow.setRowKind(RowKind.INSERT);
         return seaTunnelRow;
@@ -300,6 +295,9 @@ public class MilvusSourceConverter {
         builder.sourceType(dataType.name());
         builder.comment(fieldSchema.getDescription());
         Map<String, Object> optionsMap = new HashMap<>();
+        optionsMap.put(MilvusConstants.IS_NULLABLE, fieldSchema.getIsNullable());
+        optionsMap.put(MilvusConstants.DEFAULT_VALUE, fieldSchema.getDefaultValue());
+
         switch (dataType) {
             case Bool:
                 builder.dataType(BasicType.BOOLEAN_TYPE);
@@ -337,50 +335,50 @@ public class MilvusSourceConverter {
                 }
                 if (fieldSchema.getMultiAnalyzerParams() != null && !fieldSchema.getMultiAnalyzerParams().isEmpty()) {
                     com.google.gson.Gson gson = new com.google.gson.Gson();
-                    optionsMap.put(MilvusConstants.MULTI_ANALYZER_PARAMS, gson.toJson(fieldSchema.getMultiAnalyzerParams()));
+                    optionsMap.put(MilvusConstants.MULTI_ANALYZER_PARAMS,
+                            gson.toJson(fieldSchema.getMultiAnalyzerParams()));
                 }
-                builder.options(optionsMap);
+
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);
                 break;
             case JSON:
                 builder.dataType(STRING_TYPE);
-                Map<String, Object> options = new HashMap<>();
-                options.put(CommonOptions.JSON.getName(), true);
-                builder.options(options);
+                optionsMap.put(CommonOptions.JSON.getName(), true);
                 break;
             case Array:
 
                 DataType elementType = fieldSchema.getElementType();
-                if(elementType == DataType.Bool){
+                if (elementType == DataType.Bool) {
                     builder.dataType(ArrayType.BOOLEAN_ARRAY_TYPE);
-                }else if(elementType == DataType.Int8){
+                } else if (elementType == DataType.Int8) {
                     builder.dataType(ArrayType.BYTE_ARRAY_TYPE);
-                }else if(elementType == DataType.Int16){
+                } else if (elementType == DataType.Int16) {
                     builder.dataType(ArrayType.SHORT_ARRAY_TYPE);
-                }else if(elementType == DataType.Int32){
+                } else if (elementType == DataType.Int32) {
                     builder.dataType(ArrayType.INT_ARRAY_TYPE);
-                }else if(elementType == DataType.Int64){
+                } else if (elementType == DataType.Int64) {
                     builder.dataType(ArrayType.LONG_ARRAY_TYPE);
-                }else if(elementType == DataType.Float){
+                } else if (elementType == DataType.Float) {
                     builder.dataType(ArrayType.FLOAT_ARRAY_TYPE);
-                }else if(elementType == DataType.Double){
+                } else if (elementType == DataType.Double) {
                     builder.dataType(ArrayType.DOUBLE_ARRAY_TYPE);
-                }else if(elementType == DataType.VarChar){
+                } else if (elementType == DataType.VarChar) {
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
-                }else if(elementType == DataType.Struct){
+                } else if (elementType == DataType.Struct) {
                     // Array[Struct] - map to Array[String] with JSON flag
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
                     optionsMap.put(CommonOptions.JSON.getName(), true);
-                    // Note: struct fields are extracted at schema level in MilvusSourceConnectorUtils
-                }else {
+                    // Note: struct fields are extracted at schema level in
+                    // MilvusSourceConnectorUtils
+                } else {
                     builder.dataType(ArrayType.STRING_ARRAY_TYPE);
                 }
                 optionsMap.put(MilvusConstants.ELEMENT_TYPE, elementType.getCode());
                 optionsMap.put(MilvusConstants.MAX_CAPACITY, fieldSchema.getMaxCapacity());
                 optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
-                builder.options(optionsMap);
+
                 break;
             case FloatVector:
                 builder.dataType(VectorType.VECTOR_FLOAT_TYPE);
@@ -404,9 +402,7 @@ public class MilvusSourceConverter {
             case Struct:
                 // Handle Struct type - map to JSON
                 builder.dataType(STRING_TYPE);
-                Map<String, Object> structOptions = new HashMap<>();
-                structOptions.put(CommonOptions.JSON.getName(), true);
-                builder.options(structOptions);
+                optionsMap.put(CommonOptions.JSON.getName(), true);
                 break;
             case Geometry:
                 builder.dataType(org.apache.seatunnel.api.table.type.GeometryType.GEOMETRY_TYPE);
@@ -417,7 +413,7 @@ public class MilvusSourceConverter {
             default:
                 throw new UnsupportedOperationException("Unsupported data type: " + dataType);
         }
-
+        builder.options(optionsMap);
         return builder.build();
     }
 
