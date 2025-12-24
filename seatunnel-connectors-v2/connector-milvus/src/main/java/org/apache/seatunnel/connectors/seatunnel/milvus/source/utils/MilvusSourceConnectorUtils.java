@@ -198,6 +198,11 @@ public class MilvusSourceConnectorUtils {
             options.put(MilvusConstants.INDEX_LIST, "[]");
         }
         options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
+        if (describeCollectionResp.getProperties() != null
+                && describeCollectionResp.getProperties().containsKey(MilvusConstants.TIMEZONE)) {
+            options.put(MilvusConstants.TIMEZONE,
+                    String.valueOf(describeCollectionResp.getProperties().get(MilvusConstants.TIMEZONE)));
+        }
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
         } else {

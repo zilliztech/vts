@@ -29,6 +29,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaC
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -91,8 +92,9 @@ public class CatalogUtils {
                     if (indexes != null && !indexes.isEmpty()) {
                         for (Map<String, String> indexInfo : indexes) {
 
-                            IndexParam.MetricType metricType = indexInfo.containsKey("metricType") ?
-                                    IndexParam.MetricType.valueOf(indexInfo.get("metricType")) : null;
+                            IndexParam.MetricType metricType = indexInfo.containsKey("metricType")
+                                    ? IndexParam.MetricType.valueOf(indexInfo.get("metricType"))
+                                    : null;
 
                             IndexParam.IndexType indexType;
                             try {
@@ -233,7 +235,14 @@ public class CatalogUtils {
         // 3. Collection Description - source first, then config override
         String collectionDescription = getCollectionDescription(tablePath, catalogTable);
 
-        // 4. Function List - source first, then merge/add from config
+        // 4. Timezone - source first, then config override
+        Map<String, String> properties = new HashMap<>();
+        String timezone = getTimezone(options);
+        if (timezone != null) {
+            properties.put("timezone", timezone);
+        }
+
+        // 5. Function List - source first, then merge/add from config
         List<CreateCollectionReq.Function> functionList = getFunctionList(options, gson);
 
         // 5. Struct Fields - passed from caller (already collected from source/config)
@@ -248,7 +257,6 @@ public class CatalogUtils {
                 .functionList(functionList)
                 .structFields(structFields)
                 .build();
-
         // Build create collection request
         CreateCollectionReq createCollectionReq = CreateCollectionReq.builder()
                 .collectionName(tablePath.getTableName())
@@ -256,6 +264,7 @@ public class CatalogUtils {
                 .collectionSchema(collectionSchema)
                 .enableDynamicField(enableDynamicField)
                 .consistencyLevel(consistencyLevel)
+                .properties(properties)
                 .build();
 
         // Set shard number - source first, then config override
@@ -642,5 +651,23 @@ public class CatalogUtils {
         }
 
         return shardNum;
+    }
+
+    private String getTimezone(Map<String, String> options) {
+        String timezone = null;
+
+        // Use source value if available
+        if (options.containsKey(MilvusConstants.TIMEZONE)) {
+            timezone = options.get(MilvusConstants.TIMEZONE);
+            log.debug("Using timezone from source: {}", timezone);
+        }
+
+        // Override with config value if provided
+        if (config.get(MilvusSinkConfig.TIMEZONE) != null) {
+            timezone = config.get(MilvusSinkConfig.TIMEZONE);
+            log.debug("Overriding timezone with config: {}", timezone);
+        }
+
+        return timezone;
     }
 }

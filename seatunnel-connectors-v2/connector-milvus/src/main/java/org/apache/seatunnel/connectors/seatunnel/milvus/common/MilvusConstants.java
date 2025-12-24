@@ -39,6 +39,7 @@ public class MilvusConstants {
     public static final String ENABLE_MATCH = "enable_match";
     public static final String ANALYZER_PARAMS = "analyzer_params";
     public static final String MULTI_ANALYZER_PARAMS = "multi_analyzer_params";
+    public static final String TIMEZONE = "timezone";
 
     // Field properties from source metadata
     public static final String IS_PARTITION_KEY = "is_partition_key";
