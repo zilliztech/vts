@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.common.IndexParam.MetricType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
@@ -67,8 +68,7 @@ public class MilvusSourceConnectorUtils {
         if (!config.get(MilvusSourceConfig.COLLECTION).isEmpty()) {
             collectionList.addAll(config.get(MilvusSourceConfig.COLLECTION));
         } else {
-            ListCollectionsResp response =
-                    client.listCollections();
+            ListCollectionsResp response = client.listCollections();
             List<String> collectionNames = response.getCollectionNames();
             collectionList.addAll(collectionNames);
         }
@@ -86,11 +86,12 @@ public class MilvusSourceConnectorUtils {
     private CatalogTable getCatalogTable(
             MilvusClientV2 client, String database, String collection) {
         DescribeCollectionResp describeCollectionResp = client.describeCollection(
-                        DescribeCollectionReq.builder()
-                                .collectionName(collection)
-                                .build());
+                DescribeCollectionReq.builder()
+                        .collectionName(collection)
+                        .build());
 
-        log.info("describe collection database: {}, collection: {}, response: {}", database, collection, describeCollectionResp);
+        log.info("describe collection database: {}, collection: {}, response: {}", database, collection,
+                describeCollectionResp);
         // collection column
         CreateCollectionReq.CollectionSchema schema = describeCollectionResp.getCollectionSchema();
         List<Column> columns = new ArrayList<>();
@@ -120,32 +121,34 @@ public class MilvusSourceConnectorUtils {
             Map<String, Object> options = new HashMap<>();
 
             options.put(CommonOptions.METADATA.getName(), true);
-            PhysicalColumn dynamicColumn =
-                    PhysicalColumn.builder()
-                            .name(CommonOptions.METADATA.getName())
-                            .dataType(STRING_TYPE)
-                            .options(options)
-                            .build();
+            PhysicalColumn dynamicColumn = PhysicalColumn.builder()
+                    .name(CommonOptions.METADATA.getName())
+                    .dataType(STRING_TYPE)
+                    .options(options)
+                    .build();
             columns.add(dynamicColumn);
         }
-        List<CreateCollectionReq.Function> functionList = describeCollectionResp.getCollectionSchema().getFunctionList();
+        List<CreateCollectionReq.Function> functionList = describeCollectionResp.getCollectionSchema()
+                .getFunctionList();
         // primary key
         PrimaryKey primaryKey = buildPrimaryKey(schema.getFieldSchemaList());
 
         // build tableSchema
         TableSchema tableSchema = TableSchema.builder()
-                                    .columns(columns)
-                                    .primaryKey(primaryKey)
-                                    .build();
+                .columns(columns)
+                .primaryKey(primaryKey)
+                .build();
 
         // build tableId
         String CATALOG_NAME = MilvusConstants.MILVUS;
         TableIdentifier tableId = TableIdentifier.of(CATALOG_NAME, database, null, collection);
         // build options info
         Map<String, String> options = new HashMap<>();
-        options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD, String.valueOf(describeCollectionResp.getEnableDynamicField()));
+        options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD,
+                String.valueOf(describeCollectionResp.getEnableDynamicField()));
         options.put(MilvusConstants.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
-        options.put(MilvusConstants.CONSISTENCY_LEVEL, String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
+        options.put(MilvusConstants.CONSISTENCY_LEVEL,
+                String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
         // Serialize functionList as JSON for proper reconstruction in sink
         if (functionList != null && !functionList.isEmpty()) {
             try {
@@ -159,7 +162,8 @@ public class MilvusSourceConnectorUtils {
             options.put(MilvusConstants.FUNCTION_LIST, "[]");
         }
 
-        // Note: struct fields are serialized per-column in MilvusSourceConverter, not at schema level
+        // Note: struct fields are serialized per-column in MilvusSourceConverter, not
+        // at schema level
 
         // Serialize vector index info as JSON for proper reconstruction in sink
         List<Object> indexList = new ArrayList<>();
@@ -177,7 +181,9 @@ public class MilvusSourceConnectorUtils {
                         indexInfo.put("fieldName", indexDesc.getFieldName());
                         indexInfo.put("indexName", indexDesc.getIndexName());
                         indexInfo.put("indexType", indexDesc.getIndexType().getName());
-                        indexInfo.put("metricType", indexDesc.getMetricType().name());
+                        if (indexDesc.getMetricType() != MetricType.INVALID) {
+                            indexInfo.put("metricType", indexDesc.getMetricType().name());
+                        }
                         indexList.add(indexInfo);
                     }
                 } catch (Exception e) {
@@ -194,11 +200,12 @@ public class MilvusSourceConnectorUtils {
         options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
-        }else {
+        } else {
             options.put(MilvusConstants.PARTITION_NAMES, getPartitionNames(client, collection));
         }
 
-        return CatalogTable.of(tableId, tableSchema, options, new ArrayList<>(), describeCollectionResp.getDescription());
+        return CatalogTable.of(tableId, tableSchema, options, new ArrayList<>(),
+                describeCollectionResp.getDescription());
     }
 
     private String getPartitionNames(MilvusClientV2 client, String collection) {
