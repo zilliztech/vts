@@ -398,14 +398,7 @@ public class MilvusSinkConverter {
                 return value;
             case Timestamptz:
                 // Handle Timestamptz - convert java.sql.Timestamp to Long (Unix timestamp in microseconds)
-                if (value instanceof java.sql.Timestamp) {
-                    return ((java.sql.Timestamp) value).getTime() * 1000;
-                } else if (value instanceof Long) {
-                    return value;
-                } else {
-                    // Parse string to timestamp and convert to microseconds
-                    return java.sql.Timestamp.valueOf(value.toString()).getTime() * 1000;
-                }
+                return value;
             default:
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, fieldSchema.getDataType().name());
         }
