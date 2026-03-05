@@ -38,6 +38,7 @@ public class MilvusSchemaConverter {
                 .dataType(milvusDataType)
                 .build();
         // Handle column options safely - these come from source metadata
+        boolean nullableSetFromOptions = false;
         Map<String, Object> options = column.getOptions();
         if (options != null) {
             // Handle analyzer settings from source
@@ -103,6 +104,7 @@ public class MilvusSchemaConverter {
             Boolean isNullable = (Boolean) options.get(MilvusConstants.IS_NULLABLE);
             if (isNullable != null) {
                 fieldSchema.setIsNullable(isNullable);
+                nullableSetFromOptions = true;
             }
 
             // Handle default value from source metadata
@@ -110,6 +112,22 @@ public class MilvusSchemaConverter {
             if (defaultValue != null) {
                 fieldSchema.setDefaultValue(defaultValue);
             }
+        }
+
+        // Determine if this column is a primary key
+        boolean isPrimaryKeyColumn = primaryKey != null
+                && primaryKey.getColumnNames().size() == 1
+                && primaryKey.getColumnNames().contains(column.getName());
+
+        // Fallback: if nullable not explicitly set from options, use Column.isNullable().
+        // This handles non-Milvus sources (JDBC, ES, etc.) where nullable info
+        // is in the Column object, not in Milvus-specific options.
+        // Milvus does not support nullable for primary keys or vector fields.
+        if (!nullableSetFromOptions
+                && column.isNullable()
+                && !isPrimaryKeyColumn
+                && !isVectorType(milvusDataType)) {
+            fieldSchema.setIsNullable(true);
         }
         if (StringUtils.isNotEmpty(column.getComment())) {
             fieldSchema.setDescription(column.getComment());
@@ -123,7 +141,8 @@ public class MilvusSchemaConverter {
                 fieldSchema.setMaxLength(50);
                 break;
             case TIMESTAMP:
-                // TIMESTAMP maps to Timestamptz in Milvus, no maxLength needed
+            case TIMESTAMP_TZ:
+                // TIMESTAMP/TIMESTAMP_TZ maps to Timestamptz in Milvus, no maxLength needed
                 break;
             case STRING:
                 if (column.getOptions() != null
@@ -235,6 +254,7 @@ public class MilvusSchemaConverter {
             case TIME:
                 return io.milvus.v2.common.DataType.VarChar;
             case TIMESTAMP:
+            case TIMESTAMP_TZ:
                 return io.milvus.v2.common.DataType.Timestamptz;
             case ROW:
                 return io.milvus.v2.common.DataType.JSON;
@@ -243,6 +263,19 @@ public class MilvusSchemaConverter {
         }
         throw new CatalogException(
                 String.format("Not support convert to milvus type, sqlType is %s", sqlType));
+    }
+
+    private static boolean isVectorType(io.milvus.v2.common.DataType dataType) {
+        switch (dataType) {
+            case FloatVector:
+            case BinaryVector:
+            case Float16Vector:
+            case BFloat16Vector:
+            case SparseFloatVector:
+                return true;
+            default:
+                return false;
+        }
     }
 
 }
