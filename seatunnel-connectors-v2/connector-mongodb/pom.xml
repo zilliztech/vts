@@ -63,5 +63,12 @@
             <artifactId>bson</artifactId>
             <version>${mongo.driver.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>seatunnel-commons-lang3</artifactId>
+            <version>${project.version}</version>
+            <classifier>optional</classifier>
+        </dependency>
     </dependencies>
 </project>
