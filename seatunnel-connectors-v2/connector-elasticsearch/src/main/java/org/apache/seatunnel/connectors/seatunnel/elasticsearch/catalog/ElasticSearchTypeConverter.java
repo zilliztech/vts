@@ -126,10 +126,30 @@ public class ElasticSearchTypeConverter implements BasicTypeConverter<BasicTypeD
             case DATE:
                 builder.dataType(LocalTimeType.LOCAL_DATE_TIME_TYPE);
                 builder.scale(3);
+                if (typeDefine.getNativeType() != null
+                        && typeDefine.getNativeType().getOptions() != null) {
+                    String dateFormat =
+                            (String) typeDefine.getNativeType().getOptions().get("format");
+                    if (dateFormat != null) {
+                        Map<String, Object> opts = new HashMap<>();
+                        opts.put("format", dateFormat);
+                        builder.options(opts);
+                    }
+                }
                 break;
             case DATE_NANOS:
                 builder.dataType(LocalTimeType.LOCAL_DATE_TIME_TYPE);
                 builder.scale(9);
+                if (typeDefine.getNativeType() != null
+                        && typeDefine.getNativeType().getOptions() != null) {
+                    String dateNanosFormat =
+                            (String) typeDefine.getNativeType().getOptions().get("format");
+                    if (dateNanosFormat != null) {
+                        Map<String, Object> opts = new HashMap<>();
+                        opts.put("format", dateNanosFormat);
+                        builder.options(opts);
+                    }
+                }
                 break;
             case DOUBLE:
             case RANK_FEATURE:

@@ -22,7 +22,6 @@ import org.apache.seatunnel.api.configuration.util.ConfigUtil;
 import org.apache.seatunnel.api.table.catalog.Catalog;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.InfoPreviewResult;
-import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.PreviewResult;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
@@ -155,16 +154,7 @@ public class ElasticSearchCatalog implements Catalog {
                 builder,
                 fieldTypeMapping.entrySet().iterator(),
                 nameAndType -> {
-                    // todo: we need to add a new type TEXT or add length in STRING type
-                    return PhysicalColumn.of(
-                            nameAndType.getKey(),
-                            ElasticSearchTypeConverter.INSTANCE
-                                    .convert(nameAndType.getValue())
-                                    .getDataType(),
-                            (Long) null,
-                            true,
-                            null,
-                            null);
+                    return ElasticSearchTypeConverter.INSTANCE.convert(nameAndType.getValue());
                 });
 
         return CatalogTable.of(

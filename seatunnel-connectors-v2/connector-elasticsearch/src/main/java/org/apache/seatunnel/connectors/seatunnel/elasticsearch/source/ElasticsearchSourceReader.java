@@ -20,6 +20,8 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.source;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.source.SourceReader;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
@@ -34,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -74,8 +77,18 @@ public class ElasticsearchSourceReader
             ElasticsearchSourceSplit split = splits.poll();
             if (split != null) {
                 SeaTunnelRowType seaTunnelRowType = split.getSeaTunnelRowType();
+                Map<String, Map<String, Object>> columnOptionsMap = new HashMap<>();
+                CatalogTable catalogTable = split.getSourceConfig().getCatalogTable();
+                if (catalogTable != null) {
+                    for (Column col : catalogTable.getTableSchema().getColumns()) {
+                        if (col.getOptions() != null && !col.getOptions().isEmpty()) {
+                            columnOptionsMap.put(col.getName(), col.getOptions());
+                        }
+                    }
+                }
                 SeaTunnelRowDeserializer deserializer =
-                        new DefaultSeaTunnelRowDeserializer(seaTunnelRowType);
+                        new DefaultSeaTunnelRowDeserializer(
+                                seaTunnelRowType, columnOptionsMap);
                 SourceConfig sourceIndexInfo = split.getSourceConfig();
                 ScrollResult scrollResult =
                         esRestClient.searchByScroll(
