@@ -42,8 +42,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalAccessor;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +67,28 @@ import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 
 public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer {
 
+    /** Handles "yyyy-MM-dd HH:mm:ss[.nnnnnnnnn][+HH:MM]" and ISO variants with T and Z. */
+    private static final DateTimeFormatter FALLBACK_FORMATTER =
+            new DateTimeFormatterBuilder()
+                    .appendPattern("yyyy-MM-dd")
+                    .optionalStart()
+                    .appendLiteral('T')
+                    .optionalEnd()
+                    .optionalStart()
+                    .appendLiteral(' ')
+                    .optionalEnd()
+                    .appendPattern("HH:mm:ss")
+                    .optionalStart()
+                    .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+                    .optionalEnd()
+                    .optionalStart()
+                    .appendOffset("+HH:MM", "Z")
+                    .optionalEnd()
+                    .toFormatter();
+
     private final SeaTunnelRowType rowTypeInfo;
+
+    private final Map<String, Map<String, Object>> columnOptionsMap;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -98,13 +125,19 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                     put(
                             "yyyy-MM-dd HH:mm:ss.SSSSSSSSS".length(),
                             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSS"));
-                    put("2025-02-07 03:06:16.693985+00:00".length(),
-                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSSXXX"));
                 }
             };
 
     public DefaultSeaTunnelRowDeserializer(SeaTunnelRowType rowTypeInfo) {
+        this(rowTypeInfo, Collections.emptyMap());
+    }
+
+    public DefaultSeaTunnelRowDeserializer(
+            SeaTunnelRowType rowTypeInfo,
+            Map<String, Map<String, Object>> columnOptionsMap) {
         this.rowTypeInfo = rowTypeInfo;
+        this.columnOptionsMap =
+                columnOptionsMap != null ? columnOptionsMap : Collections.emptyMap();
     }
 
     @Override
@@ -127,9 +160,13 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                         seaTunnelFields[i] = null;
                     } else if (value instanceof TextNode) {
                         seaTunnelFields[i] =
-                                convertValue(seaTunnelDataType, ((TextNode) value).textValue());
+                                convertValue(
+                                        seaTunnelDataType,
+                                        ((TextNode) value).textValue(),
+                                        fieldName);
                     } else {
-                        seaTunnelFields[i] = convertValue(seaTunnelDataType, value.toString());
+                        seaTunnelFields[i] =
+                                convertValue(seaTunnelDataType, value.toString(), fieldName);
                     }
                 }
             }
@@ -147,6 +184,11 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
     }
 
     Object convertValue(SeaTunnelDataType<?> fieldType, String fieldValue)
+            throws JsonProcessingException {
+        return convertValue(fieldType, fieldValue, null);
+    }
+
+    Object convertValue(SeaTunnelDataType<?> fieldType, String fieldValue, String fieldName)
             throws JsonProcessingException {
         if (STRING_TYPE.equals(fieldType)) {
             return fieldValue;
@@ -169,13 +211,13 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
             } else if (DOUBLE_TYPE.equals(fieldType)) {
                 return Double.parseDouble(fieldValue);
             } else if (LocalTimeType.LOCAL_DATE_TYPE.equals(fieldType)) {
-                LocalDateTime localDateTime = parseDate(fieldValue);
+                LocalDateTime localDateTime = parseDate(fieldValue, fieldName);
                 return localDateTime.toLocalDate();
             } else if (LocalTimeType.LOCAL_TIME_TYPE.equals(fieldType)) {
-                LocalDateTime localDateTime = parseDate(fieldValue);
+                LocalDateTime localDateTime = parseDate(fieldValue, fieldName);
                 return localDateTime.toLocalTime();
             } else if (LocalTimeType.LOCAL_DATE_TIME_TYPE.equals(fieldType)) {
-                return parseDate(fieldValue);
+                return parseDate(fieldValue, fieldName);
             } else if (fieldType instanceof DecimalType) {
                 return new BigDecimal(fieldValue);
             } else if (fieldType instanceof ArrayType) {
@@ -209,9 +251,9 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                         mapper.readValue(fieldValue, new TypeReference<Map<String, Object>>() {});
                 Object[] seaTunnelFields = new Object[rowType.getTotalFields()];
                 for (int i = 0; i < rowType.getTotalFields(); i++) {
-                    String fieldName = rowType.getFieldName(i);
+                    String subFieldName = rowType.getFieldName(i);
                     SeaTunnelDataType<?> fieldDataType = rowType.getFieldType(i);
-                    Object value = collect.get(fieldName);
+                    Object value = collect.get(subFieldName);
                     if (value != null) {
                         seaTunnelFields[i] =
                                 convertValue(
@@ -239,7 +281,21 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
         }
     }
 
-    private LocalDateTime parseDate(String fieldValue) {
+    private LocalDateTime parseDate(String fieldValue, String fieldName) {
+        // Try ES format-based parsing first if format info is available
+        if (fieldName != null && columnOptionsMap.containsKey(fieldName)) {
+            Map<String, Object> opts = columnOptionsMap.get(fieldName);
+            Object format = opts.get("format");
+            if (format instanceof String) {
+                LocalDateTime result =
+                        EsDateFormatter.parseDate(fieldValue, (String) format);
+                if (result != null) {
+                    return result;
+                }
+            }
+        }
+
+        // Fallback: existing length-based heuristic
         // handle strings of timestamp type
         try {
             long ts = Long.parseLong(fieldValue);
@@ -247,14 +303,28 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
         } catch (NumberFormatException e) {
             // no op
         }
+
+        // Try offset-aware formatter (handles "+00:00", "-05:30", "Z", and no offset)
+        // Consistent with EsDateFormatter: convert offset to system default timezone
+        try {
+            TemporalAccessor parsed = FALLBACK_FORMATTER.parse(fieldValue);
+            LocalDateTime ldt = LocalDateTime.from(parsed);
+            if (parsed.isSupported(ChronoField.OFFSET_SECONDS)) {
+                int offsetSeconds = parsed.get(ChronoField.OFFSET_SECONDS);
+                ZoneOffset offset = ZoneOffset.ofTotalSeconds(offsetSeconds);
+                Instant instant = ldt.toInstant(offset);
+                return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+            }
+            return ldt;
+        } catch (DateTimeParseException e) {
+            // no op
+        }
+
+        // Legacy length-based heuristic for non-standard formats
         String formatDate = fieldValue.replace("T", " ").replace("Z", "");
         if (fieldValue.length() == "yyyyMMdd".length()
                 || fieldValue.length() == "yyyy-MM-dd".length()) {
             formatDate = fieldValue + " 00:00:00";
-        }
-        if(fieldValue.length() == "2025-02-07 03:06:16.693985+00:00".length()){
-            // Remove the offset (+00:00)
-            formatDate = formatDate.substring(0, formatDate.lastIndexOf("+"));
         }
         DateTimeFormatter dateTimeFormatter = dateTimeFormatterMap.get(formatDate.length());
         if (dateTimeFormatter == null) {
