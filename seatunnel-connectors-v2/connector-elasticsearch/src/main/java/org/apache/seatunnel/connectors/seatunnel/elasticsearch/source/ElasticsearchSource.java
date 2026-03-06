@@ -47,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -131,13 +132,14 @@ public class ElasticsearchSource
             for (int i = 0; i < source.size(); i++) {
                 String key = source.get(i);
                 String sourceType = esFieldType.get(key).getDataType();
+                Map<String, Object> columnOptions = extractDateFormatOptions(esFieldType.get(key));
                 if (arrayColumn.containsKey(key)) {
                     String value = arrayColumn.get(key);
                     SeaTunnelDataType<?> dataType =
                             SeaTunnelDataTypeConvertorUtil.deserializeSeaTunnelDataType(key, value);
                     builder.column(
                             PhysicalColumn.of(
-                                    key, dataType, 0L, esFieldType.get(key).getScale(), true, null, null, sourceType, null));
+                                    key, dataType, 0L, esFieldType.get(key).getScale(), true, null, null, sourceType, columnOptions));
                     continue;
                 }
 
@@ -151,7 +153,7 @@ public class ElasticsearchSource
                                 null,
                                 null,
                                 sourceType,
-                                null));
+                                columnOptions));
             }
             if (!source.contains(pkConfig.getName())) {
                 addPkFieldIfNotExistInSourceList(builder, pkConfig);
@@ -190,6 +192,20 @@ public class ElasticsearchSource
                         true,
                         null,
                         null));
+    }
+
+    private static Map<String, Object> extractDateFormatOptions(
+            BasicTypeDefine<EsType> typeDefine) {
+        if (typeDefine.getNativeType() != null
+                && typeDefine.getNativeType().getOptions() != null) {
+            Object format = typeDefine.getNativeType().getOptions().get("format");
+            if (format != null) {
+                Map<String, Object> opts = new HashMap<>();
+                opts.put("format", format.toString());
+                return opts;
+            }
+        }
+        return null;
     }
 
     private static SeaTunnelDataType<?> buildPkSeaTunnelDataType(PkConfig pkConfig) {

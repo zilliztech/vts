@@ -43,6 +43,9 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -107,6 +110,17 @@ public class MilvusSinkConverter {
                 // Convert java.sql.Timestamp to Long (Unix timestamp in microseconds for Milvus)
                 if (value instanceof java.sql.Timestamp) {
                     return ((java.sql.Timestamp) value).getTime() * 1000;
+                } else {
+                    return value.toString();
+                }
+            case TIMESTAMP_TZ:
+                // Milvus SDK requires Timestamptz as ISO 8601 String format
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).toInstant().toString();
+                } else if (value instanceof LocalDateTime) {
+                    return ((LocalDateTime) value).atZone(ZoneId.systemDefault()).toInstant().toString();
+                } else if (value instanceof OffsetDateTime) {
+                    return ((OffsetDateTime) value).toInstant().toString();
                 } else {
                     return value.toString();
                 }
@@ -372,9 +386,19 @@ public class MilvusSinkConverter {
                 ByteBuffer binaryVector = (ByteBuffer) value;
                 return gson.toJsonTree(binaryVector.array());
             case FloatVector:
-                ByteBuffer floatVectorBuffer = (ByteBuffer) value;
-                Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
-                return Arrays.stream(floats).collect(Collectors.toList());
+                if (value instanceof ByteBuffer) {
+                    ByteBuffer floatVectorBuffer = (ByteBuffer) value;
+                    Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
+                    return Arrays.stream(floats).collect(Collectors.toList());
+                } else if (value instanceof Double[]) {
+                    Double[] doubleArr = (Double[]) value;
+                    return Arrays.stream(doubleArr).map(Double::floatValue).collect(Collectors.toList());
+                } else if (value instanceof Float[]) {
+                    return Arrays.asList((Float[]) value);
+                } else {
+                    // fallback: try to parse as list
+                    return value;
+                }
             case SparseFloatVector:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
             case Struct:
@@ -397,8 +421,31 @@ public class MilvusSinkConverter {
                 // Handle Geometry - pass through ByteBuffer directly
                 return value;
             case Timestamptz:
-                // Handle Timestamptz - convert java.sql.Timestamp to Long (Unix timestamp in microseconds)
-                return value;
+                // Milvus SDK requires Timestamptz as ISO 8601 String format (e.g., "2024-01-19T11:30:45Z")
+                // Reference: Milvus ParamUtils.java line 430+ requires String type for Timestamptz
+                if (value instanceof java.sql.Timestamp) {
+                    // Convert java.sql.Timestamp to ISO 8601 string (UTC)
+                    return ((java.sql.Timestamp) value).toInstant().toString();
+                } else if (value instanceof LocalDateTime) {
+                    // Convert LocalDateTime (systemDefault) to ISO 8601 string
+                    return ((LocalDateTime) value).atZone(ZoneId.systemDefault()).toInstant().toString();
+                } else if (value instanceof OffsetDateTime) {
+                    // Convert OffsetDateTime to ISO 8601 string (preserves timezone)
+                    return ((OffsetDateTime) value).toInstant().toString();
+                } else if (value instanceof String) {
+                    // Already a string - validate and/or convert to ISO 8601 format
+                    String strValue = value.toString();
+                    // Try to parse and normalize to ISO 8601
+                    try {
+                        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(strValue);
+                        return ts.toInstant().toString();
+                    } catch (IllegalArgumentException e) {
+                        // If it's already in ISO 8601 format, return as-is
+                        return strValue;
+                    }
+                }
+                // Fallback: convert to string
+                return value.toString();
             default:
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, fieldSchema.getDataType().name());
         }
