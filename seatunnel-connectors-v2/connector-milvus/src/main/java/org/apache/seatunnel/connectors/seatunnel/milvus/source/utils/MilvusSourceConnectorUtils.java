@@ -184,6 +184,10 @@ public class MilvusSourceConnectorUtils {
                         if (indexDesc.getMetricType() != MetricType.INVALID) {
                             indexInfo.put("metricType", indexDesc.getMetricType().name());
                         }
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        Map<String, Object> extraParams = new HashMap<>();
+                        extraParams.put("params", gson.toJson(indexDesc.getExtraParams()));
+                        indexInfo.put("extraParams", gson.toJson(extraParams));
                         indexList.add(indexInfo);
                     }
                 } catch (Exception e) {

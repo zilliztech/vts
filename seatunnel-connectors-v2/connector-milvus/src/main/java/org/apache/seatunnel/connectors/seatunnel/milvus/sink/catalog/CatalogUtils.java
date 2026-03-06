@@ -103,12 +103,18 @@ public class CatalogUtils {
                                 log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
                                 indexType = IndexParam.IndexType.AUTOINDEX;
                             }
-
+                            Map<String, Object> extraParams = new HashMap<>();
+                            if (indexInfo.containsKey("extraParams")) {
+                                String extraParamsStr = indexInfo.get("extraParams");
+                                extraParams = gson.fromJson(extraParamsStr,
+                                        new TypeToken<Map<String, Object>>(){}.getType());
+                            }
                             IndexParam indexParam = IndexParam.builder()
                                     .fieldName(indexInfo.get("fieldName"))
                                     .metricType(metricType)
                                     .indexType(indexType)
                                     .indexName(indexInfo.get("indexName"))
+                                    .extraParams(extraParams)
                                     .build();
                             indexParams.add(indexParam);
                             log.info("Using existing index from source: {}", indexInfo);
