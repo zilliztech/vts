@@ -76,6 +76,7 @@ public class MilvusSinkWriter
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
     private final PartitionRouter partitionRouter;
+    private final String sourceTableName;
 
     private final AtomicLong writeCount = new AtomicLong(0);
 
@@ -83,10 +84,12 @@ public class MilvusSinkWriter
             Context context,
             CatalogTable catalogTable,
             ReadonlyConfig config,
-            List<MilvusSinkState> milvusSinkStates) {
+            List<MilvusSinkState> milvusSinkStates,
+            String sourceTableName) {
         this.config = config;
         this.catalogTable = catalogTable;
         this.collection = catalogTable.getTablePath().getTableName();
+        this.sourceTableName = sourceTableName;
         log.info("create Milvus sink writer success");
         log.info("MilvusSinkWriter config: " + config);
         this.milvusClient = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
@@ -109,9 +112,7 @@ public class MilvusSinkWriter
         if (hasPartitionKey) {
             partition = DEFAULT_PARTITION;
         } else {
-            String sourceCollection = element.getTableId() != null
-                    ? element.getTableId().split("_")[0] : collection;
-            partition = partitionRouter.resolve(sourceCollection, element.getPartitionName());
+            partition = partitionRouter.resolve(sourceTableName, element.getPartitionName());
         }
         String partitionId = catalogTable.getTablePath() + "." + partition;
 

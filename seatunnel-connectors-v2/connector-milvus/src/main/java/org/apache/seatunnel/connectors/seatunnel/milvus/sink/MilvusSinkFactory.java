@@ -52,8 +52,9 @@ public class MilvusSinkFactory implements TableSinkFactory {
 
     public TableSink createSink(TableSinkFactoryContext context) {
         ReadonlyConfig config = context.getOptions();
+        String sourceTableName = context.getCatalogTable().getTableId().getTableName();
         CatalogTable catalogTable = renameCatalogTable(config, context.getCatalogTable());
-        return () -> new MilvusSink(config, catalogTable);
+        return () -> new MilvusSink(config, catalogTable, sourceTableName);
     }
 
     private CatalogTable renameCatalogTable(

@@ -57,22 +57,24 @@ public class MilvusSink
 
     private final ReadonlyConfig config;
     private final CatalogTable catalogTable;
+    private final String sourceTableName;
 
-    public MilvusSink(ReadonlyConfig config, CatalogTable catalogTable) {
+    public MilvusSink(ReadonlyConfig config, CatalogTable catalogTable, String sourceTableName) {
         this.config = config;
         this.catalogTable = catalogTable;
+        this.sourceTableName = sourceTableName;
     }
 
     @Override
     public SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> createWriter(
             SinkWriter.Context context) {
-        return new MilvusSinkWriter(context, catalogTable, config, Collections.emptyList());
+        return new MilvusSinkWriter(context, catalogTable, config, Collections.emptyList(), sourceTableName);
     }
 
     @Override
     public SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState> restoreWriter(
             SinkWriter.Context context, List<MilvusSinkState> states) {
-        return new MilvusSinkWriter(context, catalogTable, config, states);
+        return new MilvusSinkWriter(context, catalogTable, config, states, sourceTableName);
     }
 
     @Override
