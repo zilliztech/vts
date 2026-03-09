@@ -36,11 +36,13 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecti
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.PartitionRouter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StageHelper;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBufferBatchWriter;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWriter;
@@ -48,6 +50,7 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,6 +75,7 @@ public class MilvusSinkWriter
     private final StageBucket stageBucket;
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
+    private final PartitionRouter partitionRouter;
 
     private final AtomicLong writeCount = new AtomicLong(0);
 
@@ -91,6 +95,7 @@ public class MilvusSinkWriter
         useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
+        this.partitionRouter = buildPartitionRouter(config);
     }
 
     /**
@@ -100,12 +105,13 @@ public class MilvusSinkWriter
      */
     @Override
     public void write(SeaTunnelRow element) {
-        String partition = StringUtils.isEmpty(element.getPartitionName()) ? DEFAULT_PARTITION : element.getPartitionName();
+        String partition;
         if (hasPartitionKey) {
             partition = DEFAULT_PARTITION;
-        }
-        if (partition.contains("-")) {
-            partition = partition.replace("-", "_");
+        } else {
+            String sourceCollection = element.getTableId() != null
+                    ? element.getTableId().split("_")[0] : collection;
+            partition = partitionRouter.resolve(sourceCollection, element.getPartitionName());
         }
         String partitionId = catalogTable.getTablePath() + "." + partition;
 
@@ -219,5 +225,27 @@ public class MilvusSinkWriter
         }
         // Wait for all waitJobFinish calls to complete
         futures.forEach(CompletableFuture::join);
+    }
+
+    private static PartitionRouter buildPartitionRouter(ReadonlyConfig config) {
+        Map<String, String> flatMap = config.get(MilvusSinkConfig.PARTITION_ROUTING);
+        Map<String, Map<String, String>> routingTable = new HashMap<>();
+        for (Map.Entry<String, String> entry : flatMap.entrySet()) {
+            String key = entry.getKey();
+            String targetPartition = entry.getValue();
+            int dotIndex = key.lastIndexOf(".");
+            String srcCollection;
+            String srcPartition;
+            if (dotIndex > 0) {
+                srcCollection = key.substring(0, dotIndex);
+                srcPartition = key.substring(dotIndex + 1);
+            } else {
+                srcCollection = key;
+                srcPartition = "*";
+            }
+            routingTable.computeIfAbsent(srcCollection, k -> new HashMap<>())
+                    .put(srcPartition, targetPartition);
+        }
+        return new PartitionRouter(routingTable);
     }
 }

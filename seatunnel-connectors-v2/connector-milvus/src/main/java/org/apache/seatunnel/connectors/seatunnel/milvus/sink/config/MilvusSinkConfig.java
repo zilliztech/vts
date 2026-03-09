@@ -61,6 +61,40 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .withDescription("collection description");
 
         /**
+         * Partition routing table for controlling target partition assignment.
+         *
+         * Flat map with dot-notation keys: sourceCollection.sourcePartition = targetPartition
+         * Use "*" as wildcard for fallback matching.
+         *
+         * Resolution priority:
+         * 1. Exact match: [sourceCollection].[sourcePartition]
+         * 2. Table wildcard: [sourceCollection].*
+         * 3. Global wildcard: *.*
+         * 4. No match: preserve original partition name
+         *
+         * Examples:
+         * # All data to one partition (control plane simple mode):
+         * partition_routing = { "*.*" = "partition_A" }
+         *
+         * # Multi-table merge:
+         * partition_routing = {
+         *   "collectionA.*" = "from_A"
+         *   "collectionB.*" = "from_B"
+         * }
+         *
+         * # Mixed routing with specific partition mapping:
+         * partition_routing = {
+         *   "collectionA.hot" = "active"
+         *   "collectionA.*" = "other"
+         * }
+         */
+        public static final Option<Map<String, String>> PARTITION_ROUTING = Options.key("partition_routing")
+                        .mapType()
+                        .defaultValue(new HashMap<>())
+                        .withDescription(
+                                        "Partition routing table. Dot-notation keys: sourceCollection.sourcePartition = targetPartition. Use * as wildcard.");
+
+        /**
          * Unified field schema configuration for defining the target collection schema.
          *
          * IMPORTANT: When field_schema is supplied, ONLY the fields defined in

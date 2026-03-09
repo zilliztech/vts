@@ -45,7 +45,8 @@ public class MilvusSinkFactory implements TableSinkFactory {
                         MilvusSinkConfig.ENABLE_DYNAMIC_FIELD,
                         MilvusSinkConfig.SCHEMA_SAVE_MODE,
                         MilvusSinkConfig.DATA_SAVE_MODE,
-                        MilvusSinkConfig.FIELD_SCHEMA)
+                        MilvusSinkConfig.FIELD_SCHEMA,
+                        MilvusSinkConfig.PARTITION_ROUTING)
                 .build();
     }
 
