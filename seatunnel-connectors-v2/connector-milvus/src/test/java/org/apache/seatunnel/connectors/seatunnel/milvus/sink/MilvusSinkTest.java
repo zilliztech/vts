@@ -24,7 +24,7 @@ import java.util.Collections;
 
 class MilvusSinkTest {
     ReadonlyConfig pluginConfig = mock(ReadonlyConfig.class);
-    MilvusSink milvusSink = new MilvusSink(pluginConfig, null);
+    MilvusSink milvusSink = new MilvusSink(pluginConfig, null, "test");
 
     @Test
     void getPluginName() {

@@ -25,6 +25,7 @@ import static org.apache.seatunnel.api.sink.DataSaveMode.APPEND_DATA;
 import static org.apache.seatunnel.api.sink.DataSaveMode.DROP_DATA;
 import static org.apache.seatunnel.api.sink.DataSaveMode.ERROR_WHEN_DATA_EXISTS;
 import org.apache.seatunnel.api.sink.SchemaSaveMode;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusCommonConfig;
 
 import java.util.ArrayList;
@@ -63,36 +64,35 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
         /**
          * Partition routing table for controlling target partition assignment.
          *
-         * Flat map with dot-notation keys: sourceCollection.sourcePartition = targetPartition
+         * Two-level nested map: sourceCollection → sourcePartition → targetPartition
          * Use "*" as wildcard for fallback matching.
          *
          * Resolution priority:
-         * 1. Exact match: [sourceCollection].[sourcePartition]
-         * 2. Table wildcard: [sourceCollection].*
-         * 3. Global wildcard: *.*
+         * 1. Exact match: routingTable[sourceCollection][sourcePartition]
+         * 2. Table wildcard: routingTable[sourceCollection]["*"]
+         * 3. Global wildcard: routingTable["*"]["*"]
          * 4. No match: preserve original partition name
          *
          * Examples:
          * # All data to one partition (control plane simple mode):
-         * partition_routing = { "*.*" = "partition_A" }
+         * partition_routing = { "*" = { "*" = "partition_A" } }
          *
          * # Multi-table merge:
          * partition_routing = {
-         *   "collectionA.*" = "from_A"
-         *   "collectionB.*" = "from_B"
+         *   collectionA = { "*" = "from_A" }
+         *   collectionB = { "*" = "from_B" }
          * }
          *
          * # Mixed routing with specific partition mapping:
          * partition_routing = {
-         *   "collectionA.hot" = "active"
-         *   "collectionA.*" = "other"
+         *   collectionA = { hot = "active", "*" = "other" }
          * }
          */
-        public static final Option<Map<String, String>> PARTITION_ROUTING = Options.key("partition_routing")
-                        .mapType()
+        public static final Option<Map<String, Map<String, String>>> PARTITION_ROUTING = Options.key("partition_routing")
+                        .type(new TypeReference<Map<String, Map<String, String>>>() {})
                         .defaultValue(new HashMap<>())
                         .withDescription(
-                                        "Partition routing table. Dot-notation keys: sourceCollection.sourcePartition = targetPartition. Use * as wildcard.");
+                                        "Partition routing table. Nested map: sourceCollection -> sourcePartition -> targetPartition. Use * as wildcard.");
 
         /**
          * Unified field schema configuration for defining the target collection schema.

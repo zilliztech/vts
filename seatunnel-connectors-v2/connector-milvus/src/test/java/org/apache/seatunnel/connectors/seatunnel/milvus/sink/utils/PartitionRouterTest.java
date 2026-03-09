@@ -137,24 +137,20 @@ class PartitionRouterTest {
     }
 
     @Test
-    void flatConfigParsing() {
-        // Simulates buildPartitionRouter parsing from flat HOCON map
-        Map<String, String> flatMap = new HashMap<>();
-        flatMap.put("colA.*", "from_A");
-        flatMap.put("colB.hot", "active");
-        flatMap.put("colB.*", "other");
-        flatMap.put("*.*", "global");
-
+    void nestedMapConfig() {
+        // Simulates HOCON nested map config:
+        // partition_routing = {
+        //   colA = { "*" = "from_A" }
+        //   colB = { hot = "active", "*" = "other" }
+        //   "*" = { "*" = "global" }
+        // }
         Map<String, Map<String, String>> routingTable = new HashMap<>();
-        for (Map.Entry<String, String> entry : flatMap.entrySet()) {
-            String key = entry.getKey();
-            int dotIndex = key.lastIndexOf(".");
-            String collection = key.substring(0, dotIndex);
-            String partition = key.substring(dotIndex + 1);
-            routingTable
-                    .computeIfAbsent(collection, k -> new HashMap<>())
-                    .put(partition, entry.getValue());
-        }
+        routingTable.put("colA", Collections.singletonMap("*", "from_A"));
+        Map<String, String> colBRules = new HashMap<>();
+        colBRules.put("hot", "active");
+        colBRules.put("*", "other");
+        routingTable.put("colB", colBRules);
+        routingTable.put("*", Collections.singletonMap("*", "global"));
 
         PartitionRouter router = new PartitionRouter(routingTable);
         assertEquals("from_A", router.resolve("colA", "_default"));

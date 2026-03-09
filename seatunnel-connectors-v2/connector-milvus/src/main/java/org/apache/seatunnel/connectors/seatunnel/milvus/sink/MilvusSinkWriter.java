@@ -50,7 +50,6 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -229,24 +228,6 @@ public class MilvusSinkWriter
     }
 
     private static PartitionRouter buildPartitionRouter(ReadonlyConfig config) {
-        Map<String, String> flatMap = config.get(MilvusSinkConfig.PARTITION_ROUTING);
-        Map<String, Map<String, String>> routingTable = new HashMap<>();
-        for (Map.Entry<String, String> entry : flatMap.entrySet()) {
-            String key = entry.getKey();
-            String targetPartition = entry.getValue();
-            int dotIndex = key.lastIndexOf(".");
-            String srcCollection;
-            String srcPartition;
-            if (dotIndex > 0) {
-                srcCollection = key.substring(0, dotIndex);
-                srcPartition = key.substring(dotIndex + 1);
-            } else {
-                srcCollection = key;
-                srcPartition = "*";
-            }
-            routingTable.computeIfAbsent(srcCollection, k -> new HashMap<>())
-                    .put(srcPartition, targetPartition);
-        }
-        return new PartitionRouter(routingTable);
+        return new PartitionRouter(config.get(MilvusSinkConfig.PARTITION_ROUTING));
     }
 }
