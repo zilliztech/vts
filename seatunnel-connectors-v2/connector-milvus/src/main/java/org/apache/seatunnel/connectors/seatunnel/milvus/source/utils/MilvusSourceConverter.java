@@ -294,8 +294,10 @@ public class MilvusSourceConverter {
         builder.name(fieldSchema.getName());
         builder.sourceType(dataType.name());
         builder.comment(fieldSchema.getDescription());
+        Boolean isNullable = fieldSchema.getIsNullable();
+        builder.nullable(Boolean.TRUE.equals(isNullable));
         Map<String, Object> optionsMap = new HashMap<>();
-        optionsMap.put(MilvusConstants.IS_NULLABLE, fieldSchema.getIsNullable());
+        optionsMap.put(MilvusConstants.IS_NULLABLE, isNullable);
         optionsMap.put(MilvusConstants.DEFAULT_VALUE, fieldSchema.getDefaultValue());
 
         switch (dataType) {
