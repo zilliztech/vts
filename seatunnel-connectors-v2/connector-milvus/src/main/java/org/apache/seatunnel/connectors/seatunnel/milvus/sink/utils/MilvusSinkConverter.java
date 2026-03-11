@@ -22,6 +22,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import io.milvus.common.clientenum.FunctionType;
 import io.milvus.grpc.DataType;
@@ -282,7 +283,17 @@ public class MilvusSinkConverter {
                                                         + matchedField
                                                         + "'. Use field_schema to rename the conflicting field.");
                                     }
-                                    data.add(matchedField, entry.getValue());
+                                    FieldSchema dynamicFieldSchema = getFieldSchema(describeCollectionResp, matchedField);
+                                    if (dynamicFieldSchema != null && !entry.getValue().isJsonArray()) {
+                                        Object convertedValue = entry.getValue();
+                                        if (dynamicFieldSchema.getDataType() != io.milvus.v2.common.DataType.JSON) {
+                                            convertedValue = extractJsonValue(entry.getValue());
+                                        }
+                                        Object converted = convertByMilvusType(dynamicFieldSchema, convertedValue);
+                                        data.add(matchedField, gson.toJsonTree(converted));
+                                    } else {
+                                        data.add(matchedField, entry.getValue());
+                                    }
                                 });
                 continue;
             }
@@ -386,6 +397,28 @@ public class MilvusSinkConverter {
                 .withEnableDynamicField(describeCollectionResp.getEnableDynamicField())
                 .withFieldTypes(fieldTypes)
                 .build();
+    }
+
+    /**
+     * Extract a raw Java value from a JsonElement so that convertByMilvusType
+     * receives a proper Java object instead of a JsonPrimitive whose toString()
+     * may add JSON quoting (e.g. JsonPrimitive("hello").toString() = "\"hello\"").
+     */
+    private static Object extractJsonValue(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (element.isJsonPrimitive()) {
+            JsonPrimitive p = element.getAsJsonPrimitive();
+            if (p.isString()) {
+                return p.getAsString();
+            } else if (p.isNumber()) {
+                return p.getAsNumber();
+            } else if (p.isBoolean()) {
+                return p.getAsBoolean();
+            }
+        }
+        return element;
     }
 
     public Object convertByMilvusType(FieldSchema fieldSchema, Object value) {
