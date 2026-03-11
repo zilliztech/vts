@@ -22,6 +22,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import io.milvus.common.clientenum.FunctionType;
 import io.milvus.grpc.DataType;
 import io.milvus.param.collection.CollectionSchemaParam;
@@ -204,9 +205,14 @@ public class MilvusSinkConverter {
                         .forEach(
                                 entry -> {
                                     String entryKey = entry.getKey();
-                                    // Direct lookup using entryKey
                                     String matchedField = milvusFieldsMap.getOrDefault(entryKey, entryKey);
-                                    data.add(matchedField, entry.getValue());
+                                    FieldSchema dynamicFieldSchema = getFieldSchema(describeCollectionResp, matchedField);
+                                    if (dynamicFieldSchema != null) {
+                                        Object converted = convertByMilvusType(dynamicFieldSchema, entry.getValue());
+                                        data.add(matchedField, gson.toJsonTree(converted));
+                                    } else {
+                                        data.add(matchedField, entry.getValue());
+                                    }
                                 });
                 continue;
             }
@@ -304,9 +310,37 @@ public class MilvusSinkConverter {
                 .build();
     }
 
+    /**
+     * Extract a raw Java value from a JsonElement so that convertByMilvusType
+     * receives a proper Java object instead of a JsonPrimitive whose toString()
+     * may add JSON quoting (e.g. JsonPrimitive("hello").toString() = "\"hello\"").
+     */
+    private static Object extractJsonValue(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (element.isJsonPrimitive()) {
+            JsonPrimitive p = element.getAsJsonPrimitive();
+            if (p.isString()) {
+                return p.getAsString();
+            } else if (p.isNumber()) {
+                return p.getAsNumber();
+            } else if (p.isBoolean()) {
+                return p.getAsBoolean();
+            }
+        }
+        return element;
+    }
+
     public Object convertByMilvusType(FieldSchema fieldSchema, Object value) {
         if (value == null) {
             return null;
+        }
+        if (value instanceof JsonElement) {
+            value = extractJsonValue((JsonElement) value);
+            if (value == null) {
+                return null;
+            }
         }
         switch (fieldSchema.getDataType()) {
             case Int8:

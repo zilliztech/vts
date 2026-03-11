@@ -17,7 +17,9 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
@@ -225,6 +227,78 @@ public class MilvusSinkConverterTest {
         Assertions.assertEquals("null_time", json.get("name").getAsString());
         // null sub-field should be serialized as JsonNull
         Assertions.assertTrue(json.get("event_time").isJsonNull());
+    }
+
+    // --- convertByMilvusType with JsonElement inputs (dynamic field fix) ---
+
+    @Test
+    public void testConvertByMilvusType_VarChar_FromJsonPrimitiveNumber() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("store_id").dataType(DataType.VarChar).maxLength(200).build();
+        // Simulates: Qdrant keyword field with numeric value stored as JsonPrimitive(12345)
+        JsonPrimitive input = new JsonPrimitive(12345);
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(String.class, result);
+        Assertions.assertEquals("12345", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_VarChar_FromJsonPrimitiveString() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("name").dataType(DataType.VarChar).maxLength(200).build();
+        JsonPrimitive input = new JsonPrimitive("hello");
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(String.class, result);
+        Assertions.assertEquals("hello", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Int64_FromJsonPrimitiveNumber() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("count").dataType(DataType.Int64).build();
+        JsonPrimitive input = new JsonPrimitive(99999);
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(Long.class, result);
+        Assertions.assertEquals(99999L, result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Double_FromJsonPrimitiveNumber() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("score").dataType(DataType.Double).build();
+        JsonPrimitive input = new JsonPrimitive(9.5);
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(Double.class, result);
+        Assertions.assertEquals(9.5, (Double) result, 0.001);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Bool_FromJsonPrimitiveBoolean() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("active").dataType(DataType.Bool).build();
+        JsonPrimitive input = new JsonPrimitive(true);
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(Boolean.class, result);
+        Assertions.assertEquals(true, result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_JSON_FromJsonObject() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("meta").dataType(DataType.JSON).build();
+        JsonObject input = new JsonObject();
+        input.addProperty("key", "value");
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(JsonObject.class, result);
+        Assertions.assertEquals("value", ((JsonObject) result).get("key").getAsString());
+    }
+
+    @Test
+    public void testConvertByMilvusType_VarChar_FromJsonNull() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("field").dataType(DataType.VarChar).maxLength(200).build();
+        Object result = converter.convertByMilvusType(schema, JsonNull.INSTANCE);
+        Assertions.assertNull(result);
     }
 
     // --- FloatVector from Double[] input ---
