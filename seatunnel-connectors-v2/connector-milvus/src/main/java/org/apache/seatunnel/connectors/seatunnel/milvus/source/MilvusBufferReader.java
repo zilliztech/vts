@@ -89,7 +89,7 @@ public class MilvusBufferReader {
 
         int maxFailRetry = 3;
 
-        while (maxFailRetry > 0) {
+        while (true) {
             try {
                 List<QueryResultsWrapper.RowRecord> next = iterator.next();
                 if (next == null || next.isEmpty()) {
@@ -102,10 +102,16 @@ public class MilvusBufferReader {
                         seaTunnelRow.setTableId(split.getTablePath().toString());
                         output.collect(seaTunnelRow);
                     }
+                    // Reset retry counter on successful batch
+                    maxFailRetry = 3;
                 }
             } catch (Exception e) {
-                if (e.getMessage()!=null && e.getMessage().contains("rate limit exceeded")) {
+                if (e.getMessage() != null && e.getMessage().contains("rate limit exceeded")) {
                     maxFailRetry--;
+                    if (maxFailRetry <= 0) {
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL,
+                                "Rate limit retries exhausted for collection: " + collectionName, e);
+                    }
                     log.warn("Rate limit exceeded. Retrying in 30 seconds. Retries left: {}", maxFailRetry);
                     Thread.sleep(30000);
                 } else {
