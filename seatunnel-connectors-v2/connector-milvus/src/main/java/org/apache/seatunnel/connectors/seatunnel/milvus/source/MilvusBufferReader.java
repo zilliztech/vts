@@ -31,6 +31,7 @@ public class MilvusBufferReader {
     private final TableSchema tableSchema;
     private final MilvusSourceSplit split;
     private final CountDownLatch completionSignal = new CountDownLatch(1);
+    private long rateLimitRetryIntervalMs = 30000;
 
     public MilvusBufferReader(MilvusSourceSplit split, Collector<SeaTunnelRow> output,
                               MilvusClientV2 client, TableSchema tableSchema) {
@@ -43,6 +44,10 @@ public class MilvusBufferReader {
         this.partitionName = split.getPartitionName();
         this.offset = split.getOffset();
         this.limit = split.getLimit();
+    }
+
+    void setRateLimitRetryIntervalMs(long rateLimitRetryIntervalMs) {
+        this.rateLimitRetryIntervalMs = rateLimitRetryIntervalMs;
     }
 
     public void pollData(Integer batchSize) {
@@ -89,7 +94,7 @@ public class MilvusBufferReader {
 
         int maxFailRetry = 3;
 
-        while (maxFailRetry > 0) {
+        while (true) {
             try {
                 List<QueryResultsWrapper.RowRecord> next = iterator.next();
                 if (next == null || next.isEmpty()) {
@@ -102,12 +107,18 @@ public class MilvusBufferReader {
                         seaTunnelRow.setTableId(split.getTablePath().toString());
                         output.collect(seaTunnelRow);
                     }
+                    // Reset retry counter on successful batch
+                    maxFailRetry = 3;
                 }
             } catch (Exception e) {
-                if (e.getMessage()!=null && e.getMessage().contains("rate limit exceeded")) {
+                if (e.getMessage() != null && e.getMessage().contains("rate limit exceeded")) {
                     maxFailRetry--;
-                    log.warn("Rate limit exceeded. Retrying in 30 seconds. Retries left: {}", maxFailRetry);
-                    Thread.sleep(30000);
+                    if (maxFailRetry <= 0) {
+                        throw new MilvusConnectorException(MilvusConnectionErrorCode.READ_DATA_FAIL,
+                                "Rate limit retries exhausted for collection: " + collectionName, e);
+                    }
+                    log.warn("Rate limit exceeded. Retrying in {} ms. Retries left: {}", rateLimitRetryIntervalMs, maxFailRetry);
+                    Thread.sleep(rateLimitRetryIntervalMs);
                 } else {
                     log.error("Query failed. Batch size: {}. Aborting...", batchSize, e);
                     throw new RuntimeException("Query failed", e);
