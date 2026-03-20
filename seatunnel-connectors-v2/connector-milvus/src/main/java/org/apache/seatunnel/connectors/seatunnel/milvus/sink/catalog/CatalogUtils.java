@@ -30,8 +30,10 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaC
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -53,20 +55,15 @@ public class CatalogUtils {
         if (config.get(FIELD_SCHEMA) != null && !config.get(FIELD_SCHEMA).isEmpty()) {
             Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
             for (Object field : config.get(FIELD_SCHEMA)) {
-                try {
-                    Type type = new TypeToken<MilvusFieldSchema>() {
-                    }.getType();
-                    String json = gson.toJson(field);
-                    MilvusFieldSchema fieldSchema = gson.fromJson(json, type);
-                    if (fieldSchema != null) {
-                        String key = fieldSchema.getEffectiveFieldName();
-                        if (key != null) {
-                            schemaMap.put(key, fieldSchema);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to parse field schema: {}, error: {}", field, e.getMessage());
+                Type type = new TypeToken<MilvusFieldSchema>() {
+                }.getType();
+                String json = gson.toJson(field);
+                MilvusFieldSchema fieldSchema = gson.fromJson(json, type);
+                if (fieldSchema == null || fieldSchema.getEffectiveFieldName() == null) {
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_COLLECTION_ERROR,
+                            "Invalid field_schema entry, missing field name: " + field);
                 }
+                schemaMap.put(fieldSchema.getEffectiveFieldName(), fieldSchema);
             }
             log.info("Loaded field_schema config for {} fields", schemaMap.size());
         }
@@ -75,58 +72,126 @@ public class CatalogUtils {
     }
 
     void createIndex(TablePath tablePath, CatalogTable catalogTable) {
-        Map<String, String> options = catalogTable.getOptions();
-
-        List<IndexParam> indexParams = new ArrayList<>();
-
-        // Check if there are existing indexes from source metadata in options
-        if (options.containsKey(MilvusConstants.INDEX_LIST)) {
-            String indexListStr = options.get(MilvusConstants.INDEX_LIST);
-            if (StringUtils.isNotEmpty(indexListStr) && !indexListStr.equals("[]")) {
-                try {
-                    Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
-                    Type indexListType = new TypeToken<List<Map<String, String>>>() {
-                    }.getType();
-                    List<Map<String, String>> indexes = gson.fromJson(indexListStr, indexListType);
-
-                    if (indexes != null && !indexes.isEmpty()) {
-                        for (Map<String, String> indexInfo : indexes) {
-
-                            IndexParam.MetricType metricType = indexInfo.containsKey("metricType")
-                                    ? IndexParam.MetricType.valueOf(indexInfo.get("metricType"))
-                                    : null;
-
-                            IndexParam.IndexType indexType;
-                            try {
-                                indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
-                            } catch (Exception e) {
-                                log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
-                                indexType = IndexParam.IndexType.AUTOINDEX;
-                            }
-
-                            IndexParam indexParam = IndexParam.builder()
-                                    .fieldName(indexInfo.get("fieldName"))
-                                    .metricType(metricType)
-                                    .indexType(indexType)
-                                    .indexName(indexInfo.get("indexName"))
-                                    .build();
-                            indexParams.add(indexParam);
-                            log.info("Using existing index from source: {}", indexInfo);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to parse index list from options: {}, error: {}", indexListStr, e.getMessage());
-                }
-            }
-        }
+        List<IndexParam> indexParams = parseIndexParamsFromSource(catalogTable);
 
         log.info("indexParams: {}", indexParams);
-        // create index
         CreateIndexReq createIndexReq = CreateIndexReq.builder()
                 .collectionName(tablePath.getTableName())
                 .indexParams(indexParams)
                 .build();
         this.client.createIndex(createIndexReq);
+    }
+
+    List<IndexParam> parseIndexParamsFromSource(CatalogTable catalogTable) {
+        List<IndexParam> indexParams = new ArrayList<>();
+        Map<String, String> options = catalogTable.getOptions();
+
+        String indexListStr = options.get(MilvusConstants.INDEX_LIST);
+        if (StringUtils.isEmpty(indexListStr) || indexListStr.equals("[]")) {
+            return indexParams;
+        }
+
+        Gson gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
+        List<Map<String, String>> indexes;
+        Type indexListType = new TypeToken<List<Map<String, String>>>() {}.getType();
+        indexes = gson.fromJson(indexListStr, indexListType);
+
+        if (indexes == null || indexes.isEmpty()) {
+            return indexParams;
+        }
+
+        Set<String> targetFieldNames = collectTargetFieldNames(catalogTable);
+        Set<String> sourceFieldNames = collectSourceFieldNames(catalogTable);
+        boolean enableDynamicField = getEnableDynamicField(options);
+        Type extraParamsType = new TypeToken<Map<String, Object>>() {}.getType();
+
+        for (Map<String, String> indexInfo : indexes) {
+            IndexParam indexParam = buildIndexParam(indexInfo, targetFieldNames, sourceFieldNames, enableDynamicField, gson, extraParamsType);
+            if (indexParam != null) {
+                indexParams.add(indexParam);
+                log.info("Using existing index from source: {}", indexInfo);
+            }
+        }
+
+        return indexParams;
+    }
+
+    /**
+     * Collect all non-metadata column names from the source schema.
+     * Used to distinguish explicit source fields from dynamic field keys.
+     */
+    Set<String> collectSourceFieldNames(CatalogTable catalogTable) {
+        Set<String> sourceFieldNames = new HashSet<>();
+        for (Column col : catalogTable.getTableSchema().getColumns()) {
+            if (col.getOptions() != null
+                    && col.getOptions().containsKey(CommonOptions.METADATA.getName())
+                    && Boolean.TRUE.equals(col.getOptions().get(CommonOptions.METADATA.getName()))) {
+                continue;
+            }
+            sourceFieldNames.add(col.getName());
+        }
+        return sourceFieldNames;
+    }
+
+    Set<String> collectTargetFieldNames(CatalogTable catalogTable) {
+        if (!fieldSchemaMap.isEmpty()) {
+            return new HashSet<>(fieldSchemaMap.keySet());
+        }
+        return collectSourceFieldNames(catalogTable);
+    }
+
+    IndexParam buildIndexParam(Map<String, String> indexInfo, Set<String> targetFieldNames,
+            Set<String> sourceFieldNames, boolean enableDynamicField, Gson gson, Type extraParamsType) {
+        String fieldName = indexInfo.get("fieldName");
+        if (fieldName == null) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_INDEX_ERROR,
+                    "Index has null fieldName: " + indexInfo);
+        }
+        if (!targetFieldNames.isEmpty() && !targetFieldNames.contains(fieldName)) {
+            if (sourceFieldNames.contains(fieldName)) {
+                // Field exists in source explicit schema but not synced to target — skip
+                log.info("Skipping index '{}' on field '{}': source schema field not synced to target",
+                        indexInfo.get("indexName"), fieldName);
+                return null;
+            } else if (enableDynamicField) {
+                // Field not in any explicit schema — dynamic field index, data lives in $meta
+                log.info("Index '{}' on field '{}' not in explicit schema, allowing as dynamic field index",
+                        indexInfo.get("indexName"), fieldName);
+            } else {
+                log.info("Skipping index '{}' on field '{}': field not present in target schema",
+                        indexInfo.get("indexName"), fieldName);
+                return null;
+            }
+        }
+
+        IndexParam.MetricType metricType = indexInfo.containsKey("metricType")
+                ? IndexParam.MetricType.valueOf(indexInfo.get("metricType"))
+                : null;
+
+        IndexParam.IndexType indexType;
+        try {
+            indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
+            indexType = IndexParam.IndexType.AUTOINDEX;
+        }
+
+        IndexParam.IndexParamBuilder builder = IndexParam.builder()
+                .fieldName(fieldName)
+                .metricType(metricType)
+                .indexType(indexType)
+                .indexName(indexInfo.get("indexName"));
+
+        // Parse and apply extraParams if present
+        if (indexInfo.containsKey("extraParams") && StringUtils.isNotEmpty(indexInfo.get("extraParams"))) {
+            Map<String, Object> extraParams = gson.fromJson(indexInfo.get("extraParams"), extraParamsType);
+            if (extraParams != null && !extraParams.isEmpty()) {
+                builder.extraParams(extraParams);
+                log.debug("Applied extraParams for index '{}': {}", indexInfo.get("indexName"), extraParams);
+            }
+        }
+
+        return builder.build();
     }
 
     void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
@@ -188,7 +253,7 @@ public class CatalogUtils {
         for (Column column : tableSchema.getColumns()) {
             if (column.getOptions() != null
                     && column.getOptions().containsKey(CommonOptions.METADATA.getName())
-                    && (Boolean) column.getOptions().get(CommonOptions.METADATA.getName())) {
+                    && Boolean.TRUE.equals(column.getOptions().get(CommonOptions.METADATA.getName()))) {
                 // skip dynamic field
                 continue;
             }
@@ -245,10 +310,10 @@ public class CatalogUtils {
         // 5. Function List - source first, then merge/add from config
         List<CreateCollectionReq.Function> functionList = getFunctionList(options, gson);
 
-        // 5. Struct Fields - passed from caller (already collected from source/config)
+        // 6. Struct Fields - passed from caller (already collected from source/config)
         log.info("Creating collection with {} struct fields", structFields.size());
 
-        // 6. Shard Number - source first, then config override (handled later in
+        // 7. Shard Number - source first, then config override (handled later in
         // createCollectionReq)
         // Build collection schema
         CreateCollectionReq.CollectionSchema collectionSchema = CreateCollectionReq.CollectionSchema.builder()
@@ -523,38 +588,29 @@ public class CatalogUtils {
         if (options.containsKey(MilvusConstants.FUNCTION_LIST)) {
             String functionListStr = options.get(MilvusConstants.FUNCTION_LIST);
             if (StringUtils.isNotEmpty(functionListStr) && !functionListStr.equals("[]")) {
-                try {
-                    Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
-                    }.getType();
-                    List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr,
-                            functionListType);
-                    if (functionsFromSource != null) {
-                        functionList = functionsFromSource;
-                        log.info("Loaded {} functions from source", functionsFromSource.size());
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to parse functionList from source: {}, error: {}", functionListStr,
-                            e.getMessage());
+                Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
+                }.getType();
+                List<CreateCollectionReq.Function> functionsFromSource = gson.fromJson(functionListStr,
+                        functionListType);
+                if (functionsFromSource != null) {
+                    functionList = functionsFromSource;
+                    log.info("Loaded {} functions from source", functionsFromSource.size());
                 }
             }
         }
 
         // Merge/add functions from config (additive, not override)
         if (config.get(MilvusSinkConfig.functionList) != null && !config.get(MilvusSinkConfig.functionList).isEmpty()) {
-            try {
-                List<Object> functionsFromConfigRaw = config.get(MilvusSinkConfig.functionList);
-                Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
-                }.getType();
-                String functionListStr = gson.toJson(functionsFromConfigRaw);
-                List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr,
-                        functionListType);
-                if (functionsFromConfig != null) {
-                    functionList = functionsFromConfig;
-                    log.info("Added {} functions from config, total: {}", functionsFromConfig.size(),
-                            functionList.size());
-                }
-            } catch (Exception e) {
-                log.warn("Failed to parse functionList from config, error: {}", e.getMessage());
+            List<Object> functionsFromConfigRaw = config.get(MilvusSinkConfig.functionList);
+            Type functionListType = new TypeToken<List<CreateCollectionReq.Function>>() {
+            }.getType();
+            String functionListStr = gson.toJson(functionsFromConfigRaw);
+            List<CreateCollectionReq.Function> functionsFromConfig = gson.fromJson(functionListStr,
+                    functionListType);
+            if (functionsFromConfig != null) {
+                functionList = functionsFromConfig;
+                log.info("Added {} functions from config, total: {}", functionsFromConfig.size(),
+                        functionList.size());
             }
         }
 
@@ -575,34 +631,30 @@ public class CatalogUtils {
             if (column.getOptions() != null && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS)) {
                 String structFieldsJson = (String) column.getOptions().get(MilvusConstants.STRUCT_FIELDS);
                 if (StringUtils.isNotEmpty(structFieldsJson) && !structFieldsJson.equals("[]")) {
-                    try {
-                        // Parse the nested fields from the struct
-                        Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>() {
-                        }.getType();
-                        List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson,
-                                nestedFieldsType);
+                    // Parse the nested fields from the struct
+                    Type nestedFieldsType = new TypeToken<List<CreateCollectionReq.FieldSchema>>() {
+                    }.getType();
+                    List<CreateCollectionReq.FieldSchema> nestedFields = gson.fromJson(structFieldsJson,
+                            nestedFieldsType);
 
-                        if (nestedFields != null && !nestedFields.isEmpty()) {
-                            // Create a StructFieldSchema for this Array[Struct] field
-                            CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema
-                                    .builder()
-                                    .name(column.getName())
-                                    .description(column.getComment() != null ? column.getComment() : "")
-                                    .fields(nestedFields)
-                                    .build();
+                    if (nestedFields != null && !nestedFields.isEmpty()) {
+                        // Create a StructFieldSchema for this Array[Struct] field
+                        CreateCollectionReq.StructFieldSchema structFieldSchema = CreateCollectionReq.StructFieldSchema
+                                .builder()
+                                .name(column.getName())
+                                .description(column.getComment() != null ? column.getComment() : "")
+                                .fields(nestedFields)
+                                .build();
 
-                            // Set maxCapacity if available
-                            if (column.getOptions().containsKey(MilvusConstants.MAX_CAPACITY)) {
-                                Integer maxCapacity = (Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY);
-                                structFieldSchema.setMaxCapacity(maxCapacity);
-                            }
-
-                            structFieldsList.add(structFieldSchema);
-                            log.info("Extracted struct field from column: {} with {} nested fields",
-                                    column.getName(), nestedFields.size());
+                        // Set maxCapacity if available
+                        if (column.getOptions().containsKey(MilvusConstants.MAX_CAPACITY)) {
+                            Integer maxCapacity = (Integer) column.getOptions().get(MilvusConstants.MAX_CAPACITY);
+                            structFieldSchema.setMaxCapacity(maxCapacity);
                         }
-                    } catch (Exception e) {
-                        log.warn("Failed to parse struct fields from column {}: {}", column.getName(), e.getMessage());
+
+                        structFieldsList.add(structFieldSchema);
+                        log.info("Extracted struct field from column: {} with {} nested fields",
+                                column.getName(), nestedFields.size());
                     }
                 }
             }

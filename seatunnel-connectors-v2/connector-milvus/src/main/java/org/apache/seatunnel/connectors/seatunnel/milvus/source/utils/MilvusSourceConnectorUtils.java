@@ -149,15 +149,11 @@ public class MilvusSourceConnectorUtils {
         options.put(MilvusConstants.ENABLE_AUTO_ID, String.valueOf(describeCollectionResp.getAutoID()));
         options.put(MilvusConstants.CONSISTENCY_LEVEL,
                 String.valueOf(describeCollectionResp.getConsistencyLevel().getName()));
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+
         // Serialize functionList as JSON for proper reconstruction in sink
         if (functionList != null && !functionList.isEmpty()) {
-            try {
-                com.google.gson.Gson gson = new com.google.gson.Gson();
-                options.put(MilvusConstants.FUNCTION_LIST, gson.toJson(functionList));
-            } catch (Exception e) {
-                log.warn("Failed to serialize functionList, setting empty list. Error: {}", e.getMessage());
-                options.put(MilvusConstants.FUNCTION_LIST, "[]");
-            }
+            options.put(MilvusConstants.FUNCTION_LIST, gson.toJson(functionList));
         } else {
             options.put(MilvusConstants.FUNCTION_LIST, "[]");
         }
@@ -167,36 +163,28 @@ public class MilvusSourceConnectorUtils {
 
         // Serialize vector index info as JSON for proper reconstruction in sink
         List<Object> indexList = new ArrayList<>();
-        try {
-            List<String> indexes = client.listIndexes(ListIndexesReq.builder().collectionName(collection).build());
-            for (String index : indexes) {
-                DescribeIndexReq describeIndexReq = DescribeIndexReq.builder()
-                        .collectionName(collection)
-                        .indexName(index)
-                        .build();
-                try {
-                    DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
-                    for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
-                        Map<String, String> indexInfo = new HashMap<>();
-                        indexInfo.put("fieldName", indexDesc.getFieldName());
-                        indexInfo.put("indexName", indexDesc.getIndexName());
-                        indexInfo.put("indexType", indexDesc.getIndexType().getName());
-                        if (indexDesc.getMetricType() != MetricType.INVALID) {
-                            indexInfo.put("metricType", indexDesc.getMetricType().name());
-                        }
-                        indexList.add(indexInfo);
-                    }
-                } catch (Exception e) {
-                    log.info("describe index error, maybe index not exist {}", e.getMessage());
-                    continue;
+        List<String> indexes = client.listIndexes(ListIndexesReq.builder().collectionName(collection).build());
+        for (String index : indexes) {
+            DescribeIndexReq describeIndexReq = DescribeIndexReq.builder()
+                    .collectionName(collection)
+                    .indexName(index)
+                    .build();
+            DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
+            for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
+                Map<String, String> indexInfo = new HashMap<>();
+                indexInfo.put("fieldName", indexDesc.getFieldName());
+                indexInfo.put("indexName", indexDesc.getIndexName());
+                indexInfo.put("indexType", indexDesc.getIndexType().getName());
+                if (indexDesc.getMetricType() != MetricType.INVALID) {
+                    indexInfo.put("metricType", indexDesc.getMetricType().name());
                 }
+                if (indexDesc.getExtraParams() != null && !indexDesc.getExtraParams().isEmpty()) {
+                    indexInfo.put("extraParams", gson.toJson(indexDesc.getExtraParams()));
+                }
+                indexList.add(indexInfo);
             }
-            com.google.gson.Gson gson = new com.google.gson.Gson();
-            options.put(MilvusConstants.INDEX_LIST, gson.toJson(indexList));
-        } catch (Exception e) {
-            log.warn("Failed to get index info, setting empty list. Error: {}", e.getMessage());
-            options.put(MilvusConstants.INDEX_LIST, "[]");
         }
+        options.put(MilvusConstants.INDEX_LIST, gson.toJson(indexList));
         options.put(MilvusConstants.SHARDS_NUM, String.valueOf(describeCollectionResp.getShardsNum()));
         if (describeCollectionResp.getProperties() != null
                 && describeCollectionResp.getProperties().containsKey(MilvusConstants.TIMEZONE)) {
