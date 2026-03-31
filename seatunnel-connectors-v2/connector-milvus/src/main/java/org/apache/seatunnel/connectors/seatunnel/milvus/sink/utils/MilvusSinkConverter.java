@@ -198,14 +198,25 @@ public class MilvusSinkConverter {
             // Handle dynamic field extraction
             if (Objects.equals(fieldName, CommonOptions.METADATA.getName())
                     && describeCollectionResp.getEnableDynamicField()) {
+                if (value == null) {
+                    continue;
+                }
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
                 dynamicData
                         .entrySet()
                         .forEach(
                                 entry -> {
                                     String entryKey = entry.getKey();
-                                    // Direct lookup using entryKey
                                     String matchedField = milvusFieldsMap.getOrDefault(entryKey, entryKey);
+                                    if (data.has(matchedField)) {
+                                        throw new MilvusConnectorException(
+                                                MilvusConnectionErrorCode.WRITE_DATA_FAIL,
+                                                "Metadata key '"
+                                                        + entryKey
+                                                        + "' conflicts with existing field '"
+                                                        + matchedField
+                                                        + "'. Use field_schema to rename the conflicting field.");
+                                    }
                                     data.add(matchedField, entry.getValue());
                                 });
                 continue;
@@ -224,7 +235,15 @@ public class MilvusSinkConverter {
                 continue;
             }
 
-            // Add to data using target field name
+            // Add to data using target field name, check for conflicts with dynamic fields
+            if (data.has(fieldName)) {
+                throw new MilvusConnectorException(
+                        MilvusConnectionErrorCode.WRITE_DATA_FAIL,
+                        "Field '"
+                                + fieldName
+                                + "' conflicts with a previously written dynamic field. "
+                                + "Use field_schema to rename the conflicting field.");
+            }
             data.add(fieldName, gson.toJsonTree(object));
         }
         return data;
