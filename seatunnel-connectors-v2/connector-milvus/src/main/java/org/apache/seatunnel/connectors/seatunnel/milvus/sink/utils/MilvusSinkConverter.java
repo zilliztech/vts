@@ -30,6 +30,7 @@ import io.milvus.param.collection.FieldType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -57,6 +58,37 @@ import java.util.stream.Collectors;
 
 public class MilvusSinkConverter {
     private static final Gson gson = new Gson();
+
+    /**
+     * Geometry conversion is fully delegated to a {@link GeometryConverter} instance.
+     * This dispatcher class deliberately knows nothing about coordinate orders, WKT
+     * formats, or any other geometry-specific concept — it just hands {@code value}
+     * to {@code geometryConverter} for the {@code Geometry} cases. Adding a new
+     * geometry-specific configuration option does not require any change to this
+     * file; it lives entirely on {@code GeometryConverter}.
+     */
+    private final GeometryConverter geometryConverter;
+
+    public MilvusSinkConverter() {
+        // Matches the production default (GEOMETRY_CONVERT_MODE = "passthrough"):
+        // Geometry strings flow byte-for-byte to Milvus. Tests that need the
+        // parsing path should construct with new MilvusSinkConverter(GeometryConverter.PARSE).
+        this(GeometryConverter.PASSTHROUGH);
+    }
+
+    public MilvusSinkConverter(GeometryConverter geometryConverter) {
+        this.geometryConverter = geometryConverter;
+    }
+
+    /**
+     * Production factory: builds a converter wired up from the sink config.
+     * Writers should construct via this entry point so the converter and its
+     * helpers (currently just {@link GeometryConverter}) absorb any config keys
+     * they need without polluting the writer with sub-domain knowledge.
+     */
+    public static MilvusSinkConverter fromConfig(ReadonlyConfig config) {
+        return new MilvusSinkConverter(GeometryConverter.fromConfig(config));
+    }
 
     public Object convertBySeaTunnelType(
             SeaTunnelDataType<?> fieldType, Boolean isJson, Object value) {
@@ -168,8 +200,7 @@ public class MilvusSinkConverter {
             case MAP:
                 return JsonUtils.toJsonString(value);
             case GEOMETRY:
-                // Handle Geometry - pass through ByteBuffer directly
-                return value;
+                return geometryConverter.convert(value);
             default:
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
@@ -450,8 +481,7 @@ public class MilvusSinkConverter {
                 }
                 return value;
             case Geometry:
-                // Handle Geometry - pass through ByteBuffer directly
-                return value;
+                return geometryConverter.convert(value);
             case Timestamptz:
                 // Milvus SDK requires Timestamptz as ISO 8601 String format (e.g., "2024-01-19T11:30:45Z")
                 // Reference: Milvus ParamUtils.java line 430+ requires String type for Timestamptz
