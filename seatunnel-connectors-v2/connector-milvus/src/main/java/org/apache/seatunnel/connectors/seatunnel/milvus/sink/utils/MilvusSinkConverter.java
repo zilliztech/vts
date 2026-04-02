@@ -48,6 +48,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -381,6 +382,12 @@ public class MilvusSinkConverter {
                         Boolean[] booleanArray = (Boolean[]) value;
                         return Arrays.asList(booleanArray);
                     case VarChar:
+                        // ES keyword fields don't distinguish between single values and arrays,
+                        // so the same field may arrive as String or String[] depending on the document.
+                        // Wrap single values into a one-element list for compatibility.
+                        if (value instanceof String) {
+                            return Collections.singletonList((String) value);
+                        }
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
                     case Struct:
