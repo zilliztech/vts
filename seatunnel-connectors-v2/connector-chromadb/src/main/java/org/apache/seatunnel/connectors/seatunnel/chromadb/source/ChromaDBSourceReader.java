@@ -241,7 +241,7 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
             String tableId,
             ChromaDBClient.GetRecordsResult result) {
         List<String> ids = result.getIds();
-        List<List<Float>> embeddings = result.getEmbeddings();
+        List<float[]> embeddings = result.getEmbeddings();
         List<String> documents = result.getDocuments();
         List<String> uris = result.getUris();
         List<Map<String, Object>> metadatas = result.getMetadatas();
@@ -249,7 +249,7 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
         for (int i = 0; i < ids.size(); i++) {
             try {
                 String id = ids.get(i);
-                List<Float> embedding =
+                float[] embedding =
                         (embeddings != null && i < embeddings.size())
                                 ? embeddings.get(i)
                                 : null;

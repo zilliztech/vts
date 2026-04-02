@@ -23,9 +23,10 @@ import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.chromadb.config.ChromaDBSourceConfig;
 
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,7 +38,7 @@ public class ChromaDBConverter {
     public static SeaTunnelRow convert(
             TableSchema tableSchema,
             String id,
-            List<Float> embedding,
+            float[] embedding,
             String document,
             String uri,
             Map<String, Object> metadata) {
@@ -62,8 +63,13 @@ public class ChromaDBConverter {
             } else if (Objects.equals(fieldName, ChromaDBSourceConfig.FIELD_URI)) {
                 fields[i] = uri;
             } else if (Objects.equals(fieldName, ChromaDBSourceConfig.FIELD_EMBEDDING)) {
-                if (embedding != null && !embedding.isEmpty()) {
-                    fields[i] = BufferUtils.toByteBuffer(embedding.toArray(new Float[0]));
+                if (embedding != null && embedding.length > 0) {
+                    ByteBuffer buf = ByteBuffer.allocate(embedding.length * 4);
+                    for (float v : embedding) {
+                        buf.putFloat(v);
+                    }
+                    ((Buffer) buf).flip();
+                    fields[i] = buf;
                 }
             }
         }
