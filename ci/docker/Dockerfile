@@ -31,16 +31,22 @@ RUN apt-get update && \
     apt-get install -y curl unzip git && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Maven Daemon (mvnd)
-RUN curl -L "https://github.com/apache/maven-mvnd/releases/download/${MAVEN_DAEMON_VERSION}/maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64.zip" -o mvnd.zip && \
-    unzip mvnd.zip && \
-    mv maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64 /opt/mvnd && \
-    rm mvnd.zip
+# Install Maven Daemon (mvnd) for amd64 only; arm64 falls back to mvn
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" != "arm64" ]; then \
+      curl -L "https://github.com/apache/maven-mvnd/releases/download/${MAVEN_DAEMON_VERSION}/maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64.zip" -o mvnd.zip && \
+      unzip mvnd.zip && \
+      mv maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64 /opt/mvnd && \
+      rm mvnd.zip; \
+    fi
 
 ENV PATH="/opt/mvnd/bin:${PATH}"
 
 # Package the distribution to produce apache-seatunnel-*-bin.tar.gz
-RUN mvnd -B clean package \
+# Use mvnd on amd64, fall back to mvn on arm64 (mvnd has no arm64 binary)
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then MVN_CMD="mvn"; else MVN_CMD="mvnd"; fi && \
+    $MVN_CMD -B clean package \
     -pl seatunnel-dist -am \
     -D"skip.ui"=true \
     -Dmaven.test.skip=true \
