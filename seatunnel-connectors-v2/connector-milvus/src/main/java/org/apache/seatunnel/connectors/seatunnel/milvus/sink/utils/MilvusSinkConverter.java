@@ -166,8 +166,11 @@ public class MilvusSinkConverter {
             case MAP:
                 return JsonUtils.toJsonString(value);
             case GEOMETRY:
-                // Handle Geometry - pass through ByteBuffer directly
-                return value;
+                // Milvus SDK requires Geometry as WKT String.
+                if (value instanceof String) {
+                    return GeometryConverter.convertToWkt((String) value);
+                }
+                return GeometryConverter.convertToWkt(JsonUtils.toJsonString(value));
             default:
                 throw new MilvusConnectorException(
                         MilvusConnectionErrorCode.NOT_SUPPORT_TYPE, sqlType.name());
@@ -437,8 +440,13 @@ public class MilvusSinkConverter {
                 }
                 return value;
             case Geometry:
-                // Handle Geometry - pass through ByteBuffer directly
-                return value;
+                // Milvus SDK requires Geometry as WKT String.
+                // Handle various input formats: WKT, GeoJSON, EWKB/WKB hex, EWKT, ES geo_point array
+                // Non-String values (e.g., List from ES geo_point array [lon,lat]) are serialized to JSON first.
+                if (value instanceof String) {
+                    return GeometryConverter.convertToWkt((String) value);
+                }
+                return GeometryConverter.convertToWkt(JsonUtils.toJsonString(value));
             case Timestamptz:
                 // Milvus SDK requires Timestamptz as ISO 8601 String format (e.g., "2024-01-19T11:30:45Z")
                 // Reference: Milvus ParamUtils.java line 430+ requires String type for Timestamptz
