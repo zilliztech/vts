@@ -22,6 +22,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import io.milvus.common.clientenum.FunctionType;
 import io.milvus.grpc.DataType;
 import io.milvus.param.collection.CollectionSchemaParam;
@@ -48,6 +49,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -381,6 +383,17 @@ public class MilvusSinkConverter {
                         Boolean[] booleanArray = (Boolean[]) value;
                         return Arrays.asList(booleanArray);
                     case VarChar:
+                        // ES keyword fields are always deserialized as String by the ES source connector,
+                        // even when the original value is an array (e.g. ["a","b"] becomes "[\"a\",\"b\"]").
+                        // We need to detect JSON array strings and parse them, or wrap single values.
+                        if (value instanceof String) {
+                            String strVal = ((String) value).trim();
+                            if (strVal.startsWith("[")) {
+                                List<String> parsed = gson.fromJson(strVal, new TypeToken<List<String>>(){}.getType());
+                                return parsed != null ? parsed : Collections.singletonList(strVal);
+                            }
+                            return Collections.singletonList(strVal);
+                        }
                         String[] stringArray = (String[]) value;
                         return Arrays.asList(stringArray);
                     case Struct:
