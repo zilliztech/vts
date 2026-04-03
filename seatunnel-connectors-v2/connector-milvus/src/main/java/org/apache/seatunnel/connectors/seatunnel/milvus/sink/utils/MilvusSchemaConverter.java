@@ -202,6 +202,11 @@ public class MilvusSchemaConverter {
         if (null != primaryKey && primaryKey.getColumnNames().size() == 1
                 && primaryKey.getColumnNames().contains(column.getName())) {
             fieldSchema.setIsPrimaryKey(true);
+            // Use enableAutoId from PrimaryKey as authoritative source (covers cases
+            // where column-level AUTO_ID option is absent, e.g. non-Milvus sources)
+            if (primaryKey.getEnableAutoId() != null) {
+                fieldSchema.setAutoID(primaryKey.getEnableAutoId());
+            }
             List<SqlType> integerTypes = new ArrayList<>();
             integerTypes.add(SqlType.INT);
             integerTypes.add(SqlType.SMALLINT);
