@@ -16,31 +16,17 @@
 #
 
 ###############################
-# Builder stage: package distribution with Maven Daemon
+# Builder stage: package distribution
 ###############################
 FROM maven:3.9.7-eclipse-temurin-17 AS builder
 
 ENV MAVEN_OPTS="-Xmx16g -Xms1g"
-ARG MAVEN_DAEMON_VERSION=1.0.2
 
 WORKDIR /workspace
 COPY . .
 
-# Install build dependencies
-RUN apt-get update && \
-    apt-get install -y curl unzip git && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Maven Daemon (mvnd)
-RUN curl -L "https://github.com/apache/maven-mvnd/releases/download/${MAVEN_DAEMON_VERSION}/maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64.zip" -o mvnd.zip && \
-    unzip mvnd.zip && \
-    mv maven-mvnd-${MAVEN_DAEMON_VERSION}-linux-amd64 /opt/mvnd && \
-    rm mvnd.zip
-
-ENV PATH="/opt/mvnd/bin:${PATH}"
-
 # Package the distribution to produce apache-seatunnel-*-bin.tar.gz
-RUN mvnd -B clean package \
+RUN mvn -B clean package \
     -pl seatunnel-dist -am \
     -D"skip.ui"=true \
     -Dmaven.test.skip=true \

@@ -170,11 +170,16 @@ public class MilvusCatalog implements Catalog {
         checkNotNull(catalogTable, "catalogTable must not be null");
         TableSchema tableSchema = catalogTable.getTableSchema();
         checkNotNull(tableSchema, "tableSchema must not be null");
-        catalogUtils.createTableInternal(tablePath, catalogTable);
-        log.info("create table: {} success", tablePath.getTableName());
-        log.info("create index for table: {}", tablePath.getTableName());
-        catalogUtils.createIndex(tablePath, catalogTable);
-        log.info("create index for table: {} success", tablePath.getTableName());
+        try {
+            catalogUtils.createTableInternal(tablePath, catalogTable);
+            log.info("create table: {} success", tablePath.getTableName());
+            log.info("create index for table: {}", tablePath.getTableName());
+            catalogUtils.createIndex(tablePath, catalogTable);
+            log.info("create index for table: {} success", tablePath.getTableName());
+        } catch (Exception e) {
+            throw new CatalogException(
+                    String.format("Failed to create table %s", tablePath.getTableName()), e);
+        }
     }
 
 

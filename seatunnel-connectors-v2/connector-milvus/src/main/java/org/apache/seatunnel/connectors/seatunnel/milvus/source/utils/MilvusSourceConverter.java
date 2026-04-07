@@ -299,6 +299,9 @@ public class MilvusSourceConverter {
         Map<String, Object> optionsMap = new HashMap<>();
         optionsMap.put(MilvusConstants.IS_NULLABLE, isNullable);
         optionsMap.put(MilvusConstants.DEFAULT_VALUE, fieldSchema.getDefaultValue());
+        if (fieldSchema.getAutoID() != null) {
+            optionsMap.put(MilvusConstants.AUTO_ID, fieldSchema.getAutoID());
+        }
 
         switch (dataType) {
             case Bool:
