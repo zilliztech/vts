@@ -56,7 +56,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.config = config;
         this.stageBucket = stageBucket;
 
-        this.milvusSinkConverter = new MilvusSinkConverter();
+        this.milvusSinkConverter = MilvusSinkConverter.fromConfig(config);
         this.describeCollectionResp = describeCollectionResp;
 
         Gson gson = new Gson();

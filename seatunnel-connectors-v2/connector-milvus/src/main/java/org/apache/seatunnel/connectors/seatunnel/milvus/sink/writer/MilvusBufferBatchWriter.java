@@ -76,7 +76,7 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
         this.partitionName = partitionName;
 
         this.milvusDataCache = new ArrayList<>();
-        this.milvusSinkConverter = new MilvusSinkConverter();
+        this.milvusSinkConverter = MilvusSinkConverter.fromConfig(config);
         this.milvusClient = milvusClient;
 
         this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(describeCollectionResp);

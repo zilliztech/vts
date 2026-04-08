@@ -54,6 +54,11 @@
             <artifactId>milvus-sdk-java-bulkwriter</artifactId>
             <version>2.6.8</version>
         </dependency>
+        <dependency>
+            <groupId>org.locationtech.jts</groupId>
+            <artifactId>jts-core</artifactId>
+            <version>1.20.0</version>
+        </dependency>
 
     </dependencies>
 
@@ -74,8 +79,19 @@
                                 <relocation>
                                     <pattern>com.google</pattern>
                                     <shadedPattern>milvus.com.google</shadedPattern>
+                                </relocation>
+                                <relocation>
                                     <pattern>io.grpc</pattern>
                                     <shadedPattern>milvus.io.grpc</shadedPattern>
+                                </relocation>
+                                <!--
+                                  Shade JTS so that downstream classpaths carrying their
+                                  own JTS version (PostGIS JDBC, GeoTools, etc.) cannot
+                                  collide with the version this connector links against.
+                                -->
+                                <relocation>
+                                    <pattern>org.locationtech.jts</pattern>
+                                    <shadedPattern>milvus.org.locationtech.jts</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
