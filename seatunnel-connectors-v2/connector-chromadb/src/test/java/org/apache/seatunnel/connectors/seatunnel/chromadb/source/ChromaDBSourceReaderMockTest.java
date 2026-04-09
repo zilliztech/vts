@@ -59,6 +59,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests for the Phase-2-only {@link ChromaDBSourceReader}.
+ *
+ * <p>Splits now arrive pre-populated with their ID shard from the enumerator; the reader's only
+ * job is to batch them by {@code batch_size}, fetch full records, and emit. Phase 1 logic no
+ * longer lives in the reader.
+ */
 @ExtendWith(MockitoExtension.class)
 public class ChromaDBSourceReaderMockTest {
 
@@ -106,7 +113,8 @@ public class ChromaDBSourceReaderMockTest {
                         "");
     }
 
-    private ChromaDBSourceReader createReaderWithMockClient(ReadonlyConfig config) throws Exception {
+    private ChromaDBSourceReader createReaderWithMockClient(
+            ReadonlyConfig config, List<String> splitIds) throws Exception {
         when(mockCollector.getCheckpointLock()).thenReturn(checkpointLock);
 
         LinkedHashMap<String, CatalogTable> tables = new LinkedHashMap<>();
@@ -119,14 +127,14 @@ public class ChromaDBSourceReaderMockTest {
 
         reader.addSplits(
                 Collections.singletonList(
-                        new ChromaDBSourceSplit(COLLECTION_ID, catalogTable.getTablePath())));
+                        new ChromaDBSourceSplit(
+                                COLLECTION_ID, catalogTable.getTablePath(), 0L, splitIds)));
         return reader;
     }
 
-    private ReadonlyConfig makeConfig(int idSplitSize, int batchSize) {
+    private ReadonlyConfig makeConfig(int batchSize) {
         Map<String, Object> map = new HashMap<>();
         map.put("url", "http://localhost:8000");
-        map.put("id_split_size", idSplitSize);
         map.put("batch_size", batchSize);
         return ReadonlyConfig.fromMap(map);
     }
@@ -141,7 +149,8 @@ public class ChromaDBSourceReaderMockTest {
     void testCloseReleasesClient() throws Exception {
         LinkedHashMap<String, CatalogTable> tables = new LinkedHashMap<>();
         tables.put(COLLECTION_ID, catalogTable);
-        ChromaDBSourceReader reader = new ChromaDBSourceReader(makeConfig(1000, 100), mockContext, tables);
+        ChromaDBSourceReader reader =
+                new ChromaDBSourceReader(makeConfig(100), mockContext, tables);
         Field clientField = ChromaDBSourceReader.class.getDeclaredField("client");
         clientField.setAccessible(true);
         clientField.set(reader, mockClient);
@@ -152,25 +161,45 @@ public class ChromaDBSourceReaderMockTest {
     // --- Reading with splits ---
 
     @Test
-    void testEmptyCollectionSignalsComplete() throws Exception {
+    void testEmptySplitIdsEmitsNothing() throws Exception {
         when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
-        when(mockClient.getRecords(eq(COLLECTION_ID), any()))
-                .thenReturn(result("{\"ids\":[]}"));
 
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(1000, 100));
+        ChromaDBSourceReader reader =
+                createReaderWithMockClient(makeConfig(100), Collections.emptyList());
         reader.handleNoMoreSplits();
         reader.pollNext(mockCollector);
+        // Second poll should drain and signal no more element
         reader.pollNext(mockCollector);
 
         verify(mockContext, atLeastOnce()).signalNoMoreElement();
         verify(mockCollector, never()).collect(any(SeaTunnelRow.class));
+        // Empty split should not trigger any client call
+        verify(mockClient, never()).getRecords(eq(COLLECTION_ID), any());
     }
 
     @Test
-    void testSingleSplitMultipleBatches() throws Exception {
-        when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
+    void testSingleBatchEmitsAllRows() throws Exception {
         when(mockClient.getRecords(eq(COLLECTION_ID), any()))
-                .thenReturn(result("{\"ids\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}"))
+                .thenReturn(
+                        result(
+                                "{\"ids\":[\"a\",\"b\",\"c\"],\"embeddings\":[[1,2,3],[4,5,6],[7,8,9]],"
+                                        + "\"documents\":[\"d1\",\"d2\",\"d3\"],\"metadatas\":[{},{},{}]}"));
+
+        ChromaDBSourceReader reader =
+                createReaderWithMockClient(makeConfig(100), Arrays.asList("a", "b", "c"));
+        reader.handleNoMoreSplits();
+        reader.pollNext(mockCollector);
+
+        ArgumentCaptor<SeaTunnelRow> captor = ArgumentCaptor.forClass(SeaTunnelRow.class);
+        verify(mockCollector, times(3)).collect(captor.capture());
+        Assertions.assertEquals("a", captor.getAllValues().get(0).getField(0));
+        Assertions.assertEquals("c", captor.getAllValues().get(2).getField(0));
+    }
+
+    @Test
+    void testMultipleBatchesForLargeSplit() throws Exception {
+        // batch_size=2, split has 5 IDs → 3 client calls: [a,b], [c,d], [e]
+        when(mockClient.getRecords(eq(COLLECTION_ID), any()))
                 .thenReturn(
                         result(
                                 "{\"ids\":[\"a\",\"b\"],\"embeddings\":[[1,2,3],[4,5,6]],"
@@ -184,7 +213,9 @@ public class ChromaDBSourceReaderMockTest {
                                 "{\"ids\":[\"e\"],\"embeddings\":[[13,14,15]],"
                                         + "\"documents\":[\"d5\"],\"metadatas\":[{}]}"));
 
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(1000, 2));
+        ChromaDBSourceReader reader =
+                createReaderWithMockClient(
+                        makeConfig(2), Arrays.asList("a", "b", "c", "d", "e"));
         reader.handleNoMoreSplits();
         reader.pollNext(mockCollector);
 
@@ -195,42 +226,25 @@ public class ChromaDBSourceReaderMockTest {
     }
 
     @Test
-    void testSplitTerminatesOnEmpty() throws Exception {
-        when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
-        when(mockClient.getRecords(eq(COLLECTION_ID), any()))
-                .thenReturn(result("{\"ids\":[\"a\"]}"))
-                .thenReturn(
-                        result(
-                                "{\"ids\":[\"a\"],\"embeddings\":[[1,2,3]],"
-                                        + "\"documents\":[\"d1\"],\"metadatas\":[{}]}"));
+    void testNullResponseThrows() throws Exception {
+        when(mockClient.getRecords(eq(COLLECTION_ID), any())).thenReturn(null);
 
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(10, 100));
+        ChromaDBSourceReader reader =
+                createReaderWithMockClient(makeConfig(100), Arrays.asList("a"));
         reader.handleNoMoreSplits();
-        reader.pollNext(mockCollector);
 
-        verify(mockCollector, times(1)).collect(any(SeaTunnelRow.class));
-    }
-
-    @Test
-    void testNullIdsTerminates() throws Exception {
-        when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
-        when(mockClient.getRecords(eq(COLLECTION_ID), any())).thenReturn(result("{}"));
-
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(10, 100));
-        reader.handleNoMoreSplits();
-        reader.pollNext(mockCollector);
-
-        verify(mockCollector, never()).collect(any(SeaTunnelRow.class));
+        Assertions.assertThrows(
+                ChromaDBConnectorException.class, () -> reader.pollNext(mockCollector));
     }
 
     @Test
     void testEmitRowsWithNullOptionalFields() throws Exception {
-        when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
+        // Phase 2 response only has ids, no embeddings/docs/metadatas
         when(mockClient.getRecords(eq(COLLECTION_ID), any()))
-                .thenReturn(result("{\"ids\":[\"a\",\"b\"]}"))
                 .thenReturn(result("{\"ids\":[\"a\",\"b\"]}"));
 
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(1000, 100));
+        ChromaDBSourceReader reader =
+                createReaderWithMockClient(makeConfig(100), Arrays.asList("a", "b"));
         reader.handleNoMoreSplits();
         reader.pollNext(mockCollector);
 
@@ -243,50 +257,67 @@ public class ChromaDBSourceReaderMockTest {
         Assertions.assertNull(row.getField(2));
     }
 
-    // --- Multi id-split: first split is exactly id_split_size, triggers second split ---
-
     @Test
-    void testMultipleIdSplits() throws Exception {
-        when(mockContext.getBoundedness()).thenReturn(Boundedness.BOUNDED);
-        // id_split_size=3: first split returns exactly 3 IDs → triggers second split
-        when(mockClient.getRecords(eq(COLLECTION_ID), any()))
-                // Phase 1, split 1: scan IDs (offset=0, limit=3) → exactly 3
-                .thenReturn(result("{\"ids\":[\"a\",\"b\",\"c\"]}"))
-                // Phase 2, split 1: batch fetch (ids=[a,b,c])
-                .thenReturn(
-                        result(
-                                "{\"ids\":[\"a\",\"b\",\"c\"],\"embeddings\":[[1,2,3],[4,5,6],[7,8,9]],"
-                                        + "\"documents\":[\"d1\",\"d2\",\"d3\"],\"metadatas\":[{},{},{}]}"))
-                // Phase 1, split 2: scan IDs (offset=3, limit=3) → 2 (less than 3 → last split)
-                .thenReturn(result("{\"ids\":[\"d\",\"e\"]}"))
-                // Phase 2, split 2: batch fetch (ids=[d,e])
-                .thenReturn(
-                        result(
-                                "{\"ids\":[\"d\",\"e\"],\"embeddings\":[[10,11,12],[13,14,15]],"
-                                        + "\"documents\":[\"d4\",\"d5\"],\"metadatas\":[{},{}]}"));
+    void testEmptyQueueSendsSplitRequest() throws Exception {
+        LinkedHashMap<String, CatalogTable> tables = new LinkedHashMap<>();
+        tables.put(COLLECTION_ID, catalogTable);
+        ChromaDBSourceReader reader =
+                new ChromaDBSourceReader(makeConfig(100), mockContext, tables);
+        Field clientField = ChromaDBSourceReader.class.getDeclaredField("client");
+        clientField.setAccessible(true);
+        clientField.set(reader, mockClient);
 
-        ChromaDBSourceReader reader = createReaderWithMockClient(makeConfig(3, 100));
-        reader.handleNoMoreSplits();
+        when(mockCollector.getCheckpointLock()).thenReturn(checkpointLock);
+
+        // No splits, noMoreSplit not yet signaled → reader should ask for more
         reader.pollNext(mockCollector);
 
-        ArgumentCaptor<SeaTunnelRow> captor = ArgumentCaptor.forClass(SeaTunnelRow.class);
-        verify(mockCollector, times(5)).collect(captor.capture());
-        Assertions.assertEquals("a", captor.getAllValues().get(0).getField(0));
-        Assertions.assertEquals("e", captor.getAllValues().get(4).getField(0));
+        verify(mockContext).sendSplitRequest();
     }
 
-    // --- Config validation: zero/negative values ---
+    @Test
+    void testAddSplitsResetsSplitRequestOutstanding() throws Exception {
+        LinkedHashMap<String, CatalogTable> tables = new LinkedHashMap<>();
+        tables.put(COLLECTION_ID, catalogTable);
+        ChromaDBSourceReader reader =
+                new ChromaDBSourceReader(makeConfig(100), mockContext, tables);
+        Field clientField = ChromaDBSourceReader.class.getDeclaredField("client");
+        clientField.setAccessible(true);
+        clientField.set(reader, mockClient);
+
+        when(mockCollector.getCheckpointLock()).thenReturn(checkpointLock);
+        when(mockClient.getRecords(eq(COLLECTION_ID), any()))
+                .thenReturn(result("{\"ids\":[\"a\"]}"));
+
+        // First poll: empty queue → sendSplitRequest
+        reader.pollNext(mockCollector);
+        verify(mockContext, times(1)).sendSplitRequest();
+
+        // addSplits should reset the outstanding flag and process the split
+        reader.addSplits(
+                Collections.singletonList(
+                        new ChromaDBSourceSplit(
+                                COLLECTION_ID,
+                                catalogTable.getTablePath(),
+                                0L,
+                                Collections.singletonList("a"))));
+        reader.pollNext(mockCollector);
+
+        // After processing, queue is empty again → one more sendSplitRequest
+        reader.pollNext(mockCollector);
+        verify(mockContext, times(2)).sendSplitRequest();
+    }
+
+    // --- Config validation ---
 
     @Test
     void testZeroBatchSizeThrows() {
         LinkedHashMap<String, CatalogTable> tables = new LinkedHashMap<>();
         tables.put(COLLECTION_ID, catalogTable);
         ChromaDBSourceReader reader =
-                new ChromaDBSourceReader(makeConfig(1000, 0), mockContext, tables);
+                new ChromaDBSourceReader(makeConfig(0), mockContext, tables);
 
-        Assertions.assertThrows(
-                ChromaDBConnectorException.class,
-                () -> reader.open());
+        Assertions.assertThrows(ChromaDBConnectorException.class, reader::open);
     }
 
     @Test
@@ -301,8 +332,6 @@ public class ChromaDBSourceReaderMockTest {
         tables.put(COLLECTION_ID, catalogTable);
         ChromaDBSourceReader reader = new ChromaDBSourceReader(config, mockContext, tables);
 
-        Assertions.assertThrows(
-                ChromaDBConnectorException.class,
-                () -> reader.open());
+        Assertions.assertThrows(ChromaDBConnectorException.class, reader::open);
     }
 }
