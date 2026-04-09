@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -66,7 +67,7 @@ public class CatalogUtilsTest {
     @Test
     void testCollectSourceFieldNames_regularColumns() {
         CatalogTable table = buildCatalogTable(
-                List.of(
+                Arrays.asList(
                         buildColumn("id", BasicType.LONG_TYPE, null),
                         buildColumn("name", BasicType.STRING_TYPE, null),
                         buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null)
@@ -75,7 +76,7 @@ public class CatalogUtilsTest {
         );
 
         Set<String> result = catalogUtils.collectSourceFieldNames(table);
-        Assertions.assertEquals(Set.of("id", "name", "vec"), result);
+        Assertions.assertEquals(setOf("id", "name", "vec"), result);
     }
 
     @Test
@@ -84,7 +85,7 @@ public class CatalogUtilsTest {
         metaOptions.put(CommonOptions.METADATA.getName(), true);
 
         CatalogTable table = buildCatalogTable(
-                List.of(
+                Arrays.asList(
                         buildColumn("id", BasicType.LONG_TYPE, null),
                         buildColumn("$meta", BasicType.STRING_TYPE, metaOptions)
                 ),
@@ -92,7 +93,7 @@ public class CatalogUtilsTest {
         );
 
         Set<String> result = catalogUtils.collectSourceFieldNames(table);
-        Assertions.assertEquals(Set.of("id"), result);
+        Assertions.assertEquals(setOf("id"), result);
     }
 
     @Test
@@ -101,7 +102,7 @@ public class CatalogUtilsTest {
         metaOptions.put(CommonOptions.METADATA.getName(), false);
 
         CatalogTable table = buildCatalogTable(
-                List.of(
+                Arrays.asList(
                         buildColumn("id", BasicType.LONG_TYPE, null),
                         buildColumn("dynamic", BasicType.STRING_TYPE, metaOptions)
                 ),
@@ -109,18 +110,18 @@ public class CatalogUtilsTest {
         );
 
         Set<String> result = catalogUtils.collectSourceFieldNames(table);
-        Assertions.assertEquals(Set.of("id", "dynamic"), result);
+        Assertions.assertEquals(setOf("id", "dynamic"), result);
     }
 
     @Test
     void testCollectSourceFieldNames_nullOptions() {
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("id", BasicType.LONG_TYPE, null)),
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)),
                 new HashMap<>()
         );
 
         Set<String> result = catalogUtils.collectSourceFieldNames(table);
-        Assertions.assertEquals(Set.of("id"), result);
+        Assertions.assertEquals(setOf("id"), result);
     }
 
     // ========================
@@ -131,7 +132,7 @@ public class CatalogUtilsTest {
     void testCollectTargetFieldNames_noFieldSchemaConfig_fallsBackToSource() {
         // catalogUtils has empty fieldSchemaMap (default setUp)
         CatalogTable table = buildCatalogTable(
-                List.of(
+                Arrays.asList(
                         buildColumn("id", BasicType.LONG_TYPE, null),
                         buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null)
                 ),
@@ -139,7 +140,7 @@ public class CatalogUtilsTest {
         );
 
         Set<String> result = catalogUtils.collectTargetFieldNames(table);
-        Assertions.assertEquals(Set.of("id", "vec"), result);
+        Assertions.assertEquals(setOf("id", "vec"), result);
     }
 
     @Test
@@ -151,12 +152,12 @@ public class CatalogUtilsTest {
         fieldSchema.put("data_type", 5); // Int64
 
         Map<String, Object> configMap = new HashMap<>();
-        configMap.put("field_schema", List.of(fieldSchema));
+        configMap.put("field_schema", Arrays.asList(fieldSchema));
         ReadonlyConfig config = ReadonlyConfig.fromMap(configMap);
         CatalogUtils utilsWithSchema = new CatalogUtils(null, config);
 
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("id", BasicType.LONG_TYPE, null)),
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)),
                 new HashMap<>()
         );
 
@@ -177,8 +178,8 @@ public class CatalogUtilsTest {
         indexInfo.put("indexType", "HNSW");
         indexInfo.put("metricType", "COSINE");
 
-        Set<String> targetFields = Set.of("id", "vec");
-        Set<String> sourceFields = Set.of("id", "vec");
+        Set<String> targetFields = setOf("id", "vec");
+        Set<String> sourceFields = setOf("id", "vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, sourceFields, false, gson, extraParamsType);
@@ -198,8 +199,8 @@ public class CatalogUtilsTest {
         indexInfo.put("indexType", "HNSW");
         indexInfo.put("metricType", "L2");
 
-        Set<String> targetFields = Set.of("id", "new_vec");
-        Set<String> sourceFields = Set.of("id", "old_vec", "new_vec");
+        Set<String> targetFields = setOf("id", "new_vec");
+        Set<String> sourceFields = setOf("id", "old_vec", "new_vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, sourceFields, false, gson, extraParamsType);
@@ -214,8 +215,8 @@ public class CatalogUtilsTest {
         indexInfo.put("indexName", "dyn_idx");
         indexInfo.put("indexType", "INVERTED");
 
-        Set<String> targetFields = Set.of("id", "vec");
-        Set<String> sourceFields = Set.of("id", "vec");
+        Set<String> targetFields = setOf("id", "vec");
+        Set<String> sourceFields = setOf("id", "vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, sourceFields, true, gson, extraParamsType);
@@ -231,8 +232,8 @@ public class CatalogUtilsTest {
         indexInfo.put("indexName", "dyn_idx");
         indexInfo.put("indexType", "INVERTED");
 
-        Set<String> targetFields = Set.of("id", "vec");
-        Set<String> sourceFields = Set.of("id", "vec");
+        Set<String> targetFields = setOf("id", "vec");
+        Set<String> sourceFields = setOf("id", "vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, sourceFields, false, gson, extraParamsType);
@@ -248,7 +249,7 @@ public class CatalogUtilsTest {
         indexInfo.put("indexType", "HNSW");
 
         Assertions.assertThrows(MilvusConnectorException.class, () ->
-                catalogUtils.buildIndexParam(indexInfo, Set.of("id"), Set.of("id"), false, gson, extraParamsType));
+                catalogUtils.buildIndexParam(indexInfo, setOf("id"), setOf("id"), false, gson, extraParamsType));
     }
 
     @Test
@@ -278,7 +279,7 @@ public class CatalogUtilsTest {
         indexInfo.put("indexName", "trie_idx");
         indexInfo.put("indexType", "Trie");
 
-        Set<String> targetFields = Set.of("varchar_field");
+        Set<String> targetFields = setOf("varchar_field");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
@@ -296,7 +297,7 @@ public class CatalogUtilsTest {
         indexInfo.put("indexType", "NONEXISTENT_TYPE");
         indexInfo.put("metricType", "L2");
 
-        Set<String> targetFields = Set.of("vec");
+        Set<String> targetFields = setOf("vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
@@ -313,7 +314,7 @@ public class CatalogUtilsTest {
         indexInfo.put("indexName", "scalar_idx");
         indexInfo.put("indexType", "INVERTED");
 
-        Set<String> targetFields = Set.of("scalar_field");
+        Set<String> targetFields = setOf("scalar_field");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
@@ -335,7 +336,7 @@ public class CatalogUtilsTest {
         indexInfo.put("metricType", "L2");
         indexInfo.put("extraParams", gson.toJson(extraParams));
 
-        Set<String> targetFields = Set.of("vec");
+        Set<String> targetFields = setOf("vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
@@ -353,7 +354,7 @@ public class CatalogUtilsTest {
         indexInfo.put("indexType", "HNSW");
         indexInfo.put("extraParams", "");
 
-        Set<String> targetFields = Set.of("vec");
+        Set<String> targetFields = setOf("vec");
 
         IndexParam result = catalogUtils.buildIndexParam(
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
@@ -368,7 +369,7 @@ public class CatalogUtilsTest {
     @Test
     void testParseIndexParamsFromSource_noIndexList() {
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("id", BasicType.LONG_TYPE, null)),
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)),
                 new HashMap<>()
         );
 
@@ -382,7 +383,7 @@ public class CatalogUtilsTest {
         options.put(MilvusConstants.INDEX_LIST, "[]");
 
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("id", BasicType.LONG_TYPE, null)),
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)),
                 options
         );
 
@@ -418,12 +419,12 @@ public class CatalogUtilsTest {
         fieldSchema.put("dimension", 128);
 
         Map<String, Object> configMap = new HashMap<>();
-        configMap.put("field_schema", List.of(fieldSchema));
+        configMap.put("field_schema", Arrays.asList(fieldSchema));
         ReadonlyConfig config = ReadonlyConfig.fromMap(configMap);
         CatalogUtils utilsWithSchema = new CatalogUtils(null, config);
 
         CatalogTable table = buildCatalogTable(
-                List.of(
+                Arrays.asList(
                         buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null),
                         buildColumn("old_field", BasicType.STRING_TYPE, null)
                 ),
@@ -450,7 +451,7 @@ public class CatalogUtilsTest {
         options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD, "true");
 
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("id", BasicType.LONG_TYPE, null)),
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)),
                 options
         );
 
@@ -478,7 +479,7 @@ public class CatalogUtilsTest {
         options.put(MilvusConstants.INDEX_LIST, gson.toJson(indexes));
 
         CatalogTable table = buildCatalogTable(
-                List.of(buildColumn("name", BasicType.STRING_TYPE, null)),
+                Arrays.asList(buildColumn("name", BasicType.STRING_TYPE, null)),
                 options
         );
 
@@ -508,5 +509,11 @@ public class CatalogUtilsTest {
                 new ArrayList<>(),
                 ""
         );
+    }
+
+    /** Java 8-compatible substitute for {@code Set.of(...)}; preserves insertion order is not required here. */
+    @SafeVarargs
+    private static <T> Set<T> setOf(T... items) {
+        return new HashSet<>(Arrays.asList(items));
     }
 }

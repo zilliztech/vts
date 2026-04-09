@@ -21,16 +21,19 @@ import com.google.gson.JsonObject;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
+import org.apache.seatunnel.api.table.type.GeometryType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 
 public class MilvusSinkConverterTest {
@@ -225,6 +228,190 @@ public class MilvusSinkConverterTest {
         Assertions.assertEquals("null_time", json.get("name").getAsString());
         // null sub-field should be serialized as JsonNull
         Assertions.assertTrue(json.get("event_time").isJsonNull());
+    }
+
+    // --- Geometry: in practice every VTS source connector emits Geometry as
+    //     String. The sink tests below therefore only cover the String path
+    //     (PASSTHROUGH and PARSE) and the contract that PASSTHROUGH returns
+    //     whatever it gets, as-is. Byte-level WKB tests live alongside
+    //     GeometryConverter.convertWkbBytes in the geometry-specific test class.
+
+    @Test
+    public void testConvertByMilvusType_Geometry_StringWkt() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Object result = converter.convertByMilvusType(schema, "POINT (1 2)");
+        Assertions.assertEquals("POINT (1 2)", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Geometry_String3DWktPassthrough() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Object result = converter.convertByMilvusType(schema, "POINT Z (1 2 3)");
+        Assertions.assertEquals("POINT Z (1 2 3)", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Geometry_NullStaysNull() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Assertions.assertNull(converter.convertByMilvusType(schema, null));
+    }
+
+    @Test
+    public void testConvertByMilvusType_Geometry_PassthroughReturnsAnyValueAsIs() {
+        // The core PASSTHROUGH contract: whatever arrives, goes out unchanged.
+        // Matches the original connector behavior (literal `return value;`)
+        // before any geometry conversion code was added.
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("k", "v");
+        Assertions.assertSame(map, converter.convertByMilvusType(schema, map));
+        Assertions.assertEquals(42, converter.convertByMilvusType(schema, 42));
+        Assertions.assertEquals("   not trimmed   ",
+                converter.convertByMilvusType(schema, "   not trimmed   "));
+    }
+
+    @Test
+    public void testConvertByMilvusType_Geometry_ParseMode_UnsupportedTypeThrows() {
+        // Under PARSE mode, non-String values are rejected loudly.
+        MilvusSinkConverter parseConverter = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> parseConverter.convertByMilvusType(schema, new HashMap<String, Object>()));
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> parseConverter.convertByMilvusType(schema, 42));
+    }
+
+    @Test
+    public void testConvertBySeaTunnelType_Geometry_StringWkt() {
+        Object result = converter.convertBySeaTunnelType(
+                GeometryType.GEOMETRY_TYPE, false, "POINT (1 2)");
+        Assertions.assertEquals("POINT (1 2)", result);
+    }
+
+    @Test
+    public void testConvertBySeaTunnelType_Geometry_PassthroughReturnsAnyValueAsIs() {
+        HashMap<String, Object> map = new HashMap<>();
+        Assertions.assertSame(map, converter.convertBySeaTunnelType(
+                GeometryType.GEOMETRY_TYPE, false, map));
+    }
+
+    @Test
+    public void testConvertBySeaTunnelType_Geometry_ParseMode_UnsupportedTypeThrows() {
+        MilvusSinkConverter parseConverter = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> parseConverter.convertBySeaTunnelType(
+                        GeometryType.GEOMETRY_TYPE, false, new HashMap<String, Object>()));
+    }
+
+    // --- Geometry coordinate-string ordering: configurable per converter instance ---
+    //
+    // All "lat,lon" / "lon,lat" tests below require PARSE mode — bare numeric
+    // strings are only interpreted in PARSE mode. The default no-arg
+    // MilvusSinkConverter (PASSTHROUGH mode) would pass them to Milvus
+    // unchanged, where Milvus would reject them as malformed WKT.
+
+    private static MilvusSinkConverter parseConverterWith(GeometryConverter.CoordinateOrder order) {
+        return new MilvusSinkConverter(new GeometryConverter(GeometryConverter.ConvertMode.PARSE, order));
+    }
+
+    @Test
+    public void testGeometry_DefaultParseOrder_LatLon() {
+        // PARSE mode + default LAT_LON order (Elasticsearch convention)
+        MilvusSinkConverter parseConverter = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        // "31.23,121.47" → lat=31.23, lon=121.47 → POINT (lon lat)
+        Object result = parseConverter.convertByMilvusType(schema, "31.23,121.47");
+        Assertions.assertEquals("POINT (121.47 31.23)", result);
+    }
+
+    @Test
+    public void testGeometry_LonLatOrder_OptIn() {
+        // Opt-in lon,lat ordering (e.g. for PostgreSQL text point sources)
+        MilvusSinkConverter lonLatConverter = parseConverterWith(GeometryConverter.CoordinateOrder.LON_LAT);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        // "121.47,31.23" → lon=121.47, lat=31.23 → POINT (lon lat)
+        Object result = lonLatConverter.convertByMilvusType(schema, "121.47,31.23");
+        Assertions.assertEquals("POINT (121.47 31.23)", result);
+    }
+
+    @Test
+    public void testGeometry_OrderAffectsBareStringOnly() {
+        // Same input under different orders → opposite coordinates,
+        // proving the option is plumbed all the way through
+        MilvusSinkConverter latLon = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        MilvusSinkConverter lonLat = parseConverterWith(GeometryConverter.CoordinateOrder.LON_LAT);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Assertions.assertEquals("POINT (20 10)", latLon.convertByMilvusType(schema, "10,20"));
+        Assertions.assertEquals("POINT (10 20)", lonLat.convertByMilvusType(schema, "10,20"));
+    }
+
+    @Test
+    public void testGeometry_OrderDoesNotAffectWkt() {
+        // WKT is unambiguous and pass-through — order option must NOT touch it
+        MilvusSinkConverter lonLat = parseConverterWith(GeometryConverter.CoordinateOrder.LON_LAT);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Assertions.assertEquals("POINT (10 20)", lonLat.convertByMilvusType(schema, "POINT (10 20)"));
+    }
+
+    @Test
+    public void testGeometry_OrderDoesNotAffectGeoJson() {
+        // GeoJSON has its own canonical order ([lon,lat]) — option must not touch it
+        MilvusSinkConverter latLon = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        // GeoJSON [10,20] is always (lon=10, lat=20)
+        Object result = latLon.convertByMilvusType(schema,
+                "{\"type\":\"Point\",\"coordinates\":[10,20]}");
+        Assertions.assertEquals("POINT (10 20)", result);
+    }
+
+    // --- ConvertMode: production default is PASSTHROUGH ---
+
+    @Test
+    public void testGeometry_DefaultMode_IsPassthrough() {
+        // The no-arg MilvusSinkConverter() must use PASSTHROUGH mode so that
+        // existing Milvus → Milvus configs continue to work without any change.
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        // GeoJSON-shaped string in PASSTHROUGH mode is NOT converted — it
+        // flows to the destination unchanged. Proves the no-arg converter
+        // is not running the parse logic.
+        String geoJson = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
+        Object result = converter.convertByMilvusType(schema, geoJson);
+        Assertions.assertEquals(geoJson, result,
+                "Default no-arg converter must be PASSTHROUGH (input returned unchanged)");
+    }
+
+    @Test
+    public void testGeometry_PassthroughMode_DoesNotStripSrid() {
+        // EWKT SRID prefix is NOT stripped in PASSTHROUGH — Milvus would reject
+        // this input, but VTS hands it over byte-for-byte. The point of the
+        // test is to lock in the "zero processing" contract.
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        String ewkt = "SRID=4326;POINT(1 2)";
+        Object result = converter.convertByMilvusType(schema, ewkt);
+        Assertions.assertEquals(ewkt, result,
+                "PASSTHROUGH must not strip SRID — that's a PARSE-mode behavior");
+    }
+
+    @Test
+    public void testGeometry_ParseMode_DoesStripSrid() {
+        // The exact same input under PARSE mode strips the SRID prefix.
+        MilvusSinkConverter parseConverter = parseConverterWith(GeometryConverter.CoordinateOrder.LAT_LON);
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        Object result = parseConverter.convertByMilvusType(schema, "SRID=4326;POINT(1 2)");
+        Assertions.assertEquals("POINT(1 2)", result);
     }
 
     // --- FloatVector from Double[] input ---

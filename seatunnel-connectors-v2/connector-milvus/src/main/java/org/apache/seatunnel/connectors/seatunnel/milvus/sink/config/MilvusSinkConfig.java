@@ -202,4 +202,61 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .mapType()
                         .defaultValue(new HashMap<>())
                         .withDescription("bulk writer config");
+
+        /**
+         * How to interpret bare "x,y" coordinate strings flowing into a Geometry field.
+         *
+         * <p>This only applies when the source emits a numeric pair like {@code "31.23,121.47"}
+         * with no surrounding format markers (no WKT keyword, no JSON braces). Different
+         * data sources disagree on the order:
+         * <ul>
+         *   <li>{@code lat_lon} (default): first number is latitude — Elasticsearch geo_point string convention</li>
+         *   <li>{@code lon_lat}: first number is longitude — some PostgreSQL/JDBC text representations</li>
+         * </ul>
+         *
+         * <p>VTS does not auto-detect the order; misinterpretation silently swaps every
+         * coordinate. Pick the value that matches your source.
+         *
+         * <p>Only consulted when {@link #GEOMETRY_CONVERT_MODE} is {@code parse}.
+         */
+        public static final Option<String> GEOMETRY_STRING_COORD_ORDER = Options.key("geometry_string_coord_order")
+                        .stringType()
+                        .defaultValue("lat_lon")
+                        .withDescription(
+                                        "Order of bare \"x,y\" coordinate strings flowing into a Geometry field. "
+                                                        + "Allowed values: 'lat_lon' (default, Elasticsearch geo_point string convention), "
+                                                        + "'lon_lat'. Only affects bare numeric pairs — WKT/GeoJSON/WKB inputs are unaffected. "
+                                                        + "Only consulted when geometry_convert_mode = 'parse'.");
+
+        /**
+         * How VTS handles String inputs for Geometry fields.
+         *
+         * <ul>
+         *   <li>{@code passthrough} (default): hand the string to Milvus byte-for-byte.
+         *     No trim, no SRID strip, no format detection. Use this when the source
+         *     already produces destination-compatible WKT — Milvus → Milvus,
+         *     PostgreSQL with ST_AsText, or any custom JDBC source whose query
+         *     produces standard WKT. Zero per-record overhead.</li>
+         *   <li>{@code parse}: detect and convert WKT / EWKT (SRID strip) / GeoJSON /
+         *     WKB hex / ES geo_point object|array|string. Use this when the source
+         *     produces non-WKT formats — Elasticsearch geo_point or geo_shape,
+         *     PostgreSQL with ST_AsEWKT, etc.</li>
+         * </ul>
+         *
+         * <p>Note: ByteBuffer (raw WKB) Geometry input is always processed regardless
+         * of this setting because Milvus does not accept raw WKB bytes — they must
+         * be converted to WKT before insert.
+         */
+        public static final Option<String> GEOMETRY_CONVERT_MODE = Options.key("geometry_convert_mode")
+                        .stringType()
+                        .defaultValue("passthrough")
+                        .withDescription(
+                                        "How VTS handles String inputs for Geometry fields. "
+                                                        + "'passthrough' (default): hand the string to Milvus unchanged — use when "
+                                                        + "the source already produces destination-compatible WKT (Milvus → Milvus, "
+                                                        + "PostgreSQL with ST_AsText, etc.). "
+                                                        + "'parse': detect and convert from WKT/EWKT/GeoJSON/WKB hex/ES geo_point "
+                                                        + "variants — use when the source produces non-WKT formats (Elasticsearch "
+                                                        + "geo_point/geo_shape, PostgreSQL with ST_AsEWKT). "
+                                                        + "ByteBuffer (raw WKB) input is always processed regardless of this setting.");
 }
