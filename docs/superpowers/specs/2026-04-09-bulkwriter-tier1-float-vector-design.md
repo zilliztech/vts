@@ -40,7 +40,7 @@ This design specifies **Iteration 1** of a multi-step optimization plan: replace
 
 ### Code Change
 
-Single file: `src/main/java/io/milvus/param/ParamUtils.java`, inside `checkFieldValue`, the `case FloatVector` branch.
+Single file: `sdk-core/src/main/java/io/milvus/param/ParamUtils.java`, inside `checkFieldValue`, the `case FloatVector` branch. (The upstream `milvus-sdk-java` v2.6.8 repo is a multi-module Maven project; the `io.milvus.param` package lives in the `sdk-core` module, which the `sdk-bulkwriter` module transitively depends on.)
 
 **Before:**
 
