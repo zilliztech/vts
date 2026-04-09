@@ -100,6 +100,7 @@ case FloatVector: {
   - `IllegalStateException` — element is not a `JsonPrimitive` (e.g., nested array, object).
   - `UnsupportedOperationException` — element is `JsonNull`.
   All three are wrapped in a `ParamException` with the same `"Unable to convert JsonArray to List<Float> for field '%s'..."` prefix so error handling upstream stays identical.
+- **Incidental fix:** the new code uses `e.getMessage()` directly, which avoids a latent NPE in the upstream code — the original `e.getCause().getMessage()` would NPE if `JsonSyntaxException.getCause()` was null. The new exception types are thrown directly (not wrapped), so no `getCause()` chain is needed.
 
 ### Deliberate Non-Changes
 
@@ -180,7 +181,9 @@ Baseline comparison: the unmodified `2.6.8` artifact remains in `~/.m2` untouche
 Iteration 1 is done when:
 
 1. `~/work/milvus-sdk-java-vts/` exists with the `vts/float-vector-fast-path` branch containing the version bump + code change commits.
-2. `~/.m2/repository/io/milvus/milvus-sdk-java-bulkwriter/2.6.8-vts.1/milvus-sdk-java-bulkwriter-2.6.8-vts.1.jar` is present.
+2. Both patched artifacts are present in `~/.m2/repository/io/milvus/`:
+   - `milvus-sdk-java/2.6.8-vts.1/milvus-sdk-java-2.6.8-vts.1.jar` (the core module — this is where the patched `ParamUtils` class lives)
+   - `milvus-sdk-java-bulkwriter/2.6.8-vts.1/milvus-sdk-java-bulkwriter-2.6.8-vts.1.jar`
 3. `seatunnel-connectors-v2/connector-milvus/pom.xml` has the two version bumps applied (uncommitted).
 4. VTS builds successfully with `mvnd clean package -pl :seatunnel-dist -am -D"skip.ui"=true -Dmaven.test.skip=true -Prelease`.
 5. Handoff summary has been delivered to the user.
