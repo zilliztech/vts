@@ -43,6 +43,9 @@ import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
@@ -51,11 +54,13 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class MilvusSinkConverter {
     private static final Gson gson = new Gson();
 
@@ -68,16 +73,19 @@ public class MilvusSinkConverter {
      * file; it lives entirely on {@code GeometryConverter}.
      */
     private final GeometryConverter geometryConverter;
+    private final Map<String, ZoneId> fieldTimezoneOverrides;
 
     public MilvusSinkConverter() {
-        // Matches the production default (GEOMETRY_CONVERT_MODE = "passthrough"):
-        // Geometry strings flow byte-for-byte to Milvus. Tests that need the
-        // parsing path should construct with new MilvusSinkConverter(GeometryConverter.PARSE).
-        this(GeometryConverter.PASSTHROUGH);
+        this(GeometryConverter.PASSTHROUGH, Collections.emptyMap());
     }
 
     public MilvusSinkConverter(GeometryConverter geometryConverter) {
+        this(geometryConverter, Collections.emptyMap());
+    }
+
+    public MilvusSinkConverter(GeometryConverter geometryConverter, Map<String, ZoneId> fieldTimezoneOverrides) {
         this.geometryConverter = geometryConverter;
+        this.fieldTimezoneOverrides = fieldTimezoneOverrides;
     }
 
     /**
@@ -87,7 +95,31 @@ public class MilvusSinkConverter {
      * they need without polluting the writer with sub-domain knowledge.
      */
     public static MilvusSinkConverter fromConfig(ReadonlyConfig config) {
-        return new MilvusSinkConverter(GeometryConverter.fromConfig(config));
+        GeometryConverter geo = GeometryConverter.fromConfig(config);
+        Map<String, ZoneId> tzOverrides = parseFieldTimezones(config);
+        return new MilvusSinkConverter(geo, tzOverrides);
+    }
+
+    private static Map<String, ZoneId> parseFieldTimezones(ReadonlyConfig config) {
+        List<Object> rawFieldSchema = config.get(MilvusSinkConfig.FIELD_SCHEMA);
+        if (rawFieldSchema == null || rawFieldSchema.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(
+                gson.toJson(rawFieldSchema),
+                new TypeToken<List<MilvusFieldSchema>>() {}.getType());
+        Map<String, ZoneId> result = new HashMap<>();
+        for (MilvusFieldSchema fs : fieldSchemaList) {
+            if (fs.getTimezone() != null && !fs.getTimezone().isEmpty()) {
+                String name = fs.getEffectiveFieldName();
+                if (name != null) {
+                    ZoneId zone = ZoneId.of(fs.getTimezone());
+                    result.put(name, zone);
+                    log.info("Milvus field '{}' naive-to-aware timezone: {}", name, zone);
+                }
+            }
+        }
+        return result;
     }
 
     public Object convertBySeaTunnelType(
@@ -485,24 +517,39 @@ public class MilvusSinkConverter {
             case Timestamptz:
                 // Milvus SDK requires Timestamptz as ISO 8601 String format (e.g., "2024-01-19T11:30:45Z")
                 // Reference: Milvus ParamUtils.java line 430+ requires String type for Timestamptz
+                ZoneId tzOverride = fieldTimezoneOverrides.get(fieldSchema.getName());
                 if (value instanceof java.sql.Timestamp) {
-                    // Convert java.sql.Timestamp to ISO 8601 string (UTC)
+                    // java.sql.Timestamp internally holds epoch millis (an absolute instant).
+                    // toInstant() is always correct — per-field timezone does not apply.
                     return ((java.sql.Timestamp) value).toInstant().toString();
                 } else if (value instanceof LocalDateTime) {
-                    // Convert LocalDateTime (systemDefault) to ISO 8601 string
-                    return ((LocalDateTime) value).atZone(ZoneId.systemDefault()).toInstant().toString();
+                    ZoneId zone = tzOverride != null ? tzOverride : ZoneId.systemDefault();
+                    return ((LocalDateTime) value).atZone(zone).toInstant().toString();
                 } else if (value instanceof OffsetDateTime) {
-                    // Convert OffsetDateTime to ISO 8601 string (preserves timezone)
+                    // OffsetDateTime already carries offset — toInstant() is always correct.
+                    // Per-field timezone does not apply.
                     return ((OffsetDateTime) value).toInstant().toString();
                 } else if (value instanceof String) {
-                    // Already a string - validate and/or convert to ISO 8601 format
-                    String strValue = value.toString();
-                    // Try to parse and normalize to ISO 8601
+                    String strValue = value.toString().trim();
+                    if (tzOverride != null) {
+                        // User explicitly configured timezone — parse as naive wall-clock
+                        // and apply the configured zone, consistent with LocalDateTime path.
+                        // Timestamp.valueOf only accepts "yyyy-MM-dd HH:mm:ss[.fff]" format,
+                        // so strings with timezone info (Z, +08:00, etc.) naturally fail
+                        // and pass through as-is.
+                        try {
+                            LocalDateTime ldt = java.sql.Timestamp.valueOf(
+                                    strValue.replace('T', ' ')).toLocalDateTime();
+                            return ldt.atZone(tzOverride).toInstant().toString();
+                        } catch (IllegalArgumentException e) {
+                            return strValue;
+                        }
+                    }
+                    // No timezone override — original behavior
                     try {
                         java.sql.Timestamp ts = java.sql.Timestamp.valueOf(strValue);
                         return ts.toInstant().toString();
                     } catch (IllegalArgumentException e) {
-                        // If it's already in ISO 8601 format, return as-is
                         return strValue;
                     }
                 }
