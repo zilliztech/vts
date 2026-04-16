@@ -64,6 +64,9 @@ public class MilvusFieldSchema {
     @SerializedName("enable_match")
     private Boolean enableMatch;
 
+    @SerializedName("timezone")
+    private String timezone;
+
     /**
      * Get the effective field name (field_name if specified, otherwise source_field_name)
      */

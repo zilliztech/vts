@@ -18,6 +18,8 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
 import com.google.auto.service.AutoService;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
@@ -27,7 +29,11 @@ import org.apache.seatunnel.api.table.connector.TableSink;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+
+import java.time.ZoneId;
+import java.util.List;
 
 @AutoService(Factory.class)
 public class MilvusSinkFactory implements TableSinkFactory {
@@ -51,8 +57,33 @@ public class MilvusSinkFactory implements TableSinkFactory {
 
     public TableSink createSink(TableSinkFactoryContext context) {
         ReadonlyConfig config = context.getOptions();
+        validateFieldTimezones(config);
         CatalogTable catalogTable = renameCatalogTable(config, context.getCatalogTable());
         return () -> new MilvusSink(config, catalogTable);
+    }
+
+    private void validateFieldTimezones(ReadonlyConfig config) {
+        List<Object> rawFieldSchema = config.get(MilvusSinkConfig.FIELD_SCHEMA);
+        if (rawFieldSchema == null || rawFieldSchema.isEmpty()) {
+            return;
+        }
+        Gson gson = new Gson();
+        List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(
+                gson.toJson(rawFieldSchema),
+                new TypeToken<List<MilvusFieldSchema>>() {}.getType());
+        for (MilvusFieldSchema fs : fieldSchemaList) {
+            if (fs.getTimezone() != null && !fs.getTimezone().isEmpty()) {
+                try {
+                    ZoneId.of(fs.getTimezone());
+                } catch (Exception e) {
+                    throw new IllegalArgumentException(
+                            "Invalid timezone '" + fs.getTimezone()
+                                    + "' for field '" + fs.getEffectiveFieldName()
+                                    + "'. Use IANA zone ID (e.g. 'Asia/Shanghai') "
+                                    + "or UTC offset (e.g. '+08:00').", e);
+                }
+            }
+        }
     }
 
     private CatalogTable renameCatalogTable(
