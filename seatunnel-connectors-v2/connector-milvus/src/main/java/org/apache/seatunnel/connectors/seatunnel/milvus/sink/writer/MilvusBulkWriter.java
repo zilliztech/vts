@@ -9,7 +9,6 @@ import io.milvus.bulkwriter.common.clientenum.BulkFileType;
 import io.milvus.bulkwriter.connect.AzureConnectParam;
 import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
-import io.milvus.param.collection.CollectionSchemaParam;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -19,25 +18,38 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.config.MilvusComm
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.DATABASE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusImport;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.dispatcher.BulkWriterDispatcher;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.dispatcher.BulkWriterDispatchers;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class MilvusBulkWriter implements MilvusWriter {
     private final DescribeCollectionResp describeCollectionResp;
-    RemoteBulkWriter remoteBulkWriter;
+    private final List<RemoteBulkWriter> remoteBulkWriters;
+    private final List<ExecutorService> executors;
+    private final BulkWriterDispatcher dispatcher;
+    private final int writerCount;
     MilvusImport milvusImport;
 
     MilvusSinkConverter milvusSinkConverter;
@@ -49,6 +61,7 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
+    private final AtomicReference<Throwable> asyncFailure = new AtomicReference<>();
 
     public MilvusBulkWriter(CatalogTable catalogTable, ReadonlyConfig config, StageBucket stageBucket,
                             DescribeCollectionResp describeCollectionResp, String partitionName) {
@@ -63,12 +76,9 @@ public class MilvusBulkWriter implements MilvusWriter {
         Type type = new TypeToken<List<MilvusFieldSchema>>() {}.getType();
         List<MilvusFieldSchema> fieldSchemaList = gson.fromJson(gson.toJson(config.get(FIELD_SCHEMA)), type);
 
-        // Convert list to map with sourceFieldName as key for faster lookups
-        // Convert list to map with sourceFieldName as key for faster lookups
         this.milvusFieldMapper = new HashMap<>();
         if (fieldSchemaList != null) {
             for (MilvusFieldSchema field : fieldSchemaList) {
-                // Use source_field_name as key if available, otherwise use field_name
                 String sourceFieldName = field.getSourceFieldName();
                 if (sourceFieldName != null) {
                     milvusFieldMapper.put(sourceFieldName, field.getFieldName());
@@ -96,34 +106,75 @@ public class MilvusBulkWriter implements MilvusWriter {
                     .build();
         }
 
-        RemoteBulkWriterParam remoteBulkWriterParam = RemoteBulkWriterParam.newBuilder()
-                .withCollectionSchema(describeCollectionResp.getCollectionSchema())
-                .withConnectParam(storageConnectParam)
-                .withChunkSize(stageBucket.getChunkSize() * 1024 * 1024)
-                .withRemotePath(stageBucket.getPrefix() + "/" + collectionName + "/" + partitionName)
-                .withFileType(BulkFileType.PARQUET)
-                .build();
+        Map<String, String> bulkCfg = config.get(BULK_WRITER_CONFIG);
+        int parallelism = 1;
+        String rawParallelism = bulkCfg.get("writer_parallelism");
+        if (rawParallelism != null && !rawParallelism.trim().isEmpty()) {
+            parallelism = Math.max(1, Integer.parseInt(rawParallelism.trim()));
+        }
+        this.writerCount = parallelism;
+        this.dispatcher = BulkWriterDispatchers.create(
+                bulkCfg.getOrDefault("writer_dispatch_strategy", "round_robin"));
+        this.remoteBulkWriters = new ArrayList<>(parallelism);
+        this.executors = new ArrayList<>(parallelism);
 
+        String basePath = stageBucket.getPrefix() + "/" + collectionName + "/" + partitionName;
         try {
-            remoteBulkWriter = new RemoteBulkWriter(remoteBulkWriterParam);
-            if(stageBucket.getAutoImport()) {
+            for (int i = 0; i < parallelism; i++) {
+                // Suffix per-writer path so concurrent writers don't collide on chunk files.
+                String remotePath = parallelism == 1 ? basePath : basePath + "/w" + i;
+                RemoteBulkWriterParam param = RemoteBulkWriterParam.newBuilder()
+                        .withCollectionSchema(describeCollectionResp.getCollectionSchema())
+                        .withConnectParam(storageConnectParam)
+                        .withChunkSize(stageBucket.getChunkSize() * 1024 * 1024)
+                        .withRemotePath(remotePath)
+                        .withFileType(BulkFileType.PARQUET)
+                        .build();
+                remoteBulkWriters.add(new RemoteBulkWriter(param));
+                // single-thread per writer: RemoteBulkWriter internal state is not
+                // thread-safe, so all appendRow calls for one writer must serialize.
+                executors.add(Executors.newSingleThreadExecutor(r -> {
+                    Thread t = new Thread(r, "milvus-bulk-writer-" + collectionName + "-" + partitionName);
+                    t.setDaemon(true);
+                    return t;
+                }));
+            }
+            if (stageBucket.getAutoImport()) {
                 milvusImport = new MilvusImport(config.get(URL), config.get(DATABASE), collectionName, partitionName, stageBucket);
             }
         } catch (IOException e) {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.INIT_WRITER_ERROR, e);
         }
+
+        log.info("MilvusBulkWriter initialized: collection={}, partition={}, writerParallelism={}, dispatcher={}",
+                collectionName, partitionName, parallelism, dispatcher.name());
     }
+
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
-        JsonObject data = milvusSinkConverter.buildMilvusData(
+        Throwable failure = asyncFailure.get();
+        if (failure != null) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, failure);
+        }
+        int idx = dispatcher.route(element, writerCount);
+        RemoteBulkWriter writer = remoteBulkWriters.get(idx);
+        executors.get(idx).submit(() -> {
+            try {
+                JsonObject data = milvusSinkConverter.buildMilvusData(
                         catalogTable, describeCollectionResp, milvusFieldMapper, element);
-        remoteBulkWriter.appendRow(data);
-        writeCache.incrementAndGet();
-        writeCount.incrementAndGet();
+                writer.appendRow(data);
+                writeCache.incrementAndGet();
+                writeCount.incrementAndGet();
+            } catch (Throwable t) {
+                asyncFailure.compareAndSet(null, t);
+            }
+        });
     }
+
     @Override
     public void commit(Boolean async) {
     }
+
     @Override
     public boolean needCommit() {
         return false;
@@ -131,17 +182,54 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     @Override
     public void close() throws Exception {
-        // trigger import after all data write done
-        remoteBulkWriter.close();
-        if(remoteBulkWriter.getBatchFiles().isEmpty()){
+        // Drain all pending appendRow tasks before closing writers.
+        for (ExecutorService e : executors) {
+            e.shutdown();
+        }
+        for (ExecutorService e : executors) {
+            if (!e.awaitTermination(1, TimeUnit.HOURS)) {
+                throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR,
+                        "timeout waiting for bulk writer executors to drain");
+            }
+        }
+        Throwable failure = asyncFailure.get();
+        if (failure != null) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, failure);
+        }
+        // Close each writer to flush remaining rows as final chunks.
+        for (RemoteBulkWriter writer : remoteBulkWriters) {
+            writer.close();
+        }
+
+        // Collect every produced folder across all writers. Each writer may have
+        // multiple chunk files; one importFolder call per unique folder is enough
+        // since Milvus import dedupes by objectUrl internally.
+        Set<String> folders = new LinkedHashSet<>();
+        boolean anyFiles = false;
+        for (RemoteBulkWriter writer : remoteBulkWriters) {
+            List<List<String>> batches = writer.getBatchFiles();
+            if (batches == null || batches.isEmpty()) {
+                continue;
+            }
+            for (List<String> batch : batches) {
+                for (String obj : batch) {
+                    int lastSlash = obj.lastIndexOf('/');
+                    if (lastSlash < 0) {
+                        continue;
+                    }
+                    folders.add(obj.substring(0, lastSlash + 1));
+                    anyFiles = true;
+                }
+            }
+        }
+        if (!anyFiles) {
             log.warn("No data uploaded to remote");
         }
-        if(stageBucket.getAutoImport()) {
-            String object = remoteBulkWriter.getBatchFiles().get(0).get(0);
-            String objectFolder = object.substring(0, object.lastIndexOf("/")+1);
-            milvusImport.importFolder(objectFolder);
 
-            // Log import job information in structured format for retrieval via logs API
+        if (stageBucket.getAutoImport() && milvusImport != null) {
+            for (String folder : folders) {
+                milvusImport.importFolder(folder);
+            }
             log.info("[MILVUS_IMPORT_SUMMARY] collection={}, partition={}, importJobCount={}, importJobs={}",
                     catalogTable.getTablePath().getTableName(),
                     describeCollectionResp.getCollectionName(),
@@ -164,10 +252,6 @@ public class MilvusBulkWriter implements MilvusWriter {
         }
     }
 
-    /**
-     * Get Milvus import job information (only available for bulk writer with auto-import enabled)
-     * @return Map of object URL to Milvus import job ID, or empty map if not applicable
-     */
     public Map<String, String> getImportJobIds() {
         if (stageBucket.getAutoImport() && milvusImport != null) {
             return milvusImport.getImportJobIds();
@@ -175,10 +259,6 @@ public class MilvusBulkWriter implements MilvusWriter {
         return new HashMap<>();
     }
 
-    /**
-     * Get the count of Milvus import jobs
-     * @return Number of import jobs, or 0 if not applicable
-     */
     public int getImportJobCount() {
         if (stageBucket.getAutoImport() && milvusImport != null) {
             return milvusImport.getImportJobCount();

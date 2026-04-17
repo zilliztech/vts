@@ -201,7 +201,13 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
         public static final Option<Map<String, String>> BULK_WRITER_CONFIG = Options.key("bulk_writer_config")
                         .mapType()
                         .defaultValue(new HashMap<>())
-                        .withDescription("bulk writer config");
+                        .withDescription("bulk writer config. Besides the StageBucket fields (cloud_id, "
+                                        + "bucket_name, access_key, secret_key, chunk_size, prefix, ...), the "
+                                        + "following tuning keys are recognized at this level: "
+                                        + "writer_parallelism (int, default 1) — number of parallel "
+                                        + "RemoteBulkWriter instances per sink slot; "
+                                        + "writer_dispatch_strategy (string, default round_robin) — row routing "
+                                        + "strategy for the writer pool; supported: round_robin.");
 
         /**
          * How to interpret bare "x,y" coordinate strings flowing into a Geometry field.
