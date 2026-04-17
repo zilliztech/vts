@@ -26,15 +26,18 @@ import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MilvusSinkConverterTest {
 
@@ -132,6 +135,172 @@ public class MilvusSinkConverterTest {
         // Not a valid Timestamp.valueOf format, should fall through to return as-is
         Object result = converter.convertByMilvusType(schema, "not-a-date");
         Assertions.assertEquals("not-a-date", result);
+    }
+
+    // --- Per-field timezone handling for Timestamptz ---
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_LocalDateTime_PerFieldShanghai() {
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("Asia/Shanghai"));
+        MilvusSinkConverter shanghaiConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = shanghaiConverter.convertByMilvusType(schema, ldt);
+        // 10:00 Shanghai = 02:00 UTC
+        Assertions.assertEquals("2024-01-19T02:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_LocalDateTime_PerFieldUtc() {
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("UTC"));
+        MilvusSinkConverter utcConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = utcConverter.convertByMilvusType(schema, ldt);
+        Assertions.assertEquals("2024-01-19T10:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_LocalDateTime_PerFieldUtcOffset() {
+        // UTC offset format "+08:00" should work the same as IANA "Asia/Shanghai"
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("+08:00"));
+        MilvusSinkConverter offsetConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = offsetConverter.convertByMilvusType(schema, ldt);
+        // 10:00 +08:00 = 02:00 UTC
+        Assertions.assertEquals("2024-01-19T02:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_LocalDateTime_NoOverrideFallsBackToSystemDefault() {
+        // No per-field override → systemDefault
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = converter.convertByMilvusType(schema, ldt);
+        String expected = ldt.atZone(ZoneId.systemDefault()).toInstant().toString();
+        Assertions.assertEquals(expected, result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_MultipleFieldsDifferentZones() {
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("created_at", ZoneId.of("Asia/Shanghai"));
+        overrides.put("updated_at", ZoneId.of("US/Eastern"));
+        MilvusSinkConverter multiConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+
+        LocalDateTime ldt = LocalDateTime.of(2024, 6, 15, 12, 0, 0);
+
+        FieldSchema createdSchema = FieldSchema.builder()
+                .name("created_at").dataType(DataType.Timestamptz).build();
+        Object createdResult = multiConverter.convertByMilvusType(createdSchema, ldt);
+        // 12:00 Shanghai (+8) = 04:00 UTC
+        Assertions.assertEquals("2024-06-15T04:00:00Z", createdResult);
+
+        FieldSchema updatedSchema = FieldSchema.builder()
+                .name("updated_at").dataType(DataType.Timestamptz).build();
+        Object updatedResult = multiConverter.convertByMilvusType(updatedSchema, ldt);
+        // 12:00 US/Eastern (EDT = -4 in June) = 16:00 UTC
+        Assertions.assertEquals("2024-06-15T16:00:00Z", updatedResult);
+    }
+
+    @Test
+    public void testFromConfig_FieldSchemaTimezone_WiredToConverter() {
+        // Simulate field_schema config with timezone
+        Map<String, Object> fieldEntry = new HashMap<>();
+        fieldEntry.put("field_name", "event_time");
+        fieldEntry.put("data_type", 26);  // Timestamptz
+        fieldEntry.put("timezone", "Asia/Shanghai");
+
+        List<Object> fieldSchemaList = new java.util.ArrayList<>();
+        fieldSchemaList.add(fieldEntry);
+
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("field_schema", fieldSchemaList);
+        ReadonlyConfig config = ReadonlyConfig.fromMap(configMap);
+        MilvusSinkConverter shanghaiConverter = MilvusSinkConverter.fromConfig(config);
+
+        FieldSchema schema = FieldSchema.builder()
+                .name("event_time").dataType(DataType.Timestamptz).build();
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = shanghaiConverter.convertByMilvusType(schema, ldt);
+        // 10:00 Shanghai = 02:00 UTC
+        Assertions.assertEquals("2024-01-19T02:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_String_WithOverrideUsesConfiguredTz() {
+        // String input + per-field timezone → parse as naive wall-clock, apply configured tz
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("Asia/Shanghai"));
+        MilvusSinkConverter shanghaiConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        Object result = shanghaiConverter.convertByMilvusType(schema, "2024-01-19 10:00:00");
+        // 10:00 Shanghai = 02:00 UTC
+        Assertions.assertEquals("2024-01-19T02:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_String_WithoutOverrideUsesOriginalBehavior() {
+        // String input + no per-field timezone → original Timestamp.valueOf behavior
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        Object result = converter.convertByMilvusType(schema, "2024-01-19 10:00:00");
+        Assertions.assertInstanceOf(String.class, result);
+        Assertions.assertTrue(result.toString().contains("2024-01-19"));
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_String_Iso8601PassedThrough() {
+        // ISO 8601 with offset — should pass through even with per-field timezone
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("Asia/Shanghai"));
+        MilvusSinkConverter shanghaiConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        Object result = shanghaiConverter.convertByMilvusType(schema, "2024-01-19T10:00:00Z");
+        // Already has offset Z — LocalDateTime.parse fails, falls through as-is
+        Assertions.assertEquals("2024-01-19T10:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_Timestamptz_OffsetDateTime_IgnoresPerFieldTimezone() {
+        // OffsetDateTime already carries offset — per-field timezone must NOT affect it
+        Map<String, ZoneId> overrides = new HashMap<>();
+        overrides.put("ts", ZoneId.of("Asia/Shanghai"));
+        MilvusSinkConverter shanghaiConverter = new MilvusSinkConverter(
+                GeometryConverter.PASSTHROUGH, overrides);
+        FieldSchema schema = FieldSchema.builder()
+                .name("ts").dataType(DataType.Timestamptz).build();
+        OffsetDateTime odt = OffsetDateTime.of(2024, 1, 19, 10, 0, 0, 0, ZoneOffset.ofHours(5));
+        Object result = shanghaiConverter.convertByMilvusType(schema, odt);
+        // 10:00+05 = 05:00 UTC, regardless of per-field timezone setting
+        Assertions.assertEquals("2024-01-19T05:00:00Z", result);
+    }
+
+    @Test
+    public void testConvertBySeaTunnelType_TimestampTz_LocalDateTime_UsesSystemDefault() {
+        // convertBySeaTunnelType has no field name, always uses systemDefault
+        LocalDateTime ldt = LocalDateTime.of(2024, 1, 19, 10, 0, 0);
+        Object result = converter.convertBySeaTunnelType(
+                LocalTimeType.OFFSET_DATE_TIME_TYPE, false, ldt);
+        Assertions.assertInstanceOf(String.class, result);
+        String expected = ldt.atZone(ZoneId.systemDefault()).toInstant().toString();
+        Assertions.assertEquals(expected, result);
     }
 
     // --- Consistency: both paths return same type for same input ---
