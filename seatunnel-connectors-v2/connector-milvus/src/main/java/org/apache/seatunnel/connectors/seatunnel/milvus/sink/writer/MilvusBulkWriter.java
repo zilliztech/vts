@@ -37,8 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,7 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MilvusBulkWriter implements MilvusWriter {
     private final DescribeCollectionResp describeCollectionResp;
     private final List<RemoteBulkWriter> remoteBulkWriters;
-    private final List<ExecutorService> executors;
+    private final List<BlockingQueue<SeaTunnelRow>> queues;
+    private final List<Thread> workers;
     private final BulkWriterDispatcher dispatcher;
     private final int writerCount;
     MilvusImport milvusImport;
@@ -62,6 +63,7 @@ public class MilvusBulkWriter implements MilvusWriter {
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
     private final AtomicReference<Throwable> asyncFailure = new AtomicReference<>();
+    private volatile boolean closing = false;
 
     public MilvusBulkWriter(CatalogTable catalogTable, ReadonlyConfig config, StageBucket stageBucket,
                             DescribeCollectionResp describeCollectionResp, String partitionName) {
@@ -115,8 +117,19 @@ public class MilvusBulkWriter implements MilvusWriter {
         this.writerCount = parallelism;
         this.dispatcher = BulkWriterDispatchers.create(
                 bulkCfg.getOrDefault("writer_dispatch_strategy", "round_robin"));
+        // Bounded queue size controls memory headroom per writer (each slot holds
+        // one SeaTunnelRow reference). write() blocks on queue.put() when the
+        // queue is full, providing natural backpressure upstream — only the
+        // worker thread ever touches the RemoteBulkWriter, so non-thread-safe
+        // SDK state is preserved.
+        int queueCapacity = 1024;
+        String rawQueue = bulkCfg.get("writer_queue_capacity");
+        if (rawQueue != null && !rawQueue.trim().isEmpty()) {
+            queueCapacity = Math.max(1, Integer.parseInt(rawQueue.trim()));
+        }
         this.remoteBulkWriters = new ArrayList<>(parallelism);
-        this.executors = new ArrayList<>(parallelism);
+        this.queues = new ArrayList<>(parallelism);
+        this.workers = new ArrayList<>(parallelism);
 
         String basePath = stageBucket.getPrefix() + "/" + collectionName + "/" + partitionName;
         try {
@@ -130,14 +143,19 @@ public class MilvusBulkWriter implements MilvusWriter {
                         .withRemotePath(remotePath)
                         .withFileType(BulkFileType.PARQUET)
                         .build();
-                remoteBulkWriters.add(new RemoteBulkWriter(param));
-                // single-thread per writer: RemoteBulkWriter internal state is not
-                // thread-safe, so all appendRow calls for one writer must serialize.
-                executors.add(Executors.newSingleThreadExecutor(r -> {
-                    Thread t = new Thread(r, "milvus-bulk-writer-" + collectionName + "-" + partitionName);
-                    t.setDaemon(true);
-                    return t;
-                }));
+                RemoteBulkWriter writer = new RemoteBulkWriter(param);
+                remoteBulkWriters.add(writer);
+
+                BlockingQueue<SeaTunnelRow> queue = new ArrayBlockingQueue<>(queueCapacity);
+                queues.add(queue);
+
+                final int writerIdx = i;
+                Thread worker = new Thread(
+                        () -> runWorker(writer, queue),
+                        "milvus-bulk-writer-" + collectionName + "-" + partitionName + "-w" + writerIdx);
+                worker.setDaemon(true);
+                worker.start();
+                workers.add(worker);
             }
             if (stageBucket.getAutoImport()) {
                 milvusImport = new MilvusImport(config.get(URL), config.get(DATABASE), collectionName, partitionName, stageBucket);
@@ -146,8 +164,32 @@ public class MilvusBulkWriter implements MilvusWriter {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.INIT_WRITER_ERROR, e);
         }
 
-        log.info("MilvusBulkWriter initialized: collection={}, partition={}, writerParallelism={}, dispatcher={}",
-                collectionName, partitionName, parallelism, dispatcher.name());
+        log.info("MilvusBulkWriter initialized: collection={}, partition={}, writerParallelism={}, dispatcher={}, queueCapacity={}",
+                collectionName, partitionName, parallelism, dispatcher.name(), queueCapacity);
+    }
+
+    private void runWorker(RemoteBulkWriter writer, BlockingQueue<SeaTunnelRow> queue) {
+        try {
+            while (true) {
+                SeaTunnelRow row = queue.poll(200, TimeUnit.MILLISECONDS);
+                if (row == null) {
+                    if (closing && queue.isEmpty()) {
+                        return;
+                    }
+                    continue;
+                }
+                JsonObject data = milvusSinkConverter.buildMilvusData(
+                        catalogTable, describeCollectionResp, milvusFieldMapper, row);
+                writer.appendRow(data);
+                writeCache.incrementAndGet();
+                writeCount.incrementAndGet();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            asyncFailure.compareAndSet(null, e);
+        } catch (Throwable t) {
+            asyncFailure.compareAndSet(null, t);
+        }
     }
 
     @Override
@@ -157,18 +199,7 @@ public class MilvusBulkWriter implements MilvusWriter {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, failure);
         }
         int idx = dispatcher.route(element, writerCount);
-        RemoteBulkWriter writer = remoteBulkWriters.get(idx);
-        executors.get(idx).submit(() -> {
-            try {
-                JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp, milvusFieldMapper, element);
-                writer.appendRow(data);
-                writeCache.incrementAndGet();
-                writeCount.incrementAndGet();
-            } catch (Throwable t) {
-                asyncFailure.compareAndSet(null, t);
-            }
-        });
+        queues.get(idx).put(element);
     }
 
     @Override
@@ -182,14 +213,13 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     @Override
     public void close() throws Exception {
-        // Drain all pending appendRow tasks before closing writers.
-        for (ExecutorService e : executors) {
-            e.shutdown();
-        }
-        for (ExecutorService e : executors) {
-            if (!e.awaitTermination(1, TimeUnit.HOURS)) {
+        // Signal workers to exit after draining their queues.
+        closing = true;
+        for (Thread t : workers) {
+            t.join(TimeUnit.HOURS.toMillis(1));
+            if (t.isAlive()) {
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR,
-                        "timeout waiting for bulk writer executors to drain");
+                        "timeout waiting for bulk writer worker to drain: " + t.getName());
             }
         }
         Throwable failure = asyncFailure.get();
