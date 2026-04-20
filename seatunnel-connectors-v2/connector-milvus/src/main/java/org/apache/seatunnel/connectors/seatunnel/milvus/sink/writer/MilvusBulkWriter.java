@@ -63,7 +63,10 @@ public class MilvusBulkWriter implements MilvusWriter {
     private final AtomicLong writeCache = new AtomicLong();
     private final AtomicLong writeCount = new AtomicLong();
     private final AtomicReference<Throwable> asyncFailure = new AtomicReference<>();
-    private volatile boolean closing = false;
+
+    // Poison pill: sentinel enqueued once per worker at close() time.
+    // Compared by reference identity, so it can't collide with real rows.
+    private static final SeaTunnelRow CLOSE_SIGNAL = new SeaTunnelRow(new Object[0]);
 
     public MilvusBulkWriter(CatalogTable catalogTable, ReadonlyConfig config, StageBucket stageBucket,
                             DescribeCollectionResp describeCollectionResp, String partitionName) {
@@ -171,12 +174,9 @@ public class MilvusBulkWriter implements MilvusWriter {
     private void runWorker(RemoteBulkWriter writer, BlockingQueue<SeaTunnelRow> queue) {
         try {
             while (true) {
-                SeaTunnelRow row = queue.poll(200, TimeUnit.MILLISECONDS);
-                if (row == null) {
-                    if (closing && queue.isEmpty()) {
-                        return;
-                    }
-                    continue;
+                SeaTunnelRow row = queue.take();
+                if (row == CLOSE_SIGNAL) {
+                    return;
                 }
                 JsonObject data = milvusSinkConverter.buildMilvusData(
                         catalogTable, describeCollectionResp, milvusFieldMapper, row);
@@ -213,8 +213,12 @@ public class MilvusBulkWriter implements MilvusWriter {
 
     @Override
     public void close() throws Exception {
-        // Signal workers to exit after draining their queues.
-        closing = true;
+        // Enqueue a poison pill per worker. Since each queue is FIFO drained by
+        // a single worker thread, the pill is only consumed after every real
+        // row enqueued before close() has been appended.
+        for (BlockingQueue<SeaTunnelRow> q : queues) {
+            q.put(CLOSE_SIGNAL);
+        }
         for (Thread t : workers) {
             t.join(TimeUnit.HOURS.toMillis(1));
             if (t.isAlive()) {
