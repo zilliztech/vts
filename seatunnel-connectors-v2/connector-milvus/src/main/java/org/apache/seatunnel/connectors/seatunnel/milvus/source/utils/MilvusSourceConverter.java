@@ -211,14 +211,14 @@ public class MilvusSourceConverter {
                             case FLOAT:
                                 Float[] floatArrays = new Float[list.size()];
                                 for (int i = 0; i < list.size(); i++) {
-                                    floatArrays[i] = Float.parseFloat(list.get(i).toString());
+                                    floatArrays[i] = ((Number) list.get(i)).floatValue();
                                 }
                                 seatunnelField[fieldIndex] = floatArrays;
                                 break;
                             case DOUBLE:
                                 Double[] doubleArrays = new Double[list.size()];
                                 for (int i = 0; i < list.size(); i++) {
-                                    doubleArrays[i] = Double.parseDouble(list.get(i).toString());
+                                    doubleArrays[i] = ((Number) list.get(i)).doubleValue();
                                 }
                                 seatunnelField[fieldIndex] = doubleArrays;
                                 break;
@@ -238,7 +238,8 @@ public class MilvusSourceConverter {
                         List list = (List) filedValues;
                         Float[] arrays = new Float[list.size()];
                         for (int i = 0; i < list.size(); i++) {
-                            arrays[i] = Float.parseFloat(list.get(i).toString());
+                            // Direct Number→float cast avoids a Float→String→Float
+                            arrays[i] = ((Number) list.get(i)).floatValue();
                         }
                         seatunnelField[fieldIndex] = BufferUtils.toByteBuffer(arrays);
                         break;
