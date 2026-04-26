@@ -216,7 +216,9 @@ public class MilvusSchemaConverter {
                 fieldSchema.setDataType(io.milvus.v2.common.DataType.Int64);
             } else {
                 fieldSchema.setDataType(io.milvus.v2.common.DataType.VarChar);
-                fieldSchema.setMaxLength(65535);
+                if(Objects.isNull(fieldSchema.getMaxLength())){
+                    fieldSchema.setMaxLength(65535);
+                }
             }
         }
 
