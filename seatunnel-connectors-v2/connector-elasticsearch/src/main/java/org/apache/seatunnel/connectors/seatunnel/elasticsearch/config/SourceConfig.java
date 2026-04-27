@@ -28,7 +28,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -91,22 +90,36 @@ public class SourceConfig implements Serializable {
                     .defaultValue(ImmutableMap.of("name", "_id", "type", "string", "length", 512))
                     .withDescription("The PK of es index, will as pk field of sink table.");
 
+    public static final Option<SearchApiTypeEnum> SEARCH_API_TYPE =
+            Options.key("search_api_type")
+                    .enumType(SearchApiTypeEnum.class)
+                    .defaultValue(SearchApiTypeEnum.SCROLL)
+                    .withDescription(
+                            "Choose API type for pagination: SCROLL or PIT (Point in Time).");
+
+    public static final Option<Long> PIT_KEEP_ALIVE =
+            Options.key("pit_keep_alive")
+                    .longType()
+                    .defaultValue(3600000L)
+                    .withDescription(
+                            "The amount of time (in milliseconds) for which the PIT should be kept alive. Default is 1 hour.");
+
+    public static final Option<Integer> PIT_BATCH_SIZE =
+            Options.key("pit_batch_size")
+                    .intType()
+                    .defaultValue(100)
+                    .withDescription(
+                            "Maximum number of hits to be returned with each PIT search request. Similar to scroll_size but for PIT API.");
+
     private String index;
     private List<String> source;
     private Map<String, Object> query;
     private String scrollTime;
     private int scrollSize;
 
-    private CatalogTable catalogTable;
+    private SearchApiTypeEnum searchApiType = SearchApiTypeEnum.SCROLL;
+    private long pitKeepAlive = 3600000L;
+    private int pitBatchSize = 100;
 
-    public SourceConfig clone() {
-        SourceConfig sourceConfig = new SourceConfig();
-        sourceConfig.setIndex(index);
-        sourceConfig.setSource(new ArrayList<>(source));
-        sourceConfig.setQuery(new HashMap<>(query));
-        sourceConfig.setScrollTime(scrollTime);
-        sourceConfig.setScrollSize(scrollSize);
-        sourceConfig.setCatalogTable(catalogTable);
-        return sourceConfig;
-    }
+    private CatalogTable catalogTable;
 }

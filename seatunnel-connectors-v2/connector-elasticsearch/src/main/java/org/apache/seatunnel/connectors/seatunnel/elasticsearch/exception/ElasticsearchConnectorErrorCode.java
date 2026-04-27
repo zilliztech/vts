@@ -35,6 +35,13 @@ public enum ElasticsearchConnectorErrorCode implements SeaTunnelErrorCode {
             "ELASTICSEARCH-11",
             "'index' or 'index_list' must be configured, with at least one being required."),
     FAILED_CONNECT_ES("ELASTICSEARCH-12", "Failed to connect to elasticsearch"),
+    CREATE_PIT_FAILED("ELASTICSEARCH-13", "Failed to create point in time"),
+    SEARCH_WITH_PIT_FAILED("ELASTICSEARCH-14", "Failed to search with point in time"),
+    DELETE_PIT_FAILED("ELASTICSEARCH-15", "Failed to delete point in time"),
+    SEARCH_SHARDS_FAILED("ELASTICSEARCH-16", "Failed to get search shards info"),
+    GET_NODE_HTTP_ADDRESSES_FAILED("ELASTICSEARCH-17", "Failed to get node HTTP addresses"),
+    INVALID_OPTION_VALUE("ELASTICSEARCH-18", "Invalid option value"),
+    DISPATCH_SPLIT_FAILED("ELASTICSEARCH-19", "Failed to dispatch split to reader"),
     ;
 
     private final String code;

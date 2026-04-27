@@ -15,21 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source;
+package org.apache.seatunnel.connectors.seatunnel.elasticsearch.config;
 
-import lombok.Data;
+public enum SearchApiTypeEnum {
+    /** Use Scroll API for pagination */
+    SCROLL,
 
-import java.util.List;
-import java.util.Map;
-
-@Data
-public class ScrollResult {
-
-    private String scrollId;
-    private List<Map<String, Object>> docs;
-
-    /** Total hits reported by ES on this response (hits.total.value). Populated
-     * on every scroll response; the reader only uses the value from the first
-     * batch for end-of-scan reconciliation. {@code -1} if absent. */
-    private long totalHits;
+    /** Use Point-in-Time (PIT) API for pagination */
+    PIT
 }
