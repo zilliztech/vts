@@ -20,7 +20,9 @@ package org.apache.seatunnel.connectors.seatunnel.elasticsearch.serialize.source
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.TextNode;
@@ -39,6 +41,8 @@ import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.Elastic
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -158,6 +162,11 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                     seaTunnelDataType = rowTypeInfo.getFieldType(i);
                     if (value instanceof NullNode) {
                         seaTunnelFields[i] = null;
+                    } else if (VECTOR_FLOAT_TYPE.equals(seaTunnelDataType)
+                            && value instanceof ArrayNode) {
+                        // Fast path: ES already exposes float vectors as JSON arrays, so avoid
+                        // converting the array to a String and parsing it again.
+                        seaTunnelFields[i] = convertVector((ArrayNode) value);
                     } else if (value instanceof TextNode) {
                         seaTunnelFields[i] =
                                 convertValue(
@@ -273,12 +282,26 @@ public class DefaultSeaTunnelRowDeserializer implements SeaTunnelRowDeserializer
                 Float[] vectorArray = new Float[list.size()];
                 list.toArray(vectorArray);
                 return BufferUtils.toByteBuffer(vectorArray);
-            }  else {
+            } else {
                 throw new ElasticsearchConnectorException(
                         CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
                         "Unexpected value: " + fieldType);
             }
         }
+    }
+
+    private ByteBuffer convertVector(ArrayNode arrayNode) {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(arrayNode.size() * Float.BYTES);
+        for (JsonNode element : arrayNode) {
+            if (element == null || element.isNull()) {
+                throw new IllegalArgumentException("Vector contains null element");
+            }
+            float value =
+                    element.isNumber() ? element.floatValue() : Float.parseFloat(element.asText());
+            byteBuffer.putFloat(value);
+        }
+        ((Buffer) byteBuffer).flip();
+        return byteBuffer;
     }
 
     private LocalDateTime parseDate(String fieldValue, String fieldName) {

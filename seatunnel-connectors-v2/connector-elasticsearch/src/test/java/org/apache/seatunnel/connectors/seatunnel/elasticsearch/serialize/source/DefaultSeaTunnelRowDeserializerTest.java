@@ -21,11 +21,16 @@ import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.api.table.type.VectorType;
+import org.apache.seatunnel.common.utils.BufferUtils;
+import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.ElasticsearchConnectorException;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.node.ArrayNode;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -37,6 +42,32 @@ import java.util.Map;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
 
 public class DefaultSeaTunnelRowDeserializerTest {
+
+    @Test
+    public void testDeserializeFloatVectorFromJsonArrayNode() {
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"vector"},
+                        new SeaTunnelDataType[] {VectorType.VECTOR_FLOAT_TYPE});
+
+        DefaultSeaTunnelRowDeserializer deserializer =
+                new DefaultSeaTunnelRowDeserializer(rowType);
+
+        ArrayNode vector = JsonUtils.createArrayNode();
+        vector.add(1.25F);
+        vector.add(-2.5F);
+        vector.add(3.0F);
+
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("vector", vector);
+
+        ElasticsearchRecord record =
+                new ElasticsearchRecord(doc, Collections.singletonList("vector"), "table1");
+        SeaTunnelRow row = deserializer.deserialize(record);
+
+        Float[] result = BufferUtils.toFloatArray((ByteBuffer) row.getField(0));
+        Assertions.assertArrayEquals(new Float[] {1.25F, -2.5F, 3.0F}, result);
+    }
 
     // ==================== Date format map tests ====================
 
