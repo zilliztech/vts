@@ -8,7 +8,11 @@ import ChangeLog from '../changelog/connector-elasticsearch.md';
 
 Used to read data from Elasticsearch.
 
-support version >= 2.x and <= 8.x.
+Supports Elasticsearch version >= 7.10 and <= 8.x.
+
+## Upgrade Notes
+
+The source now creates checkpoint splits at Elasticsearch shard granularity. Checkpoints or savepoints created by the previous Elasticsearch source split format are not compatible with this version. After upgrading, restart the migration job from the beginning.
 
 ## Key features
 
@@ -16,7 +20,7 @@ support version >= 2.x and <= 8.x.
 - [ ] [stream](../../concept/connector-v2-features.md)
 - [ ] [exactly-once](../../concept/connector-v2-features.md)
 - [x] [column projection](../../concept/connector-v2-features.md)
-- [ ] [parallelism](../../concept/connector-v2-features.md)
+- [x] [parallelism](../../concept/connector-v2-features.md)
 - [ ] [support user-defined split](../../concept/connector-v2-features.md)
 
 ## Options
@@ -34,6 +38,10 @@ support version >= 2.x and <= 8.x.
 | sql_query               | json    | no       | sql query                                                      |
 | scroll_time             | string  | no       | 1m                                                             |
 | scroll_size             | int     | no       | 100                                                            |
+| search_api_type         | enum    | no       | SCROLL                                                         |
+| pit_keep_alive          | long    | no       | 3600000                                                        |
+| pit_batch_size          | int     | no       | 100                                                            |
+| wan_only                | boolean | no       | false                                                          |
 | tls_verify_certificate  | boolean | no       | true                                                           |
 | tls_verify_hostnames    | boolean | no       | true                                                           |
 | array_column            | map     | no       |                                                                |
@@ -84,6 +92,28 @@ Amount of time Elasticsearch will keep the search context alive for scroll reque
 ### scroll_size [int]
 
 Maximum number of hits to be returned with each Elasticsearch scroll request.
+
+### search_api_type [enum]
+
+Pagination API used by the source connector. Valid values are `SCROLL` and `PIT`.
+
+`SCROLL` uses the Elasticsearch Scroll API and is the default value. `PIT` uses Point in Time with `search_after`, which requires Elasticsearch 7.10 or later.
+
+### pit_keep_alive [long]
+
+The amount of time, in milliseconds, for which the Point in Time should be kept alive. This option is only used when `search_api_type` is `PIT`.
+
+### pit_batch_size [int]
+
+Maximum number of hits to be returned with each PIT search request. This option is only used when `search_api_type` is `PIT`.
+
+### wan_only [boolean]
+
+Whether to only route requests through the configured `hosts`.
+
+The default value is `false`. In this mode, the connector may discover Elasticsearch data-node HTTP addresses and try to read shard splits directly from those nodes for better throughput. If node discovery or direct connection fails, the connector falls back to the configured `hosts`.
+
+Set this option to `true` when Elasticsearch is accessed through a load balancer, cloud endpoint, proxy, or when data-node publish addresses are not reachable from the SeaTunnel/VTS runtime.
 
 ### index_list [array]
 
@@ -263,6 +293,32 @@ source {
     sql_query = "select * from st_index_sql where c_int>=10 and c_int<=20"
     search_type = "sql"
   }
+}
+```
+
+Demo 7 : PIT search with shard-parallel read
+
+> This example uses the Point in Time API with `search_after` for pagination. The connector creates shard-level source splits, so the effective read concurrency is controlled by the job parallelism and the number of matched primary shards. Set `wan_only = true` when the configured Elasticsearch endpoint is a load balancer, cloud endpoint, or proxy.
+
+```hocon
+env {
+    parallelism = 4
+}
+
+source {
+    Elasticsearch {
+        hosts = ["https://elasticsearch:9200"]
+        username = "elastic"
+        password = "elasticsearch"
+        tls_verify_certificate = false
+        tls_verify_hostname = false
+
+        index = "vector_index"
+        search_api_type = "PIT"
+        pit_keep_alive = 3600000
+        pit_batch_size = 500
+        wan_only = true
+    }
 }
 ```
 

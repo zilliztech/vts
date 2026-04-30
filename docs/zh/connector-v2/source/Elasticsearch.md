@@ -6,7 +6,11 @@ import ChangeLog from '../changelog/connector-elasticsearch.md';
 
 ## 简介
 
-支持读取 Elasticsearch2.x 版本和 8.x 版本之间的数据
+支持读取 Elasticsearch 7.10 及以上、8.x 及以下版本的数据
+
+## 升级说明
+
+Source 现在按 Elasticsearch shard 粒度生成 checkpoint split。旧版本 Elasticsearch source split 格式生成的 checkpoint 或 savepoint 与该版本不兼容。升级后请从头启动迁移任务。
 
 ## Key features
 
@@ -14,7 +18,7 @@ import ChangeLog from '../changelog/connector-elasticsearch.md';
 - [ ] [流处理](../../concept/connector-v2-features.md)
 - [ ] [精准一次](../../concept/connector-v2-features.md)
 - [x] [column projection](../../concept/connector-v2-features.md)
-- [ ] [并行度](../../concept/connector-v2-features.md)
+- [x] [并行度](../../concept/connector-v2-features.md)
 - [ ] [支持用户自定义的分片](../../concept/connector-v2-features.md)
 
 ## 配置参数选项
@@ -32,6 +36,10 @@ import ChangeLog from '../changelog/connector-elasticsearch.md';
 | sql_query               | json    | no       | sql 查询语句                            |
 | scroll_time             | string  | no       | 1m                                  |
 | scroll_size             | int     | no       | 100                                 |
+| search_api_type         | enum    | no       | SCROLL                              |
+| pit_keep_alive          | long    | no       | 3600000                             |
+| pit_batch_size          | int     | no       | 100                                 |
+| wan_only                | boolean | no       | false                               |
 | tls_verify_certificate  | boolean | no       | true                                |
 | tls_verify_hostnames    | boolean | no       | true                                |
 | array_column            | map     | no       |                                     |
@@ -86,6 +94,28 @@ ElasticsSearch的原生查询语句，用于控制读取哪些数据写入到其
 ### scroll_size [int]
 
 滚动查询的最大文档数量。
+
+### search_api_type [enum]
+
+Source 连接器使用的分页查询 API。可选值为 `SCROLL` 和 `PIT`。
+
+`SCROLL` 使用 Elasticsearch Scroll API，是默认值。`PIT` 使用 Point in Time 和 `search_after` 分页，需要 Elasticsearch 7.10 或更高版本。
+
+### pit_keep_alive [long]
+
+Point in Time 的保活时间，单位为毫秒。该参数仅在 `search_api_type` 为 `PIT` 时生效。
+
+### pit_batch_size [int]
+
+每次 PIT 查询最多返回的文档数量。该参数仅在 `search_api_type` 为 `PIT` 时生效。
+
+### wan_only [boolean]
+
+是否只通过配置的 `hosts` 发送请求。
+
+默认值为 `false`。在该模式下，连接器可能会发现 Elasticsearch data node 的 HTTP 地址，并尝试直接从对应节点读取 shard split，以提升读取吞吐。如果节点发现或直连失败，连接器会回退到配置的 `hosts`。
+
+当 Elasticsearch 通过负载均衡、云服务端点或代理访问，或者 data node 的 publish address 无法从 SeaTunnel/VTS 运行环境访问时，请设置为 `true`。
 
 ### index_list [array]
 
@@ -264,6 +294,32 @@ source {
     sql_query = "select * from st_index_sql where c_int>=10 and c_int<=20"
     search_type = "sql"
   }
+}
+```
+
+案例七：使用 PIT 进行 shard 并行读取
+
+> 此示例使用 Point in Time API 和 `search_after` 分页。连接器会按 shard 创建 source split，因此实际读取并发由作业并行度和匹配到的 primary shard 数量共同决定。当配置的 Elasticsearch 入口是负载均衡、云服务端点或代理时，请设置 `wan_only = true`。
+
+```hocon
+env {
+    parallelism = 4
+}
+
+source {
+    Elasticsearch {
+        hosts = ["https://elasticsearch:9200"]
+        username = "elastic"
+        password = "elasticsearch"
+        tls_verify_certificate = false
+        tls_verify_hostname = false
+
+        index = "vector_index"
+        search_api_type = "PIT"
+        pit_keep_alive = 3600000
+        pit_batch_size = 500
+        wan_only = true
+    }
 }
 ```
 

@@ -91,4 +91,11 @@ public class EsClusterConnectionConfig {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The key password for the trust store specified");
+
+    public static final Option<Boolean> WAN_ONLY =
+            Options.key("wan_only")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If true, do not probe data-node HTTP addresses; always route through the configured hosts. Useful when data-node IPs aren't reachable from VTS (e.g. cluster behind a load balancer).");
 }

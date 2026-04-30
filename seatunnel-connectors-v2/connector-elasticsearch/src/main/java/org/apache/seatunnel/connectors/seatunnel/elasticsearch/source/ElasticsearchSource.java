@@ -23,6 +23,7 @@ import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.PkConfig;
 import org.apache.seatunnel.shade.com.google.common.annotations.VisibleForTesting;
 
+import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
@@ -88,13 +89,32 @@ public class ElasticsearchSource
     private List<SourceConfig> createMultiSource(ReadonlyConfig config) {
         List<Map<String, Object>> configMaps = config.get(SourceConfig.INDEX_LIST);
         List<ReadonlyConfig> configList =
-                configMaps.stream().map(ReadonlyConfig::fromMap).collect(Collectors.toList());
+                configMaps.stream()
+                        .map(indexConfig -> inheritTopLevelSourceOptions(config, indexConfig))
+                        .map(ReadonlyConfig::fromMap)
+                        .collect(Collectors.toList());
         List<SourceConfig> sourceConfigList = new ArrayList<>(configList.size());
         for (ReadonlyConfig readonlyConfig : configList) {
             SourceConfig sourceConfig = parseOneIndexQueryConfig(readonlyConfig);
             sourceConfigList.add(sourceConfig);
         }
         return sourceConfigList;
+    }
+
+    private Map<String, Object> inheritTopLevelSourceOptions(
+            ReadonlyConfig config, Map<String, Object> indexConfig) {
+        Map<String, Object> mergedConfig = new HashMap<>(indexConfig);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SCROLL_TIME);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SCROLL_SIZE);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SEARCH_API_TYPE);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.PIT_KEEP_ALIVE);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.PIT_BATCH_SIZE);
+        return mergedConfig;
+    }
+
+    private <T> void inheritOptionIfAbsent(
+            ReadonlyConfig config, Map<String, Object> mergedConfig, Option<T> option) {
+        config.getOptional(option).ifPresent(value -> mergedConfig.putIfAbsent(option.key(), value));
     }
 
     private SourceConfig parseOneIndexQueryConfig(ReadonlyConfig readonlyConfig) {
@@ -178,6 +198,24 @@ public class ElasticsearchSource
         sourceConfig.setScrollSize(scrollSize);
         sourceConfig.setIndex(index);
         sourceConfig.setCatalogTable(catalogTable);
+
+        sourceConfig.setSearchApiType(readonlyConfig.get(SourceConfig.SEARCH_API_TYPE));
+
+        long pitKeepAlive = readonlyConfig.get(SourceConfig.PIT_KEEP_ALIVE);
+        int pitBatchSize = readonlyConfig.get(SourceConfig.PIT_BATCH_SIZE);
+        if (pitKeepAlive <= 0) {
+            throw new ElasticsearchConnectorException(
+                    ElasticsearchConnectorErrorCode.INVALID_OPTION_VALUE,
+                    "pit_keep_alive must be > 0 (ms), got " + pitKeepAlive);
+        }
+        if (pitBatchSize <= 0) {
+            throw new ElasticsearchConnectorException(
+                    ElasticsearchConnectorErrorCode.INVALID_OPTION_VALUE,
+                    "pit_batch_size must be > 0, got " + pitBatchSize);
+        }
+        sourceConfig.setPitKeepAlive(pitKeepAlive);
+        sourceConfig.setPitBatchSize(pitBatchSize);
+
         return sourceConfig;
     }
 
