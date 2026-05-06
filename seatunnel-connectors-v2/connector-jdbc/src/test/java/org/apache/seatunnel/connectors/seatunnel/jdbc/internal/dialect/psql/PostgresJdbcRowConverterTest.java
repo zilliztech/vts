@@ -24,6 +24,7 @@ import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -154,6 +155,21 @@ public class PostgresJdbcRowConverterTest {
         Assertions.assertNotNull(row);
         Assertions.assertEquals(1, row.getField(0));
         Assertions.assertNull(row.getField(1), "timestamp_tz_col should be null");
+    }
+
+    @Test
+    public void testToInternalWithNullVector() throws SQLException {
+        ResultSet rs = mock(ResultSet.class);
+        TableSchema tableSchema = createTableSchema("embedding", VectorType.VECTOR_FLOAT_TYPE, null);
+
+        setupMockResultSet(rs, "INT4", "vector", 1, null);
+        when(rs.getString(2)).thenReturn(null);
+
+        SeaTunnelRow row = converter.toInternal(rs, tableSchema);
+
+        Assertions.assertNotNull(row);
+        Assertions.assertEquals(1, row.getField(0));
+        Assertions.assertNull(row.getField(1), "embedding should be null");
     }
 
 }
