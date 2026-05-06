@@ -42,6 +42,7 @@ import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.NullVectorFieldException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 
 import java.nio.ByteBuffer;
@@ -356,8 +357,17 @@ public class MilvusSinkConverter {
                 .build();
     }
 
+    private boolean isFloatVectorDataType(io.milvus.v2.common.DataType dataType) {
+        return dataType == io.milvus.v2.common.DataType.FloatVector
+                || dataType == io.milvus.v2.common.DataType.Float16Vector
+                || dataType == io.milvus.v2.common.DataType.BFloat16Vector;
+    }
+
     public Object convertByMilvusType(FieldSchema fieldSchema, Object value) {
         if (value == null) {
+            if (isFloatVectorDataType(fieldSchema.getDataType())) {
+                throw new NullVectorFieldException(fieldSchema.getName());
+            }
             return null;
         }
         switch (fieldSchema.getDataType()) {

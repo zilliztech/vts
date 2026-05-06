@@ -27,6 +27,7 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.NullVectorFieldException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -120,6 +121,84 @@ public class MilvusSinkConverterTest {
         FieldSchema schema = FieldSchema.builder()
                 .name("ts").dataType(DataType.Timestamptz).build();
         Object result = converter.convertByMilvusType(schema, null);
+        Assertions.assertNull(result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_NullVectorThrowsDedicatedException() {
+        FieldSchema schema =
+                FieldSchema.builder()
+                        .name("embedding")
+                        .dataType(DataType.FloatVector)
+                        .dimension(4)
+                        .build();
+
+        NullVectorFieldException exception =
+                Assertions.assertThrows(
+                        NullVectorFieldException.class,
+                        () -> converter.convertByMilvusType(schema, null));
+
+        Assertions.assertEquals("embedding", exception.getFieldName());
+    }
+
+    @Test
+    public void testConvertByMilvusType_NullFloat16VectorThrowsDedicatedException() {
+        FieldSchema schema =
+                FieldSchema.builder()
+                        .name("float16_embedding")
+                        .dataType(DataType.Float16Vector)
+                        .dimension(4)
+                        .build();
+
+        NullVectorFieldException exception =
+                Assertions.assertThrows(
+                        NullVectorFieldException.class,
+                        () -> converter.convertByMilvusType(schema, null));
+
+        Assertions.assertEquals("float16_embedding", exception.getFieldName());
+    }
+
+    @Test
+    public void testConvertByMilvusType_NullBFloat16VectorThrowsDedicatedException() {
+        FieldSchema schema =
+                FieldSchema.builder()
+                        .name("bfloat16_embedding")
+                        .dataType(DataType.BFloat16Vector)
+                        .dimension(4)
+                        .build();
+
+        NullVectorFieldException exception =
+                Assertions.assertThrows(
+                        NullVectorFieldException.class,
+                        () -> converter.convertByMilvusType(schema, null));
+
+        Assertions.assertEquals("bfloat16_embedding", exception.getFieldName());
+    }
+
+    @Test
+    public void testConvertByMilvusType_NullInt8VectorReturnsNull() {
+        FieldSchema schema =
+                FieldSchema.builder()
+                        .name("int8_embedding")
+                        .dataType(DataType.Int8Vector)
+                        .dimension(4)
+                        .build();
+
+        Object result = converter.convertByMilvusType(schema, null);
+
+        Assertions.assertNull(result);
+    }
+
+    @Test
+    public void testConvertByMilvusType_NullSparseFloatVectorReturnsNull() {
+        FieldSchema schema =
+                FieldSchema.builder()
+                        .name("sparse_embedding")
+                        .dataType(DataType.SparseFloatVector)
+                        .build();
+
+        Object result = converter.convertByMilvusType(schema, null);
+
         Assertions.assertNull(result);
     }
 

@@ -198,6 +198,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .defaultValue(1000)
                         .withDescription("writer batch size");
 
+        public static final Option<Boolean> SKIP_NULL_VECTOR_ROWS = Options.key("skip_null_vector_rows")
+                        .booleanType()
+                        .defaultValue(false)
+                        .withDescription("Skip rows that contain null vector fields before writing to Milvus");
+
         public static final Option<Map<String, String>> BULK_WRITER_CONFIG = Options.key("bulk_writer_config")
                         .mapType()
                         .defaultValue(new HashMap<>())

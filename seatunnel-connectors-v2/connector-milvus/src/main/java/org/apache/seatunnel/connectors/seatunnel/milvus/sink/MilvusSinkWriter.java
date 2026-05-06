@@ -37,7 +37,9 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnecto
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.SKIP_NULL_VECTOR_ROWS;
 
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.NullVectorFieldException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
@@ -51,6 +53,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -72,8 +75,11 @@ public class MilvusSinkWriter
     private final StageBucket stageBucket;
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
+    private final boolean skipNullVectorRows;
 
     private final AtomicLong writeCount = new AtomicLong(0);
+    private final AtomicLong skippedNullVectorRows = new AtomicLong(0);
+    private final Set<String> skippedNullVectorFields = ConcurrentHashMap.newKeySet();
 
     public MilvusSinkWriter(
             Context context,
@@ -88,6 +94,7 @@ public class MilvusSinkWriter
         this.milvusClient = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
         describeCollectionResp = milvusClient.describeCollection(DescribeCollectionReq.builder().collectionName(collection).build());
         hasPartitionKey = describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream().anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
+        skipNullVectorRows = config.get(SKIP_NULL_VECTOR_ROWS);
         useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
         // apply for a stage session bucket to store parquet files
         stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
@@ -150,6 +157,13 @@ public class MilvusSinkWriter
         synchronized (batchWriter) {
             try {
                 batchWriter.write(element);
+            } catch (NullVectorFieldException e) {
+                if (skipNullVectorRows) {
+                    skippedNullVectorRows.incrementAndGet();
+                    skippedNullVectorFields.add(e.getFieldName());
+                    return;
+                }
+                throw e;
             } catch (Exception e) {
                 log.error("write data to milvus failed, error: {}", e.getMessage());
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.WRITE_ERROR, e);
@@ -209,6 +223,13 @@ public class MilvusSinkWriter
                     }
                     // Execute asynchronous wait job finish
                     futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
+                }
+                if (skippedNullVectorRows.get() > 0) {
+                    log.warn(
+                            "Skipped {} rows with null vector fields before writing to Milvus, collection: {}, fields: {}",
+                            skippedNullVectorRows.get(),
+                            this.collection,
+                            skippedNullVectorFields);
                 }
                 log.info("Successfully put {} records to Milvus, collection: {}", writeCount.get(), this.collection);
                 log.info("Stop Milvus Client success");
