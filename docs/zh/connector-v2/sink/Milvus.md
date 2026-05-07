@@ -47,6 +47,7 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 | token                | String  | 是      | -                            | 用户：密码                                             |
 | database             | String  | 否       | -                            | 将数据写入哪个数据库，默认为源数据库。 |
 | schema_save_mode     | enum    | 否       | CREATE_SCHEMA_WHEN_NOT_EXIST | 当表不存在时自动创建表。                   |
+| create_index         | boolean | 否       | true                         | 自动创建 collection 时是否创建索引。       |
 | enable_auto_id       | boolean | 否       | false                        | 主键列启用autoId。                         |
 | enable_upsert        | boolean | 否       | false                        | 是否启用upsert。                                   |
 | enable_dynamic_field | boolean | 否       | true                         | 是否启用带动态字段的创建表。                   |

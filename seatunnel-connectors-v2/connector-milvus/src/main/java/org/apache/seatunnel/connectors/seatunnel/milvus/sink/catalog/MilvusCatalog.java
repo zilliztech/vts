@@ -173,9 +173,13 @@ public class MilvusCatalog implements Catalog {
         try {
             catalogUtils.createTableInternal(tablePath, catalogTable);
             log.info("create table: {} success", tablePath.getTableName());
-            log.info("create index for table: {}", tablePath.getTableName());
-            catalogUtils.createIndex(tablePath, catalogTable);
-            log.info("create index for table: {} success", tablePath.getTableName());
+            if (config.get(MilvusSinkConfig.CREATE_INDEX)) {
+                log.info("create index for table: {}", tablePath.getTableName());
+                catalogUtils.createIndex(tablePath, catalogTable);
+                log.info("create index for table: {} success", tablePath.getTableName());
+            } else {
+                log.info("skip create index for table: {}", tablePath.getTableName());
+            }
         } catch (Exception e) {
             throw new CatalogException(
                     String.format("Failed to create table %s", tablePath.getTableName()), e);

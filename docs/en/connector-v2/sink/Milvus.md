@@ -47,6 +47,7 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 | token                | String  | Yes      | -                            | User:password                                             |
 | database             | String  | No       | -                            | Write data to which database, default is source database. |
 | schema_save_mode     | enum    | No       | CREATE_SCHEMA_WHEN_NOT_EXIST | Auto create table when table not exist.                   |
+| create_index         | boolean | No       | true                         | Create indexes when auto creating the collection.         |
 | enable_auto_id       | boolean | No       | false                        | Primary key column enable autoId.                         |
 | enable_upsert        | boolean | No       | false                        | Upsert data not insert.                                   |
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
