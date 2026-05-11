@@ -354,6 +354,11 @@ public class CatalogUtils {
         if (shardNum != null) {
             createCollectionReq.setNumShards(shardNum);
         }
+
+        Integer partitionNum = config.get(MilvusSinkConfig.PARTITION_NUM);
+        if (partitionNum != null) {
+            createCollectionReq.setNumPartitions(partitionNum);
+        }
         int retry = 5;
         while (retry > 0) {
             try {

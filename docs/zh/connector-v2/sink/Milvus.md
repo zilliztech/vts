@@ -53,6 +53,7 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 | enable_dynamic_field | boolean | 否       | true                         | 是否启用带动态字段的创建表。                   |
 | batch_size           | int     | 否       | 1000                         | 写入批大小。                                         |
 | partition_key        | String  | 否       |                              | Milvus分区键字段                                |
+| partition_num        | int     | 否       |                              | 透传给 Milvus create collection 请求的分区数量。当前主要用于 Milvus 分区键模式。 |
 | collection_rename    | Map     | 否       | {}                           | 重命名集合：`{源名称 = "目标名称"}`       |
 | field_schema         | List    | 否       | []                           | 按字段配置 schema。详见下文。                |
 

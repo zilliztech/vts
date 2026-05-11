@@ -193,6 +193,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .noDefaultValue()
                         .withDescription("shard num");
 
+        public static final Option<Integer> PARTITION_NUM = Options.key("partition_num")
+                        .intType()
+                        .noDefaultValue()
+                        .withDescription("partition num for Milvus create collection request");
+
         public static final Option<String> TIMEZONE = Options.key("timezone")
                         .stringType()
                         .noDefaultValue()

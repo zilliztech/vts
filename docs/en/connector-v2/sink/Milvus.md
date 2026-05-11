@@ -53,6 +53,7 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
 | partition_key        | String  | No       |                              | Milvus partition key field                                |
+| partition_num        | int     | No       |                              | Number of partitions passed to Milvus create collection request. Currently used by Milvus partition key mode. |
 | collection_rename    | Map     | No       | {}                           | Rename collections: `{source_name = "target_name"}`       |
 | field_schema         | List    | No       | []                           | Per-field schema configuration. See below.                |
 
