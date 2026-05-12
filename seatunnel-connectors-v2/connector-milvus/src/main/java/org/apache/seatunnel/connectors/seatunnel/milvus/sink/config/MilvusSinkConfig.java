@@ -47,6 +47,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .defaultValue(APPEND_DATA)
                         .withDescription("data_save_mode");
 
+        public static final Option<Boolean> CREATE_INDEX = Options.key("create_index")
+                        .booleanType()
+                        .defaultValue(true)
+                        .withDescription("Create index or not when auto create collection");
+
         public static final Option<String> DATABASE = Options.key("database")
                         .stringType()
                         .noDefaultValue()
@@ -187,6 +192,11 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .intType()
                         .noDefaultValue()
                         .withDescription("shard num");
+
+        public static final Option<Integer> PARTITION_NUM = Options.key("partition_num")
+                        .intType()
+                        .noDefaultValue()
+                        .withDescription("partition num for Milvus create collection request");
 
         public static final Option<String> TIMEZONE = Options.key("timezone")
                         .stringType()

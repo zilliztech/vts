@@ -168,19 +168,15 @@ public class CatalogUtils {
                 ? IndexParam.MetricType.valueOf(indexInfo.get("metricType"))
                 : null;
 
-        IndexParam.IndexType indexType;
-        try {
-            indexType = IndexParam.IndexType.valueOf(indexInfo.get("indexType"));
-        } catch (IllegalArgumentException e) {
-            log.warn("Unknown index type: {}, using default AUTOINDEX", indexInfo.get("indexType"));
-            indexType = IndexParam.IndexType.AUTOINDEX;
-        }
+        IndexParam.IndexType indexType = parseIndexType(indexInfo.get("indexType"));
 
         IndexParam.IndexParamBuilder builder = IndexParam.builder()
                 .fieldName(fieldName)
                 .metricType(metricType)
-                .indexType(indexType)
                 .indexName(indexInfo.get("indexName"));
+        if (indexType != null) {
+            builder.indexType(indexType);
+        }
 
         // Parse and apply extraParams if present
         if (indexInfo.containsKey("extraParams") && StringUtils.isNotEmpty(indexInfo.get("extraParams"))) {
@@ -192,6 +188,27 @@ public class CatalogUtils {
         }
 
         return builder.build();
+    }
+
+    IndexParam.IndexType parseIndexType(String indexType) {
+        if (StringUtils.isBlank(indexType)) {
+            return null;
+        }
+        if (IndexParam.IndexType.None.getName().equalsIgnoreCase(indexType)) {
+            throw new MilvusConnectorException(
+                    MilvusConnectionErrorCode.CREATE_INDEX_ERROR,
+                    "Milvus index type from source is None. The source index type is missing or unsupported by the current Milvus Java SDK; refusing to create AUTOINDEX implicitly.");
+        }
+        for (IndexParam.IndexType value : IndexParam.IndexType.values()) {
+            if (value.name().equals(indexType) || value.getName().equals(indexType)) {
+                return value;
+            }
+        }
+        throw new MilvusConnectorException(
+                MilvusConnectionErrorCode.CREATE_INDEX_ERROR,
+                String.format(
+                        "Unsupported Milvus index type from source: %s. Please upgrade VTS/Milvus Java SDK or recreate the source index with a supported type.",
+                        indexType));
     }
 
     void createTableInternal(TablePath tablePath, CatalogTable catalogTable) {
@@ -336,6 +353,11 @@ public class CatalogUtils {
         Integer shardNum = getShardNum(options);
         if (shardNum != null) {
             createCollectionReq.setNumShards(shardNum);
+        }
+
+        Integer partitionNum = config.get(MilvusSinkConfig.PARTITION_NUM);
+        if (partitionNum != null) {
+            createCollectionReq.setNumPartitions(partitionNum);
         }
         int retry = 5;
         while (retry > 0) {

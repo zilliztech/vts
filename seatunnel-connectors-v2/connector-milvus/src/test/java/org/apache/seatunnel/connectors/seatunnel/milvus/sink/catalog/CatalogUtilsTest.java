@@ -271,9 +271,7 @@ public class CatalogUtilsTest {
     }
 
     @Test
-    void testBuildIndexParam_trieIndexType_fallsBackToAutoindex() {
-        // TRIE index type is serialized as "Trie" via getName(), which doesn't match
-        // enum constant name "TRIE", so it falls back to AUTOINDEX
+    void testBuildIndexParam_trieIndexTypeName_preservesTrie() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "varchar_field");
         indexInfo.put("indexName", "trie_idx");
@@ -285,16 +283,34 @@ public class CatalogUtilsTest {
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
 
         Assertions.assertNotNull(result);
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType(),
-                "Trie (getName) doesn't match TRIE (valueOf), should fall back to AUTOINDEX");
+        Assertions.assertEquals(IndexParam.IndexType.TRIE, result.getIndexType());
     }
 
     @Test
-    void testBuildIndexParam_unknownIndexType_fallsBackToAutoindex() {
+    void testBuildIndexParam_noneIndexType_failsLoudly() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "vec");
         indexInfo.put("indexName", "idx");
-        indexInfo.put("indexType", "NONEXISTENT_TYPE");
+        indexInfo.put("indexType", "None");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        MilvusConnectorException exception = Assertions.assertThrows(
+                MilvusConnectorException.class,
+                () -> catalogUtils.buildIndexParam(
+                        indexInfo, targetFields, targetFields, false, gson, extraParamsType));
+
+        Assertions.assertTrue(exception.getMessage().contains(
+                "Milvus index type from source is None. The source index type is missing or unsupported by the current Milvus Java SDK; refusing to create AUTOINDEX implicitly."));
+    }
+
+    @Test
+    void testBuildIndexParam_blankIndexType_usesSdkDefault() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("indexType", "");
         indexInfo.put("metricType", "L2");
 
         Set<String> targetFields = setOf("vec");
@@ -303,8 +319,42 @@ public class CatalogUtilsTest {
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
 
         Assertions.assertNotNull(result);
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType(),
-                "Unknown index type should fall back to AUTOINDEX");
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+    }
+
+    @Test
+    void testBuildIndexParam_missingIndexType_usesSdkDefault() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+    }
+
+    @Test
+    void testBuildIndexParam_unknownIndexType_failsLoudly() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("indexType", "NONEXISTENT_TYPE");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        MilvusConnectorException exception = Assertions.assertThrows(
+                MilvusConnectorException.class,
+                () -> catalogUtils.buildIndexParam(
+                        indexInfo, targetFields, targetFields, false, gson, extraParamsType));
+
+        Assertions.assertTrue(exception.getMessage().contains(
+                "Unsupported Milvus index type from source: NONEXISTENT_TYPE. Please upgrade VTS/Milvus Java SDK or recreate the source index with a supported type."));
     }
 
     @Test
@@ -464,15 +514,13 @@ public class CatalogUtilsTest {
     }
 
     @Test
-    void testParseIndexParamsFromSource_trieIndexTypeFallback() {
-        // Simulates what the source connector serializes for a TRIE index
-        // getName() returns "Trie" which doesn't match valueOf("TRIE"), falls back to AUTOINDEX
+    void testParseIndexParamsFromSource_trieIndexTypeNamePreserved() {
         List<Map<String, String>> indexes = new ArrayList<>();
 
         Map<String, String> idx = new HashMap<>();
         idx.put("fieldName", "name");
         idx.put("indexName", "name_trie");
-        idx.put("indexType", "Trie"); // getName() for TRIE returns "Trie"
+        idx.put("indexType", "Trie");
         indexes.add(idx);
 
         Map<String, String> options = new HashMap<>();
@@ -485,7 +533,7 @@ public class CatalogUtilsTest {
 
         List<IndexParam> result = catalogUtils.parseIndexParamsFromSource(table);
         Assertions.assertEquals(1, result.size());
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.get(0).getIndexType());
+        Assertions.assertEquals(IndexParam.IndexType.TRIE, result.get(0).getIndexType());
     }
 
     // ========================

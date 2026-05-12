@@ -33,10 +33,12 @@ Write data from milvus to Milvus or Zilliz Cloud
 | token                | String  | Yes      | -                            | User:password                                             |
 | database             | String  | No       | -                            | Write data to which database, default is source database. |
 | schema_save_mode     | enum    | No       | CREATE_SCHEMA_WHEN_NOT_EXIST | Auto create table when table not exist.                   |
+| create_index         | boolean | No       | true                         | Create indexes when auto creating the collection.         |
 | enable_auto_id       | boolean | No       | false                        | Primary key column enable autoId.                         |
 | enable_upsert        | boolean | No       | false                        | Upsert data not insert.                                   |
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
+| partition_num        | int     | No       | -                            | Number of partitions passed to Milvus create collection request. Currently used by Milvus partition key mode. |
 | functionList         | List    | No       | []                           | List of Milvus functions to add to the collection. Each function contains: name, description, functionType, inputFieldNames, outputFieldNames, and params. Will be merged with functions from source metadata. |
 | field_schema         | List    | No       | []                           | **Unified field schema configuration.** Supports both dynamic field extraction and field property configuration. See detailed examples below. |
 |server_pem_path| String | No       | No      |    Path to the PEM file for server certificate                                                                                |
