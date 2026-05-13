@@ -21,6 +21,7 @@ import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceSplitModeEnum;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.IndexDocsCount;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.ShardInfo;
 
@@ -271,6 +272,45 @@ public class ElasticsearchSourceSplitEnumeratorTest {
         verify(ctx).signalNoMoreSplits(0);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void runCreatesIndexSplitWithoutShardDiscoveryWhenSplitModeIndex() throws Exception {
+        SourceSplitEnumerator.Context<ElasticsearchSourceSplit> ctx =
+                (SourceSplitEnumerator.Context<ElasticsearchSourceSplit>)
+                        mock(SourceSplitEnumerator.Context.class);
+        when(ctx.currentParallelism()).thenReturn(1);
+        when(ctx.registeredReaders()).thenReturn(new HashSet<>(Collections.singletonList(0)));
+
+        EsRestClient client = mock(EsRestClient.class);
+        SourceConfig sourceConfig = sourceConfig("idx-a");
+        sourceConfig.setSplitMode(SourceSplitModeEnum.INDEX);
+
+        ElasticsearchSourceSplitEnumerator enumerator =
+                new ElasticsearchSourceSplitEnumerator(
+                        ctx,
+                        ReadonlyConfig.fromMap(Collections.emptyMap()),
+                        Collections.singletonList(sourceConfig));
+        injectClient(enumerator, client);
+
+        enumerator.run();
+
+        ArgumentCaptor<List<ElasticsearchSourceSplit>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(ctx).assignSplit(eq(0), captor.capture());
+        ElasticsearchSourceSplit split = captor.getValue().get(0);
+        Assertions.assertEquals("idx-a", split.getConcreteIndex());
+        Assertions.assertEquals(-1, split.getShardId());
+        Assertions.assertFalse(split.isShardSplit());
+        Assertions.assertNull(split.getNodeId());
+        Assertions.assertNull(split.getDataNodeAddress());
+        Assertions.assertNull(split.getPreference());
+
+        verify(client, never()).getNodesHttpAddresses();
+        verify(client, never()).getIndexDocsCount("idx-a");
+        verify(client, never()).getSearchShards("idx-a");
+        verify(ctx).signalNoMoreSplits(0);
+    }
+
     // ==================== snapshotState isolation ====================
 
     /**
@@ -351,6 +391,17 @@ public class ElasticsearchSourceSplitEnumeratorTest {
                         /* dataNodeAddress */ null);
         Assertions.assertEquals("node-abc", split.getNodeId());
         Assertions.assertEquals("_shards:3|_prefer_nodes:node-abc", split.getPreference());
+    }
+
+    @Test
+    public void indexSplitHasNoShardPreference() {
+        ElasticsearchSourceSplit split =
+                ElasticsearchSourceSplit.indexSplit(new SourceConfig(), "idx");
+        Assertions.assertEquals("idx", split.getConcreteIndex());
+        Assertions.assertEquals(-1, split.getShardId());
+        Assertions.assertFalse(split.isShardSplit());
+        Assertions.assertNull(split.getPreference());
+        Assertions.assertEquals("idx-index", split.splitId());
     }
 
     // ==================== restore across parallelism change ====================

@@ -39,6 +39,7 @@ The source now creates checkpoint splits at Elasticsearch shard granularity. Che
 | scroll_time             | string  | no       | 1m                                                             |
 | scroll_size             | int     | no       | 100                                                            |
 | search_api_type         | enum    | no       | SCROLL                                                         |
+| split_mode              | enum    | no       | SHARD                                                          |
 | pit_keep_alive          | long    | no       | 3600000                                                        |
 | pit_batch_size          | int     | no       | 100                                                            |
 | wan_only                | boolean | no       | false                                                          |
@@ -98,6 +99,12 @@ Maximum number of hits to be returned with each Elasticsearch scroll request.
 Pagination API used by the source connector. Valid values are `SCROLL` and `PIT`.
 
 `SCROLL` uses the Elasticsearch Scroll API and is the default value. `PIT` uses Point in Time with `search_after`, which requires Elasticsearch 7.10 or later.
+
+### split_mode [enum]
+
+Source split granularity. Valid values are `SHARD` and `INDEX`.
+
+`SHARD` is the default value and creates one split per Elasticsearch shard, using shard discovery APIs for higher parallelism. `INDEX` creates one split per configured index target and skips shard discovery; use it when the backend does not expose shard topology.
 
 ### pit_keep_alive [long]
 

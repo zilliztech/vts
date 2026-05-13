@@ -24,6 +24,7 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsType;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SearchApiTypeEnum;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceSplitModeEnum;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.source.ElasticsearchSource;
 
 import org.junit.jupiter.api.Assertions;
@@ -42,10 +43,13 @@ public class ElasticsearchSourceTest {
     public void testIndexListInheritsTopLevelOptionsForEveryIndex() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put("hosts", Collections.singletonList("http://localhost:9200"));
+        Map<String, Object> childOverride = indexConfig("idx-b");
+        childOverride.put("split_mode", "SHARD");
         config.put(
                 "index_list",
-                java.util.Arrays.asList(indexConfig("idx-a"), indexConfig("idx-b")));
+                java.util.Arrays.asList(indexConfig("idx-a"), childOverride));
         config.put("search_api_type", "PIT");
+        config.put("split_mode", "INDEX");
         config.put("pit_keep_alive", 12345L);
         config.put("pit_batch_size", 321);
         config.put("scroll_time", "7m");
@@ -66,6 +70,8 @@ public class ElasticsearchSourceTest {
             Assertions.assertEquals("7m", sourceConfig.getScrollTime());
             Assertions.assertEquals(456, sourceConfig.getScrollSize());
         }
+        Assertions.assertEquals(SourceSplitModeEnum.INDEX, sourceConfigs.get(0).getSplitMode());
+        Assertions.assertEquals(SourceSplitModeEnum.SHARD, sourceConfigs.get(1).getSplitMode());
     }
 
     private static Map<String, Object> indexConfig(String index) {

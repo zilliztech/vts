@@ -25,12 +25,12 @@ import lombok.Getter;
 import lombok.ToString;
 
 /**
- * One split per ES shard. Holds:
+ * One split per ES shard or configured index target. Holds:
  * <ul>
  *   <li>a shared reference to the source's {@link SourceConfig} — user-facing
  *       configuration, common to every split from the same source;</li>
  *   <li>split-specific runtime metadata resolved by the enumerator
- *       ({@code concreteIndex}, {@code shardId}, {@code nodeId},
+ *       ({@code concreteIndex}, optional {@code shardId}, {@code nodeId},
  *       {@code dataNodeAddress}).</li>
  * </ul>
  * Split-specific fields do NOT belong on {@code SourceConfig} because they
@@ -48,11 +48,12 @@ public class ElasticsearchSourceSplit implements SourceSplit {
 
     @Getter private final SourceConfig sourceConfig;
 
-    /** Concrete index this split queries — resolved from {@code SourceConfig.index}
-     *  (which may be a wildcard) via {@code _cat/indices}. */
+    /** Index target this split queries. In shard mode this is a concrete index
+     *  resolved from {@code SourceConfig.index}; in index mode it is the
+     *  configured index target as-is. */
     @Getter private final String concreteIndex;
 
-    /** ES shard id (0-based). */
+    /** ES shard id (0-based), or {@code -1} for index-level splits. */
     @Getter private final int shardId;
 
     /** ES node id that hosts the primary of this shard. Used to pin search execution
@@ -73,8 +74,18 @@ public class ElasticsearchSourceSplit implements SourceSplit {
 
     /** {@code preference=} query param: pins the shard AND soft-prefers the primary
      *  node when known. Soft (not hard) so ES can still fall back to a replica copy
-     *  if the primary is briefly unavailable. */
+     *  if the primary is briefly unavailable. Null for index-level splits. */
     @Getter private final String preference;
+
+    public static ElasticsearchSourceSplit indexSplit(
+            SourceConfig sourceConfig, String concreteIndex) {
+        return new ElasticsearchSourceSplit(
+                sourceConfig,
+                concreteIndex,
+                /* shardId */ -1,
+                /* nodeId */ null,
+                /* dataNodeAddress */ null);
+    }
 
     public ElasticsearchSourceSplit(
             SourceConfig sourceConfig,
@@ -91,11 +102,20 @@ public class ElasticsearchSourceSplit implements SourceSplit {
         // with HTTP 400.
         this.nodeId = (nodeId == null || nodeId.isEmpty()) ? null : nodeId;
         this.dataNodeAddress = dataNodeAddress;
-        this.splitId = concreteIndex + "-shard" + shardId;
-        this.preference =
-                this.nodeId != null
-                        ? "_shards:" + shardId + "|_prefer_nodes:" + this.nodeId
-                        : "_shards:" + shardId;
+        if (isShardSplit()) {
+            this.splitId = concreteIndex + "-shard" + shardId;
+            this.preference =
+                    this.nodeId != null
+                            ? "_shards:" + shardId + "|_prefer_nodes:" + this.nodeId
+                            : "_shards:" + shardId;
+        } else {
+            this.splitId = concreteIndex + "-index";
+            this.preference = null;
+        }
+    }
+
+    public boolean isShardSplit() {
+        return shardId >= 0;
     }
 
     public SeaTunnelRowType getSeaTunnelRowType() {

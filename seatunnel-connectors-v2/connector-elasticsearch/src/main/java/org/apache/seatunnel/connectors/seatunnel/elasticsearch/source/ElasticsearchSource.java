@@ -107,6 +107,7 @@ public class ElasticsearchSource
         inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SCROLL_TIME);
         inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SCROLL_SIZE);
         inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SEARCH_API_TYPE);
+        inheritOptionIfAbsent(config, mergedConfig, SourceConfig.SPLIT_MODE);
         inheritOptionIfAbsent(config, mergedConfig, SourceConfig.PIT_KEEP_ALIVE);
         inheritOptionIfAbsent(config, mergedConfig, SourceConfig.PIT_BATCH_SIZE);
         return mergedConfig;
@@ -200,6 +201,7 @@ public class ElasticsearchSource
         sourceConfig.setCatalogTable(catalogTable);
 
         sourceConfig.setSearchApiType(readonlyConfig.get(SourceConfig.SEARCH_API_TYPE));
+        sourceConfig.setSplitMode(readonlyConfig.get(SourceConfig.SPLIT_MODE));
 
         long pitKeepAlive = readonlyConfig.get(SourceConfig.PIT_KEEP_ALIVE);
         int pitBatchSize = readonlyConfig.get(SourceConfig.PIT_BATCH_SIZE);

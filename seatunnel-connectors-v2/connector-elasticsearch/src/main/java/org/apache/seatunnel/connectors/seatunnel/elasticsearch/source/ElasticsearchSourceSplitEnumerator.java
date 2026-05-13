@@ -23,6 +23,7 @@ import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.client.EsRestClient;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig;
+import org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceSplitModeEnum;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.IndexDocsCount;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source.ShardInfo;
 import org.apache.seatunnel.connectors.seatunnel.elasticsearch.exception.ElasticsearchConnectorErrorCode;
@@ -410,9 +411,14 @@ public class ElasticsearchSourceSplitEnumerator
 
     private List<ElasticsearchSourceSplit> getElasticsearchSplit() {
         boolean wanOnly = connConfig.get(EsClusterConnectionConfig.WAN_ONLY);
+        boolean needsShardDiscovery =
+                sourceConfigs.stream()
+                        .anyMatch(
+                                sourceConfig ->
+                                        splitModeOf(sourceConfig) == SourceSplitModeEnum.SHARD);
 
         Map<String, String> nodeAddresses = Collections.emptyMap();
-        if (!wanOnly) {
+        if (needsShardDiscovery && !wanOnly) {
             try {
                 nodeAddresses = esRestClient.getNodesHttpAddresses();
             } catch (Exception e) {
@@ -428,6 +434,14 @@ public class ElasticsearchSourceSplitEnumerator
             log.info(
                     "Resolving indices for pattern [{}] ({}/{})",
                     userIndexPattern, i + 1, total);
+
+            if (splitModeOf(sourceConfig) == SourceSplitModeEnum.INDEX) {
+                splits.add(ElasticsearchSourceSplit.indexSplit(sourceConfig, userIndexPattern));
+                log.info(
+                        "Index split mode: [{}] -> 1 logical split without shard discovery",
+                        userIndexPattern);
+                continue;
+            }
 
             // Resolve the pattern to concrete indices. Two-stage handling:
             //   - null docsCount → fail loudly (index is closed, recovering, or in
@@ -485,6 +499,12 @@ public class ElasticsearchSourceSplitEnumerator
             }
         }
         return splits;
+    }
+
+    private static SourceSplitModeEnum splitModeOf(SourceConfig sourceConfig) {
+        return sourceConfig.getSplitMode() == null
+                ? SourceSplitModeEnum.SHARD
+                : sourceConfig.getSplitMode();
     }
 
     @Override
