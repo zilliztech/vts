@@ -97,6 +97,13 @@ public class SourceConfig implements Serializable {
                     .withDescription(
                             "Choose API type for pagination: SCROLL or PIT (Point in Time).");
 
+    public static final Option<SourceSplitModeEnum> SPLIT_MODE =
+            Options.key("split_mode")
+                    .enumType(SourceSplitModeEnum.class)
+                    .defaultValue(SourceSplitModeEnum.SHARD)
+                    .withDescription(
+                            "Choose source split granularity: SHARD or INDEX. INDEX mode skips shard discovery.");
+
     public static final Option<Long> PIT_KEEP_ALIVE =
             Options.key("pit_keep_alive")
                     .longType()
@@ -118,6 +125,7 @@ public class SourceConfig implements Serializable {
     private int scrollSize;
 
     private SearchApiTypeEnum searchApiType = SearchApiTypeEnum.SCROLL;
+    private SourceSplitModeEnum splitMode = SourceSplitModeEnum.SHARD;
     private long pitKeepAlive = 3600000L;
     private int pitBatchSize = 100;
 

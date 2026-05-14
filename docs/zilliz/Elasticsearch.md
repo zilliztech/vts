@@ -22,6 +22,7 @@ Allows reading data from and writing data to Elasticsearch.
 | tls_verify_hostname | Boolean | No    | false   | Whether to verify hostname in TLS connection.                                      |
 | tls_verify_certificate | Boolean | No | false   | Whether to verify certificate in TLS connection.                                   |
 | index          | String  | Yes*     | -       | The name of the Elasticsearch index to read from. Required if index_list is not set.|
+| split_mode     | String  | No       | SHARD   | Source split granularity. Use INDEX to skip shard discovery.                       |
 ## Task Example
 
 This example shows reading from Elasticsearch and writing to Milvus.

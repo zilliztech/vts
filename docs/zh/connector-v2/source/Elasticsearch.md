@@ -37,6 +37,7 @@ Source 现在按 Elasticsearch shard 粒度生成 checkpoint split。旧版本 E
 | scroll_time             | string  | no       | 1m                                  |
 | scroll_size             | int     | no       | 100                                 |
 | search_api_type         | enum    | no       | SCROLL                              |
+| split_mode              | enum    | no       | SHARD                               |
 | pit_keep_alive          | long    | no       | 3600000                             |
 | pit_batch_size          | int     | no       | 100                                 |
 | wan_only                | boolean | no       | false                               |
@@ -100,6 +101,12 @@ ElasticsSearch的原生查询语句，用于控制读取哪些数据写入到其
 Source 连接器使用的分页查询 API。可选值为 `SCROLL` 和 `PIT`。
 
 `SCROLL` 使用 Elasticsearch Scroll API，是默认值。`PIT` 使用 Point in Time 和 `search_after` 分页，需要 Elasticsearch 7.10 或更高版本。
+
+### split_mode [enum]
+
+Source split 粒度。可选值为 `SHARD` 和 `INDEX`。
+
+`SHARD` 是默认值，会按 Elasticsearch shard 创建 split，并使用 shard discovery API 提升并发读取能力。`INDEX` 会按配置的 index target 创建 split，并跳过 shard discovery；当后端不暴露 shard 拓扑时使用该模式。
 
 ### pit_keep_alive [long]
 
