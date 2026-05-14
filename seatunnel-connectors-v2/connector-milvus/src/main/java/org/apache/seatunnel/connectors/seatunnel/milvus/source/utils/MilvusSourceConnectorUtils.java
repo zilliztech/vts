@@ -197,6 +197,11 @@ public class MilvusSourceConnectorUtils {
         }
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
+            if (describeCollectionResp.getNumOfPartitions() != null) {
+                options.put(
+                        MilvusConstants.PARTITION_NUM,
+                        String.valueOf(describeCollectionResp.getNumOfPartitions()));
+            }
         } else {
             options.put(MilvusConstants.PARTITION_NAMES, getPartitionNames(client, collection));
         }

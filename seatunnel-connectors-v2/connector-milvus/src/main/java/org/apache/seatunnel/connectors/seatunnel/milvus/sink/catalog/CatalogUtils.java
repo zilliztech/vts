@@ -355,7 +355,7 @@ public class CatalogUtils {
             createCollectionReq.setNumShards(shardNum);
         }
 
-        Integer partitionNum = config.get(MilvusSinkConfig.PARTITION_NUM);
+        Integer partitionNum = getPartitionNum(options);
         if (partitionNum != null) {
             createCollectionReq.setNumPartitions(partitionNum);
         }
@@ -725,6 +725,29 @@ public class CatalogUtils {
         }
 
         return shardNum;
+    }
+
+    /**
+     * Get partition number: source first, then config override.
+     */
+    Integer getPartitionNum(Map<String, String> options) {
+        Integer partitionNum = null;
+
+        if (StringUtils.isNotEmpty(options.get(MilvusConstants.PARTITION_NUM))) {
+            try {
+                partitionNum = Integer.parseInt(options.get(MilvusConstants.PARTITION_NUM));
+                log.debug("Using partition_num from source: {}", partitionNum);
+            } catch (NumberFormatException e) {
+                log.warn("Invalid partition_num from source: {}", options.get(MilvusConstants.PARTITION_NUM));
+            }
+        }
+
+        if (config.get(MilvusSinkConfig.PARTITION_NUM) != null) {
+            partitionNum = config.get(MilvusSinkConfig.PARTITION_NUM);
+            log.debug("Overriding partition_num with config: {}", partitionNum);
+        }
+
+        return partitionNum;
     }
 
     private String getTimezone(Map<String, String> options) {
