@@ -21,7 +21,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.ToNumberPolicy;
 import com.google.gson.reflect.TypeToken;
+import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
@@ -33,6 +35,8 @@ import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaConverter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConverter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -534,6 +538,53 @@ public class CatalogUtilsTest {
         List<IndexParam> result = catalogUtils.parseIndexParamsFromSource(table);
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals(IndexParam.IndexType.TRIE, result.get(0).getIndexType());
+    }
+
+    @Test
+    void testGetPartitionNum_usesSourceValue() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "100");
+
+        Assertions.assertEquals(100, catalogUtils.getPartitionNum(options));
+    }
+
+    @Test
+    void testGetPartitionNum_configOverridesSourceValue() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "100");
+
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("partition_num", 128);
+        CatalogUtils utilsWithConfig = new CatalogUtils(null, ReadonlyConfig.fromMap(configMap));
+
+        Assertions.assertEquals(128, utilsWithConfig.getPartitionNum(options));
+    }
+
+    @Test
+    void testGetPartitionNum_invalidSourceValueIgnored() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "invalid");
+
+        Assertions.assertNull(catalogUtils.getPartitionNum(options));
+    }
+
+    @Test
+    void testMilvusSourcePartitionKeyMetadataRestoredToSinkSchema() {
+        CreateCollectionReq.FieldSchema sourceField = CreateCollectionReq.FieldSchema.builder()
+                .name("tenant_id")
+                .dataType(DataType.VarChar)
+                .maxLength(128)
+                .isPartitionKey(true)
+                .build();
+
+        PhysicalColumn sourceColumn = MilvusSourceConverter.convertColumn(sourceField);
+        Assertions.assertEquals(
+                true,
+                sourceColumn.getOptions().get(MilvusConstants.IS_PARTITION_KEY));
+
+        CreateCollectionReq.FieldSchema targetField =
+                MilvusSchemaConverter.convertToFieldType(sourceColumn, null);
+        Assertions.assertTrue(targetField.getIsPartitionKey());
     }
 
     // ========================
