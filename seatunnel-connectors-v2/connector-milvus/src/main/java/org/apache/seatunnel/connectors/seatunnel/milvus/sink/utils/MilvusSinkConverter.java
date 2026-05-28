@@ -158,6 +158,7 @@ public class MilvusSinkConverter {
                 Float[] floats = BufferUtils.toFloatArray(floatVectorBuffer);
                 return Arrays.stream(floats).collect(Collectors.toList());
             case BINARY_VECTOR:
+            case INT8_VECTOR:
             case BFLOAT16_VECTOR:
             case FLOAT16_VECTOR:
                 ByteBuffer binaryVector = (ByteBuffer) value;
@@ -509,6 +510,7 @@ public class MilvusSinkConverter {
                         return value;
                 }
             case BinaryVector:
+            case Int8Vector:
             case BFloat16Vector:
             case Float16Vector:
                 ByteBuffer binaryVector = (ByteBuffer) value;

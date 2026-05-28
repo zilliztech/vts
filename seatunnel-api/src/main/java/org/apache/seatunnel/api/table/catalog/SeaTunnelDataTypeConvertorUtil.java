@@ -85,6 +85,8 @@ public class SeaTunnelDataTypeConvertorUtil {
                 return parseMapType(field, columnType);
             case BINARY_VECTOR:
                 return VectorType.VECTOR_BINARY_TYPE;
+            case INT8_VECTOR:
+                return VectorType.VECTOR_INT8_TYPE;
             case FLOAT_VECTOR:
                 return VectorType.VECTOR_FLOAT_TYPE;
             case FLOAT16_VECTOR:
