@@ -190,6 +190,7 @@ public class MilvusSchemaConverter {
                 }
                 break;
             case BINARY_VECTOR:
+            case INT8_VECTOR:
             case FLOAT_VECTOR:
             case FLOAT16_VECTOR:
             case BFLOAT16_VECTOR:
@@ -249,6 +250,8 @@ public class MilvusSchemaConverter {
                 return io.milvus.v2.common.DataType.FloatVector;
             case BINARY_VECTOR:
                 return io.milvus.v2.common.DataType.BinaryVector;
+            case INT8_VECTOR:
+                return io.milvus.v2.common.DataType.Int8Vector;
             case FLOAT16_VECTOR:
                 return io.milvus.v2.common.DataType.Float16Vector;
             case BFLOAT16_VECTOR:
@@ -274,6 +277,7 @@ public class MilvusSchemaConverter {
         switch (dataType) {
             case FloatVector:
             case BinaryVector:
+            case Int8Vector:
             case Float16Vector:
             case BFloat16Vector:
             case SparseFloatVector:

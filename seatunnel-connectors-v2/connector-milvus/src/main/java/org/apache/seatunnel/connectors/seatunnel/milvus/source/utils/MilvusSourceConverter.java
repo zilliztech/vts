@@ -248,6 +248,7 @@ public class MilvusSourceConverter {
                                 "Unexpected vector value: " + filedValues);
                     }
                 case BINARY_VECTOR:
+                case INT8_VECTOR:
                 case FLOAT16_VECTOR:
                 case BFLOAT16_VECTOR:
                     if (filedValues instanceof ByteBuffer) {
@@ -392,6 +393,10 @@ public class MilvusSourceConverter {
                 break;
             case BinaryVector:
                 builder.dataType(VectorType.VECTOR_BINARY_TYPE);
+                builder.scale(fieldSchema.getDimension());
+                break;
+            case Int8Vector:
+                builder.dataType(VectorType.VECTOR_INT8_TYPE);
                 builder.scale(fieldSchema.getDimension());
                 break;
             case SparseFloatVector:
