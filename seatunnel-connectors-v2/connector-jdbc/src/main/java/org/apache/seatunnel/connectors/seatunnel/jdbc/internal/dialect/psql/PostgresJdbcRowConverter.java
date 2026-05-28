@@ -147,6 +147,10 @@ public class PostgresJdbcRowConverter extends AbstractJdbcRowConverter {
                     break;
                 case FLOAT_VECTOR:
                     String vectorString = JdbcFieldTypeUtils.getString(rs, resultSetIndex);
+                    if (vectorString == null) {
+                        fields[fieldIndex] = null;
+                        break;
+                    }
                     String[] vectorArrayString =
                             vectorString.replace("[", "").replace("]", "").split(",");
                     Float[] vectorArray = new Float[vectorArrayString.length];
