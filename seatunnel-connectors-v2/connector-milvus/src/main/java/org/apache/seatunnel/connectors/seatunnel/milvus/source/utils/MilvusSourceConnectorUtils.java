@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.source.utils;
 
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.common.IndexParam.IndexType;
 import io.milvus.v2.common.IndexParam.MetricType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
@@ -174,7 +175,10 @@ public class MilvusSourceConnectorUtils {
                 Map<String, String> indexInfo = new HashMap<>();
                 indexInfo.put("fieldName", indexDesc.getFieldName());
                 indexInfo.put("indexName", indexDesc.getIndexName());
-                indexInfo.put("indexType", indexDesc.getIndexType().getName());
+                IndexType indexType = indexDesc.getIndexType();
+                if (indexType != null) {
+                    indexInfo.put("indexType", indexType.getName());
+                }
                 if (indexDesc.getMetricType() != MetricType.INVALID) {
                     indexInfo.put("metricType", indexDesc.getMetricType().name());
                 }
@@ -193,6 +197,11 @@ public class MilvusSourceConnectorUtils {
         }
         if (existPartitionKeyField) {
             options.put(MilvusConstants.PARTITION_KEY_FIELD, partitionKeyField);
+            if (describeCollectionResp.getNumOfPartitions() != null) {
+                options.put(
+                        MilvusConstants.PARTITION_NUM,
+                        String.valueOf(describeCollectionResp.getNumOfPartitions()));
+            }
         } else {
             options.put(MilvusConstants.PARTITION_NAMES, getPartitionNames(client, collection));
         }

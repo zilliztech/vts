@@ -302,6 +302,9 @@ public class MilvusSourceConverter {
         if (fieldSchema.getAutoID() != null) {
             optionsMap.put(MilvusConstants.AUTO_ID, fieldSchema.getAutoID());
         }
+        if (Boolean.TRUE.equals(fieldSchema.getIsPartitionKey())) {
+            optionsMap.put(MilvusConstants.IS_PARTITION_KEY, true);
+        }
 
         switch (dataType) {
             case Bool:

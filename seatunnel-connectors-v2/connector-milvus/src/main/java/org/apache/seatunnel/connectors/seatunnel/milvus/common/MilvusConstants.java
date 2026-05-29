@@ -25,6 +25,7 @@ public class MilvusConstants {
     // Collection options
     public static final String ENABLE_DYNAMIC_FIELD = "enableDynamicField";
     public static final String SHARDS_NUM = "shardsNum";
+    public static final String PARTITION_NUM = "partitionNum";
     public static final String PARTITION_KEY_FIELD = "partitionKeyField";
     public static final String PARTITION_NAMES = "partitionNames";
     public static final String MILVUS = "milvus";

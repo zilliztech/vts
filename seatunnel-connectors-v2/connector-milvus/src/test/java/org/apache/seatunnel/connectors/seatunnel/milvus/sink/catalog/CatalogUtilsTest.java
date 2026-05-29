@@ -21,7 +21,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.ToNumberPolicy;
 import com.google.gson.reflect.TypeToken;
+import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
@@ -33,6 +35,8 @@ import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSchemaConverter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourceConverter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -271,9 +275,7 @@ public class CatalogUtilsTest {
     }
 
     @Test
-    void testBuildIndexParam_trieIndexType_fallsBackToAutoindex() {
-        // TRIE index type is serialized as "Trie" via getName(), which doesn't match
-        // enum constant name "TRIE", so it falls back to AUTOINDEX
+    void testBuildIndexParam_trieIndexTypeName_preservesTrie() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "varchar_field");
         indexInfo.put("indexName", "trie_idx");
@@ -285,16 +287,34 @@ public class CatalogUtilsTest {
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
 
         Assertions.assertNotNull(result);
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType(),
-                "Trie (getName) doesn't match TRIE (valueOf), should fall back to AUTOINDEX");
+        Assertions.assertEquals(IndexParam.IndexType.TRIE, result.getIndexType());
     }
 
     @Test
-    void testBuildIndexParam_unknownIndexType_fallsBackToAutoindex() {
+    void testBuildIndexParam_noneIndexType_failsLoudly() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "vec");
         indexInfo.put("indexName", "idx");
-        indexInfo.put("indexType", "NONEXISTENT_TYPE");
+        indexInfo.put("indexType", "None");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        MilvusConnectorException exception = Assertions.assertThrows(
+                MilvusConnectorException.class,
+                () -> catalogUtils.buildIndexParam(
+                        indexInfo, targetFields, targetFields, false, gson, extraParamsType));
+
+        Assertions.assertTrue(exception.getMessage().contains(
+                "Milvus index type from source is None. The source index type is missing or unsupported by the current Milvus Java SDK; refusing to create AUTOINDEX implicitly."));
+    }
+
+    @Test
+    void testBuildIndexParam_blankIndexType_usesSdkDefault() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("indexType", "");
         indexInfo.put("metricType", "L2");
 
         Set<String> targetFields = setOf("vec");
@@ -303,8 +323,42 @@ public class CatalogUtilsTest {
                 indexInfo, targetFields, targetFields, false, gson, extraParamsType);
 
         Assertions.assertNotNull(result);
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType(),
-                "Unknown index type should fall back to AUTOINDEX");
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+    }
+
+    @Test
+    void testBuildIndexParam_missingIndexType_usesSdkDefault() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+    }
+
+    @Test
+    void testBuildIndexParam_unknownIndexType_failsLoudly() {
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "idx");
+        indexInfo.put("indexType", "NONEXISTENT_TYPE");
+        indexInfo.put("metricType", "L2");
+
+        Set<String> targetFields = setOf("vec");
+
+        MilvusConnectorException exception = Assertions.assertThrows(
+                MilvusConnectorException.class,
+                () -> catalogUtils.buildIndexParam(
+                        indexInfo, targetFields, targetFields, false, gson, extraParamsType));
+
+        Assertions.assertTrue(exception.getMessage().contains(
+                "Unsupported Milvus index type from source: NONEXISTENT_TYPE. Please upgrade VTS/Milvus Java SDK or recreate the source index with a supported type."));
     }
 
     @Test
@@ -464,15 +518,13 @@ public class CatalogUtilsTest {
     }
 
     @Test
-    void testParseIndexParamsFromSource_trieIndexTypeFallback() {
-        // Simulates what the source connector serializes for a TRIE index
-        // getName() returns "Trie" which doesn't match valueOf("TRIE"), falls back to AUTOINDEX
+    void testParseIndexParamsFromSource_trieIndexTypeNamePreserved() {
         List<Map<String, String>> indexes = new ArrayList<>();
 
         Map<String, String> idx = new HashMap<>();
         idx.put("fieldName", "name");
         idx.put("indexName", "name_trie");
-        idx.put("indexType", "Trie"); // getName() for TRIE returns "Trie"
+        idx.put("indexType", "Trie");
         indexes.add(idx);
 
         Map<String, String> options = new HashMap<>();
@@ -485,7 +537,54 @@ public class CatalogUtilsTest {
 
         List<IndexParam> result = catalogUtils.parseIndexParamsFromSource(table);
         Assertions.assertEquals(1, result.size());
-        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.get(0).getIndexType());
+        Assertions.assertEquals(IndexParam.IndexType.TRIE, result.get(0).getIndexType());
+    }
+
+    @Test
+    void testGetPartitionNum_usesSourceValue() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "100");
+
+        Assertions.assertEquals(100, catalogUtils.getPartitionNum(options));
+    }
+
+    @Test
+    void testGetPartitionNum_configOverridesSourceValue() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "100");
+
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("partition_num", 128);
+        CatalogUtils utilsWithConfig = new CatalogUtils(null, ReadonlyConfig.fromMap(configMap));
+
+        Assertions.assertEquals(128, utilsWithConfig.getPartitionNum(options));
+    }
+
+    @Test
+    void testGetPartitionNum_invalidSourceValueIgnored() {
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.PARTITION_NUM, "invalid");
+
+        Assertions.assertNull(catalogUtils.getPartitionNum(options));
+    }
+
+    @Test
+    void testMilvusSourcePartitionKeyMetadataRestoredToSinkSchema() {
+        CreateCollectionReq.FieldSchema sourceField = CreateCollectionReq.FieldSchema.builder()
+                .name("tenant_id")
+                .dataType(DataType.VarChar)
+                .maxLength(128)
+                .isPartitionKey(true)
+                .build();
+
+        PhysicalColumn sourceColumn = MilvusSourceConverter.convertColumn(sourceField);
+        Assertions.assertEquals(
+                true,
+                sourceColumn.getOptions().get(MilvusConstants.IS_PARTITION_KEY));
+
+        CreateCollectionReq.FieldSchema targetField =
+                MilvusSchemaConverter.convertToFieldType(sourceColumn, null);
+        Assertions.assertTrue(targetField.getIsPartitionKey());
     }
 
     // ========================

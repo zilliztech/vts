@@ -2,6 +2,7 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
+|[Improve][Elasticsearch] Support shard-parallel source reads with Scroll/PIT search; source split checkpoint format changed|https://github.com/apache/seatunnel/commit/9573251d0|2.3.11|
 |[Feature][elasticsearch-connector] support elasticsearch sql source (#8895)|https://github.com/apache/seatunnel/commit/814086279|2.3.10|
 |[Fix] Fix error log name for SourceSplitEnumerator implements class (#8817)|https://github.com/apache/seatunnel/commit/55ed90eca|2.3.10|
 |[Improve] restruct connector common options (#8634)|https://github.com/apache/seatunnel/commit/f3499a6ee|2.3.10|

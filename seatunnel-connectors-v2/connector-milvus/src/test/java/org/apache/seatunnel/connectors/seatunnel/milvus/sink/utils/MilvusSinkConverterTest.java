@@ -17,16 +17,26 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
+import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.GeometryType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -35,6 +45,8 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -398,6 +410,102 @@ public class MilvusSinkConverterTest {
         // null sub-field should be serialized as JsonNull
         Assertions.assertTrue(json.get("event_time").isJsonNull());
     }
+    // --- JSON target fields keep JsonElement semantics ---
+
+    @Test
+    public void testConvertByMilvusType_JSON_FromJsonObject() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("meta").dataType(DataType.JSON).build();
+        JsonObject input = new JsonObject();
+        input.addProperty("key", "value");
+        Object result = converter.convertByMilvusType(schema, input);
+        Assertions.assertInstanceOf(JsonObject.class, result);
+        Assertions.assertEquals("value", ((JsonObject) result).get("key").getAsString());
+    }
+
+    @Test
+    public void testConvertByMilvusType_JSON_FromJsonPrimitiveString() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("metadata").dataType(DataType.JSON).build();
+        JsonPrimitive input = new JsonPrimitive("hello");
+
+        Object result = converter.convertByMilvusType(schema, input);
+
+        Assertions.assertInstanceOf(JsonPrimitive.class, result);
+        Assertions.assertEquals("hello", ((JsonPrimitive) result).getAsString());
+    }
+
+    @Test
+    public void testBuildMilvusData_MetadataFieldConvertedByTargetSchema() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{CommonOptions.METADATA.getName()},
+                new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("store_id", 100001);
+        metadata.addProperty("msid", "MSID-A001");
+        SeaTunnelRow row = new SeaTunnelRow(new Object[]{metadata.toString()});
+
+        DescribeCollectionResp describeCollectionResp = buildDescribeCollectionResp(
+                FieldSchema.builder()
+                        .name("store_id")
+                        .dataType(DataType.VarChar)
+                        .maxLength(200)
+                        .build(),
+                FieldSchema.builder()
+                        .name("milvus_msid")
+                        .dataType(DataType.VarChar)
+                        .maxLength(200)
+                        .build());
+        Map<String, String> fieldMap = new HashMap<>();
+        fieldMap.put("store_id", "store_id");
+        fieldMap.put("msid", "milvus_msid");
+
+        JsonObject data = converter.buildMilvusData(
+                catalogTable, describeCollectionResp, fieldMap, row);
+
+        Assertions.assertTrue(data.get("store_id").getAsJsonPrimitive().isString());
+        Assertions.assertEquals("100001", data.get("store_id").getAsString());
+        Assertions.assertFalse(data.has("msid"));
+        Assertions.assertTrue(data.get("milvus_msid").getAsJsonPrimitive().isString());
+        Assertions.assertEquals("MSID-A001", data.get("milvus_msid").getAsString());
+    }
+
+    @Test
+    public void testBuildMilvusData_MetadataArrayPassedThrough() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{CommonOptions.METADATA.getName()},
+                new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+
+        JsonArray tags = new JsonArray();
+        tags.add(100001);
+        tags.add("MSID-A001");
+        JsonObject metadata = new JsonObject();
+        metadata.add("tags", tags);
+        SeaTunnelRow row = new SeaTunnelRow(new Object[]{metadata.toString()});
+
+        DescribeCollectionResp describeCollectionResp = buildDescribeCollectionResp(
+                FieldSchema.builder()
+                        .name("tags")
+                        .dataType(DataType.Array)
+                        .elementType(DataType.VarChar)
+                        .maxCapacity(10)
+                        .maxLength(200)
+                        .build());
+        Map<String, String> fieldMap = new HashMap<>();
+        fieldMap.put("tags", "tags");
+
+        JsonObject data = converter.buildMilvusData(
+                catalogTable, describeCollectionResp, fieldMap, row);
+
+        JsonArray result = data.getAsJsonArray("tags");
+        Assertions.assertTrue(result.get(0).getAsJsonPrimitive().isNumber());
+        Assertions.assertEquals(100001, result.get(0).getAsInt());
+        Assertions.assertTrue(result.get(1).getAsJsonPrimitive().isString());
+        Assertions.assertEquals("MSID-A001", result.get(1).getAsString());
+    }
 
     // --- Geometry: in practice every VTS source connector emits Geometry as
     //     String. The sink tests below therefore only cover the String path
@@ -599,5 +707,42 @@ public class MilvusSinkConverterTest {
         Assertions.assertEquals(2.5f, floatList.get(1));
         Assertions.assertEquals(3.7f, floatList.get(2));
         Assertions.assertEquals(4.2f, floatList.get(3));
+    }
+
+    private static CatalogTable buildCatalogTable(SeaTunnelRowType rowType) {
+        TableSchema.Builder schemaBuilder = TableSchema.builder();
+        String[] fieldNames = rowType.getFieldNames();
+        for (int i = 0; i < fieldNames.length; i++) {
+            schemaBuilder.column(PhysicalColumn.of(
+                    fieldNames[i],
+                    rowType.getFieldType(i),
+                    0L,
+                    true,
+                    null,
+                    null,
+                    null,
+                    null));
+        }
+        return CatalogTable.of(
+                TableIdentifier.of("test", TablePath.of("default", "test_collection")),
+                schemaBuilder.build(),
+                new HashMap<>(),
+                new ArrayList<>(),
+                "");
+    }
+
+    private static DescribeCollectionResp buildDescribeCollectionResp(FieldSchema... fields) {
+        CreateCollectionReq.CollectionSchema schema = CreateCollectionReq.CollectionSchema.builder()
+                .enableDynamicField(true)
+                .fieldSchemaList(Arrays.asList(fields))
+                .functionList(new ArrayList<>())
+                .build();
+        return DescribeCollectionResp.builder()
+                .collectionName("test_collection")
+                .primaryFieldName("id")
+                .enableDynamicField(true)
+                .autoID(false)
+                .collectionSchema(schema)
+                .build();
     }
 }

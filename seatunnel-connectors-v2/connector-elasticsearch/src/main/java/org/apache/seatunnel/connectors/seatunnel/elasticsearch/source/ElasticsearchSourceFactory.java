@@ -38,11 +38,16 @@ import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsC
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.TLS_VERIFY_CERTIFICATE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.TLS_VERIFY_HOSTNAME;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.USERNAME;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.EsClusterConnectionConfig.WAN_ONLY;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.INDEX;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.INDEX_LIST;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.PIT_BATCH_SIZE;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.PIT_KEEP_ALIVE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.QUERY;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.SCROLL_SIZE;
 import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.SCROLL_TIME;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.SEARCH_API_TYPE;
+import static org.apache.seatunnel.connectors.seatunnel.elasticsearch.config.SourceConfig.SPLIT_MODE;
 
 @AutoService(Factory.class)
 public class ElasticsearchSourceFactory implements TableSourceFactory {
@@ -62,7 +67,12 @@ public class ElasticsearchSourceFactory implements TableSourceFactory {
                         PASSWORD,
                         SCROLL_TIME,
                         SCROLL_SIZE,
+                        SEARCH_API_TYPE,
+                        SPLIT_MODE,
+                        PIT_KEEP_ALIVE,
+                        PIT_BATCH_SIZE,
                         QUERY,
+                        WAN_ONLY,
                         TLS_VERIFY_CERTIFICATE,
                         TLS_VERIFY_HOSTNAME,
                         TLS_KEY_STORE_PATH,

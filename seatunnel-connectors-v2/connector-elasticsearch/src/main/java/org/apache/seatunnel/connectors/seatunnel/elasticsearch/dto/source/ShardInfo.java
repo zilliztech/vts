@@ -17,19 +17,15 @@
 
 package org.apache.seatunnel.connectors.seatunnel.elasticsearch.dto.source;
 
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
-import java.util.List;
-import java.util.Map;
+import java.io.Serializable;
 
-@Data
-public class ScrollResult {
-
-    private String scrollId;
-    private List<Map<String, Object>> docs;
-
-    /** Total hits reported by ES on this response (hits.total.value). Populated
-     * on every scroll response; the reader only uses the value from the first
-     * batch for end-of-scan reconciliation. {@code -1} if absent. */
-    private long totalHits;
+@Getter
+@AllArgsConstructor
+public class ShardInfo implements Serializable {
+    private final String concreteIndex;
+    private final int shardId;
+    private final String nodeId;
 }
