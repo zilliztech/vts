@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -140,5 +141,17 @@ public class SeaTunnelRowTest {
         Map<String, String> map = Collections.singletonMap("key", "value");
         SeaTunnelRow row = new SeaTunnelRow(new Object[] {map});
         Assertions.assertEquals(8, row.getBytesSize());
+    }
+
+    @Test
+    void testGeometryByteBufferSizeWithRowType() {
+        SeaTunnelRow row =
+                new SeaTunnelRow(new Object[] {ByteBuffer.wrap(new byte[] {1, 2, 3, 4})});
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"geometry_f"},
+                        new SeaTunnelDataType<?>[] {GeometryType.GEOMETRY_TYPE});
+
+        Assertions.assertEquals(4, row.getBytesSize(rowType));
     }
 }

@@ -29,9 +29,9 @@ import org.apache.seatunnel.api.table.catalog.exception.DatabaseAlreadyExistExce
 import org.apache.seatunnel.api.table.catalog.exception.TableAlreadyExistException;
 import org.apache.seatunnel.api.table.catalog.exception.TableNotExistException;
 import org.apache.seatunnel.api.table.type.BasicType;
-import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.api.table.type.GeometryType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
+import org.apache.seatunnel.api.table.type.VectorType;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusCatalog;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
@@ -50,13 +50,13 @@ import org.testcontainers.containers.Container;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.milvus.MilvusContainer;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import io.milvus.client.MilvusServiceClient;
+import io.milvus.common.clientenum.ConsistencyLevelEnum;
 import io.milvus.grpc.DataType;
 import io.milvus.grpc.DescribeCollectionResponse;
 import io.milvus.grpc.FieldSchema;
 import io.milvus.grpc.MutationResult;
+import io.milvus.grpc.QueryResults;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
@@ -67,9 +67,14 @@ import io.milvus.param.collection.DescribeCollectionParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.collection.LoadCollectionParam;
+import io.milvus.param.dml.DeleteParam;
 import io.milvus.param.dml.InsertParam;
+import io.milvus.param.dml.QueryParam;
 import io.milvus.param.index.CreateIndexParam;
+import io.milvus.response.QueryResultsWrapper;
 import lombok.extern.slf4j.Slf4j;
+import milvus.com.google.gson.Gson;
+import milvus.com.google.gson.JsonObject;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -80,6 +85,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -103,6 +110,13 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
     private static final String COLLECTION_NAME_WITH_PARTITIONKEY =
             "simple_example_with_partitionkey";
     private static final String COLLECTION_NAME_NEW_TYPES = "test_new_types";
+    private static final String CDC_SOURCE_COLLECTION = "milvus_cdc_source_e2e";
+    private static final String CDC_TARGET_COLLECTION = "milvus_cdc_target_e2e";
+    private static final String CDC_ID_FIELD = "id";
+    private static final String CDC_VECTOR_FIELD = "embedding";
+    private static final String CDC_TITLE_FIELD = "title";
+    private static final long CDC_RECORD_ID = 1001L;
+    private static final String CDC_RECORD_TITLE = "Milvus CDC E2E";
     private static final String ID_FIELD = "book_id";
     private static final String VECTOR_FIELD = "book_intro";
     private static final String VECTOR_FIELD2 = "book_kind";
@@ -119,7 +133,10 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
     @Override
     public void startUp() throws Exception {
         this.container =
-                new MilvusContainer(MILVUS_IMAGE).withNetwork(NETWORK).withNetworkAliases(HOST);
+                new MilvusContainer(MILVUS_IMAGE)
+                        .withEnv("DEPLOY_MODE", "STANDALONE")
+                        .withNetwork(NETWORK)
+                        .withNetworkAliases(HOST);
         Startables.deepStart(Stream.of(this.container)).join();
         log.info("Milvus host is {}", container.getHost());
         log.info("Milvus container started");
@@ -444,6 +461,223 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
     }
 
     @TestTemplate
+    public void testMilvusCdc(TestContainer container) throws Exception {
+        createCdcCollection(CDC_SOURCE_COLLECTION, false);
+        createCdcCollection(CDC_TARGET_COLLECTION, true);
+
+        String pchannel = getCdcPhysicalChannel();
+        String jobId = String.valueOf(System.currentTimeMillis());
+        CompletableFuture<Container.ExecResult> jobFuture =
+                executeCdcJobAsync(container, jobId, pchannel);
+
+        try {
+            waitForCdcJobRunning(container, jobId, jobFuture);
+
+            insertCdcSourceRow();
+            Awaitility.await()
+                    .ignoreExceptions()
+                    .atMost(2, TimeUnit.MINUTES)
+                    .untilAsserted(this::assertCdcTargetRow);
+
+            deleteCdcSourceRow();
+            Awaitility.await()
+                    .ignoreExceptions()
+                    .atMost(2, TimeUnit.MINUTES)
+                    .untilAsserted(() -> Assertions.assertEquals(0, queryCdcTargetRows().size()));
+        } finally {
+            cancelCdcJob(container, jobId, jobFuture);
+        }
+
+        Container.ExecResult jobResult = jobFuture.get(2, TimeUnit.MINUTES);
+        Assertions.assertEquals(0, jobResult.getExitCode(), jobResult.getStderr());
+        Awaitility.await()
+                .atMost(30, TimeUnit.SECONDS)
+                .untilAsserted(
+                        () -> Assertions.assertEquals("CANCELED", container.getJobStatus(jobId)));
+    }
+
+    private void createCdcCollection(String collectionName, boolean loadCollection) {
+        List<FieldType> fields =
+                Arrays.asList(
+                        FieldType.newBuilder()
+                                .withName(CDC_ID_FIELD)
+                                .withDataType(DataType.Int64)
+                                .withPrimaryKey(true)
+                                .withAutoID(false)
+                                .build(),
+                        FieldType.newBuilder()
+                                .withName(CDC_VECTOR_FIELD)
+                                .withDataType(DataType.FloatVector)
+                                .withDimension(VECTOR_DIM)
+                                .build(),
+                        FieldType.newBuilder()
+                                .withName(CDC_TITLE_FIELD)
+                                .withDataType(DataType.VarChar)
+                                .withMaxLength(64)
+                                .build());
+
+        R<RpcStatus> createResponse =
+                milvusClient.createCollection(
+                        CreateCollectionParam.newBuilder()
+                                .withCollectionName(collectionName)
+                                .withShardsNum(1)
+                                .withFieldTypes(fields)
+                                .build());
+        assertMilvusSuccess(createResponse, "create collection " + collectionName);
+
+        if (!loadCollection) {
+            return;
+        }
+
+        R<RpcStatus> indexResponse =
+                milvusClient.createIndex(
+                        CreateIndexParam.newBuilder()
+                                .withCollectionName(collectionName)
+                                .withFieldName(CDC_VECTOR_FIELD)
+                                .withIndexType(IndexType.FLAT)
+                                .withMetricType(MetricType.L2)
+                                .build());
+        assertMilvusSuccess(indexResponse, "create index for " + collectionName);
+
+        R<RpcStatus> loadResponse =
+                milvusClient.loadCollection(
+                        LoadCollectionParam.newBuilder()
+                                .withCollectionName(collectionName)
+                                .build());
+        assertMilvusSuccess(loadResponse, "load collection " + collectionName);
+    }
+
+    private String getCdcPhysicalChannel() {
+        R<DescribeCollectionResponse> describeResponse =
+                milvusClient.describeCollection(
+                        DescribeCollectionParam.newBuilder()
+                                .withCollectionName(CDC_SOURCE_COLLECTION)
+                                .build());
+        assertMilvusSuccess(describeResponse, "describe CDC source collection");
+
+        List<String> virtualChannels = describeResponse.getData().getVirtualChannelNamesList();
+        Assertions.assertEquals(
+                1, virtualChannels.size(), "The CDC E2E source must use exactly one shard");
+        String virtualChannel = virtualChannels.get(0);
+        String physicalChannel = virtualChannel.replaceFirst("_\\d+v\\d+$", "");
+        Assertions.assertNotEquals(
+                virtualChannel,
+                physicalChannel,
+                "Unable to derive a physical channel from " + virtualChannel);
+        return physicalChannel;
+    }
+
+    private CompletableFuture<Container.ExecResult> executeCdcJobAsync(
+            TestContainer container, String jobId, String pchannel) {
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return container.executeJob(
+                                "/milvus-cdc-to-milvus.conf", jobId, "cdc_pchannel=" + pchannel);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new CompletionException(e);
+                    } catch (IOException e) {
+                        throw new CompletionException(e);
+                    }
+                });
+    }
+
+    private void waitForCdcJobRunning(
+            TestContainer container,
+            String jobId,
+            CompletableFuture<Container.ExecResult> jobFuture) {
+        Awaitility.await()
+                .ignoreExceptions()
+                .atMost(2, TimeUnit.MINUTES)
+                .until(() -> jobFuture.isDone() || "RUNNING".equals(container.getJobStatus(jobId)));
+
+        if (jobFuture.isDone()) {
+            Container.ExecResult result = jobFuture.join();
+            Assertions.fail(
+                    "CDC job exited before reaching RUNNING. stdout="
+                            + result.getStdout()
+                            + ", stderr="
+                            + result.getStderr());
+        }
+    }
+
+    private void insertCdcSourceRow() {
+        JsonObject row = new JsonObject();
+        row.addProperty(CDC_ID_FIELD, CDC_RECORD_ID);
+        row.add(CDC_VECTOR_FIELD, gson.toJsonTree(Arrays.asList(1.0F, 2.0F, 3.0F, 4.0F)));
+        row.addProperty(CDC_TITLE_FIELD, CDC_RECORD_TITLE);
+
+        R<MutationResult> insertResponse =
+                milvusClient.insert(
+                        InsertParam.newBuilder()
+                                .withCollectionName(CDC_SOURCE_COLLECTION)
+                                .withRows(Collections.singletonList(row))
+                                .build());
+        assertMilvusSuccess(insertResponse, "insert CDC source row");
+    }
+
+    private void deleteCdcSourceRow() {
+        R<MutationResult> deleteResponse =
+                milvusClient.delete(
+                        DeleteParam.newBuilder()
+                                .withCollectionName(CDC_SOURCE_COLLECTION)
+                                .withExpr(CDC_ID_FIELD + " == " + CDC_RECORD_ID)
+                                .build());
+        assertMilvusSuccess(deleteResponse, "delete CDC source row");
+    }
+
+    private void assertCdcTargetRow() {
+        List<QueryResultsWrapper.RowRecord> rows = queryCdcTargetRows();
+        Assertions.assertEquals(1, rows.size());
+        Assertions.assertEquals(CDC_RECORD_TITLE, rows.get(0).get(CDC_TITLE_FIELD));
+    }
+
+    private List<QueryResultsWrapper.RowRecord> queryCdcTargetRows() {
+        R<QueryResults> queryResponse =
+                milvusClient.query(
+                        QueryParam.newBuilder()
+                                .withCollectionName(CDC_TARGET_COLLECTION)
+                                .withConsistencyLevel(ConsistencyLevelEnum.STRONG)
+                                .withExpr(CDC_ID_FIELD + " == " + CDC_RECORD_ID)
+                                .withOutFields(Arrays.asList(CDC_ID_FIELD, CDC_TITLE_FIELD))
+                                .build());
+        assertMilvusSuccess(queryResponse, "query CDC target row");
+        return new QueryResultsWrapper(queryResponse.getData()).getRowRecords();
+    }
+
+    private void cancelCdcJob(
+            TestContainer container,
+            String jobId,
+            CompletableFuture<Container.ExecResult> jobFuture) {
+        if (jobFuture.isDone()) {
+            return;
+        }
+        try {
+            Container.ExecResult cancelResult = container.cancelJob(jobId);
+            if (cancelResult.getExitCode() != 0) {
+                log.warn("Failed to cancel CDC E2E job {}: {}", jobId, cancelResult.getStderr());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            jobFuture.cancel(true);
+            log.warn("Interrupted while canceling CDC E2E job {}", jobId, e);
+        } catch (IOException e) {
+            jobFuture.cancel(true);
+            log.warn("Failed to cancel CDC E2E job {}", jobId, e);
+        }
+    }
+
+    private void assertMilvusSuccess(R<?> response, String operation) {
+        if (response.getStatus() == null || response.getStatus() != R.Status.Success.getCode()) {
+            Exception exception = response.getException();
+            String details =
+                    exception == null ? "status=" + response.getStatus() : exception.getMessage();
+            Assertions.fail(operation + " failed: " + details);
+        }
+    }
+
+    @TestTemplate
     public void testNewTypesInCatalog(TestContainer container)
             throws TableAlreadyExistException, DatabaseAlreadyExistException,
                     TableNotExistException {
@@ -512,9 +746,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         CatalogTable catalogTable =
                 CatalogTable.of(
                         TableIdentifier.of(
-                                "milvus",
-                                tablePath.getDatabaseName(),
-                                tablePath.getTableName()),
+                                "milvus", tablePath.getDatabaseName(), tablePath.getTableName()),
                         tableSchema,
                         Collections.emptyMap(),
                         Collections.emptyList(),
@@ -531,8 +763,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
                                 .withCollectionName(COLLECTION_NAME_NEW_TYPES)
                                 .build());
         Assertions.assertTrue(
-                hasCollectionResponse.getData(),
-                "Collection should exist after creation");
+                hasCollectionResponse.getData(), "Collection should exist after creation");
 
         // Verify the schema
         R<DescribeCollectionResponse> describeResponse =
@@ -553,13 +784,10 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
         // Verify fields
         Map<String, DataType> fieldMap =
                 fields.stream()
-                        .collect(
-                                Collectors.toMap(
-                                        FieldSchema::getName, FieldSchema::getDataType));
+                        .collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getDataType));
 
         Assertions.assertTrue(fieldMap.containsKey("id"), "Should have id field");
-        Assertions.assertEquals(
-                DataType.Int64, fieldMap.get("id"), "ID field should be Int64");
+        Assertions.assertEquals(DataType.Int64, fieldMap.get("id"), "ID field should be Int64");
 
         Assertions.assertTrue(fieldMap.containsKey("location"), "Should have location field");
         Assertions.assertEquals(
@@ -567,8 +795,7 @@ public class MilvusIT extends TestSuiteBase implements TestResource {
                 fieldMap.get("location"),
                 "Location field should be Geometry type");
 
-        Assertions.assertTrue(
-                fieldMap.containsKey("created_at"), "Should have created_at field");
+        Assertions.assertTrue(fieldMap.containsKey("created_at"), "Should have created_at field");
         Assertions.assertEquals(
                 DataType.Timestamptz,
                 fieldMap.get("created_at"),
