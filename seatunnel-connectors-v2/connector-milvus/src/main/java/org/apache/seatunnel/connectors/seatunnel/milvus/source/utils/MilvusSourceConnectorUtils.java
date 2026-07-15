@@ -156,7 +156,7 @@ public class MilvusSourceConnectorUtils {
         if (functionList != null && !functionList.isEmpty()) {
             options.put(MilvusConstants.FUNCTION_LIST, gson.toJson(functionList));
         } else {
-            options.put(MilvusConstants.FUNCTION_LIST, "[]");
+            options.put(MilvusConstants.FUNCTION_LIST, MilvusConstants.EMPTY_JSON_ARRAY);
         }
 
         // Note: struct fields are serialized per-column in MilvusSourceConverter, not
@@ -173,17 +173,17 @@ public class MilvusSourceConnectorUtils {
             DescribeIndexResp describeIndexResp = client.describeIndex(describeIndexReq);
             for (DescribeIndexResp.IndexDesc indexDesc : describeIndexResp.getIndexDescriptions()) {
                 Map<String, String> indexInfo = new HashMap<>();
-                indexInfo.put("fieldName", indexDesc.getFieldName());
-                indexInfo.put("indexName", indexDesc.getIndexName());
+                indexInfo.put(MilvusConstants.INDEX_FIELD_NAME, indexDesc.getFieldName());
+                indexInfo.put(MilvusConstants.INDEX_NAME, indexDesc.getIndexName());
                 IndexType indexType = indexDesc.getIndexType();
                 if (indexType != null) {
-                    indexInfo.put("indexType", indexType.getName());
+                    indexInfo.put(MilvusConstants.INDEX_TYPE, indexType.getName());
                 }
                 if (indexDesc.getMetricType() != MetricType.INVALID) {
-                    indexInfo.put("metricType", indexDesc.getMetricType().name());
+                    indexInfo.put(MilvusConstants.METRIC_TYPE, indexDesc.getMetricType().name());
                 }
                 if (indexDesc.getExtraParams() != null && !indexDesc.getExtraParams().isEmpty()) {
-                    indexInfo.put("extraParams", gson.toJson(indexDesc.getExtraParams()));
+                    indexInfo.put(MilvusConstants.EXTRA_PARAMS, gson.toJson(indexDesc.getExtraParams()));
                 }
                 indexList.add(indexInfo);
             }

@@ -23,6 +23,8 @@ import com.google.gson.reflect.TypeToken;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
+import org.apache.seatunnel.api.sink.DataSaveMode;
+import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.connector.TableSink;
@@ -31,6 +33,7 @@ import org.apache.seatunnel.api.table.factory.TableSinkFactory;
 import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkWriteMode;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -53,15 +56,37 @@ public class MilvusSinkFactory implements TableSinkFactory {
                         MilvusSinkConfig.DATA_SAVE_MODE,
                         MilvusSinkConfig.CREATE_INDEX,
                         MilvusSinkConfig.PARTITION_NUM,
-                        MilvusSinkConfig.FIELD_SCHEMA)
+                        MilvusSinkConfig.FIELD_SCHEMA,
+                        MilvusSinkConfig.WRITE_MODE)
                 .build();
     }
 
     public TableSink createSink(TableSinkFactoryContext context) {
         ReadonlyConfig config = context.getOptions();
+        validateCdcSaveMode(config);
         validateFieldTimezones(config);
         CatalogTable catalogTable = renameCatalogTable(config, context.getCatalogTable());
         return () -> new MilvusSink(config, catalogTable);
+    }
+
+    static void validateCdcSaveMode(ReadonlyConfig config) {
+        if (config.get(MilvusSinkConfig.WRITE_MODE) != MilvusSinkWriteMode.CDC) {
+            return;
+        }
+        SchemaSaveMode schemaSaveMode = config.get(MilvusSinkConfig.SCHEMA_SAVE_MODE);
+        if (schemaSaveMode != SchemaSaveMode.ERROR_WHEN_SCHEMA_NOT_EXIST) {
+            throw new IllegalArgumentException(
+                    "Milvus CDC write mode only supports schema_save_mode = "
+                            + "ERROR_WHEN_SCHEMA_NOT_EXIST, but received: "
+                            + schemaSaveMode);
+        }
+        DataSaveMode dataSaveMode = config.get(MilvusSinkConfig.DATA_SAVE_MODE);
+        if (dataSaveMode != DataSaveMode.APPEND_DATA) {
+            throw new IllegalArgumentException(
+                    "Milvus CDC write mode only supports data_save_mode = APPEND_DATA, "
+                            + "but received: "
+                            + dataSaveMode);
+        }
     }
 
     private void validateFieldTimezones(ReadonlyConfig config) {

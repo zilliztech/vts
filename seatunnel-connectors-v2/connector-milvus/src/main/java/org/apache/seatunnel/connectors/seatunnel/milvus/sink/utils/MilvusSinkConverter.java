@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
@@ -33,6 +34,7 @@ import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -41,6 +43,7 @@ import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.common.utils.JsonUtils;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
@@ -58,7 +61,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -162,7 +164,7 @@ public class MilvusSinkConverter {
             case BFLOAT16_VECTOR:
             case FLOAT16_VECTOR:
                 ByteBuffer binaryVector = (ByteBuffer) value;
-                return gson.toJsonTree(binaryVector.array());
+                return byteBufferToJsonArray(binaryVector);
             case SPARSE_FLOAT_VECTOR:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
             case FLOAT:
@@ -247,12 +249,14 @@ public class MilvusSinkConverter {
             Map<String, String> milvusFieldsMap,
             SeaTunnelRow element) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
+        List<Column> sourceColumns = catalogTable.getTableSchema().getColumns();
         JsonObject data = new JsonObject();
         Gson gson = new Gson();
 
         // Build source-to-target field name mapping from field_schema config
         // This allows renaming: source_field_name (old name) -> field_name (new name)
         for (int i = 0; i < seaTunnelRowType.getFieldNames().length; i++) {
+            Column sourceColumn = i < sourceColumns.size() ? sourceColumns.get(i) : null;
             String sourceFieldName = seaTunnelRowType.getFieldNames()[i];
             String fieldName = milvusFieldsMap.getOrDefault(sourceFieldName, sourceFieldName);
             // Skip auto-ID primary key fields
@@ -263,9 +267,8 @@ public class MilvusSinkConverter {
             Object value = element.getField(i);
 
             // Handle dynamic field extraction
-            if (Objects.equals(fieldName, CommonOptions.METADATA.getName())
-                    && describeCollectionResp.getEnableDynamicField()) {
-                if (value == null) {
+            if (isMetadataColumn(sourceColumn, fieldName)) {
+                if (!describeCollectionResp.getEnableDynamicField() || value == null) {
                     continue;
                 }
                 JsonObject dynamicData = gson.fromJson(value.toString(), JsonObject.class);
@@ -291,7 +294,7 @@ public class MilvusSinkConverter {
                                             convertedValue = extractJsonValue(entry.getValue());
                                         }
                                         Object converted = convertByMilvusType(dynamicFieldSchema, convertedValue);
-                                        data.add(matchedField, gson.toJsonTree(converted));
+                                        data.add(matchedField, toJsonElement(converted));
                                     } else {
                                         data.add(matchedField, entry.getValue());
                                     }
@@ -321,9 +324,41 @@ public class MilvusSinkConverter {
                                 + "' conflicts with a previously written dynamic field. "
                                 + "Use field_schema to rename the conflicting field.");
             }
-            data.add(fieldName, gson.toJsonTree(object));
+            data.add(fieldName, toJsonElement(object));
         }
         return data;
+    }
+
+    private boolean isMetadataColumn(Column column, String targetFieldName) {
+        if (column != null
+                && column.getOptions() != null
+                && Boolean.TRUE.equals(column.getOptions().get(CommonOptions.METADATA.getName()))) {
+            return true;
+        }
+        return MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD.equals(targetFieldName)
+                || CommonOptions.METADATA.getName().equals(targetFieldName);
+    }
+
+    private JsonElement toJsonElement(Object value) {
+        if (value == null) {
+            return JsonNull.INSTANCE;
+        }
+        if (value instanceof JsonElement) {
+            return (JsonElement) value;
+        }
+        if (value instanceof ByteBuffer) {
+            return byteBufferToJsonArray((ByteBuffer) value);
+        }
+        return gson.toJsonTree(value);
+    }
+
+    private JsonElement byteBufferToJsonArray(ByteBuffer value) {
+        ByteBuffer buffer = value.duplicate();
+        JsonArray array = new JsonArray();
+        while (buffer.hasRemaining()) {
+            array.add(buffer.get());
+        }
+        return array;
     }
 
     /**
@@ -514,7 +549,7 @@ public class MilvusSinkConverter {
             case BFloat16Vector:
             case Float16Vector:
                 ByteBuffer binaryVector = (ByteBuffer) value;
-                return gson.toJsonTree(binaryVector.array());
+                return byteBufferToJsonArray(binaryVector);
             case FloatVector:
                 if (value instanceof ByteBuffer) {
                     ByteBuffer floatVectorBuffer = (ByteBuffer) value;
@@ -548,6 +583,9 @@ public class MilvusSinkConverter {
                 }
                 return value;
             case Geometry:
+                if (value instanceof ByteBuffer) {
+                    return GeometryConverter.PARSE.convert(value);
+                }
                 return geometryConverter.convert(value);
             case Timestamptz:
                 // Milvus SDK requires Timestamptz as ISO 8601 String format (e.g., "2024-01-19T11:30:45Z")
