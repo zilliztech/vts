@@ -37,16 +37,19 @@ import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -438,9 +441,14 @@ public class MilvusSinkConverterTest {
     @Test
     public void testBuildMilvusData_MetadataFieldConvertedByTargetSchema() {
         SeaTunnelRowType rowType = new SeaTunnelRowType(
-                new String[]{CommonOptions.METADATA.getName()},
+                new String[]{MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD},
                 new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
-        CatalogTable catalogTable = buildCatalogTable(rowType);
+        CatalogTable catalogTable =
+                buildCatalogTable(
+                        rowType,
+                        Collections.singletonMap(
+                                MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD,
+                                metadataOptions()));
 
         JsonObject metadata = new JsonObject();
         metadata.addProperty("store_id", 100001);
@@ -473,11 +481,34 @@ public class MilvusSinkConverterTest {
     }
 
     @Test
+    public void testBuildMilvusData_InternalMetaNameWithoutOptionIsDynamicField() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD},
+                new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("dynamic_key", "dynamic-value");
+        SeaTunnelRow row = new SeaTunnelRow(new Object[]{metadata.toString()});
+
+        JsonObject data =
+                converter.buildMilvusData(
+                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row);
+
+        Assertions.assertEquals("dynamic-value", data.get("dynamic_key").getAsString());
+        Assertions.assertFalse(data.has(MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD));
+    }
+
+    @Test
     public void testBuildMilvusData_MetadataArrayPassedThrough() {
         SeaTunnelRowType rowType = new SeaTunnelRowType(
                 new String[]{CommonOptions.METADATA.getName()},
                 new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
-        CatalogTable catalogTable = buildCatalogTable(rowType);
+        CatalogTable catalogTable =
+                buildCatalogTable(
+                        rowType,
+                        Collections.singletonMap(
+                                CommonOptions.METADATA.getName(), metadataOptions()));
 
         JsonArray tags = new JsonArray();
         tags.add(100001);
@@ -507,11 +538,54 @@ public class MilvusSinkConverterTest {
         Assertions.assertEquals("MSID-A001", result.get(1).getAsString());
     }
 
-    // --- Geometry: in practice every VTS source connector emits Geometry as
-    //     String. The sink tests below therefore only cover the String path
-    //     (PASSTHROUGH and PARSE) and the contract that PASSTHROUGH returns
-    //     whatever it gets, as-is. Byte-level WKB tests live alongside
-    //     GeometryConverter.convertWkbBytes in the geometry-specific test class.
+    @Test
+    public void testBuildMilvusData_LegacyMetadataNameWithoutOptionIsDynamicWhenNoTargetField() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{CommonOptions.METADATA.getName()},
+                new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("legacy_key", "legacy-value");
+        SeaTunnelRow row = new SeaTunnelRow(new Object[]{metadata.toString()});
+
+        JsonObject data =
+                converter.buildMilvusData(
+                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row);
+
+        Assertions.assertEquals("legacy-value", data.get("legacy_key").getAsString());
+        Assertions.assertFalse(data.has(CommonOptions.METADATA.getName()));
+    }
+
+    @Test
+    public void testBuildMilvusData_MetadataNameWithoutOptionKeepsLegacyDynamicSemantics() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{CommonOptions.METADATA.getName()},
+                new SeaTunnelDataType<?>[]{BasicType.STRING_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("legacy_key", "legacy-value");
+        SeaTunnelRow row = new SeaTunnelRow(new Object[]{metadata.toString()});
+
+        DescribeCollectionResp describeCollectionResp =
+                buildDescribeCollectionResp(
+                        FieldSchema.builder()
+                                .name(CommonOptions.METADATA.getName())
+                                .dataType(DataType.VarChar)
+                                .maxLength(200)
+                                .build());
+
+        JsonObject data =
+                converter.buildMilvusData(
+                        catalogTable, describeCollectionResp, new HashMap<>(), row);
+
+        Assertions.assertEquals("legacy-value", data.get("legacy_key").getAsString());
+        Assertions.assertFalse(data.has(CommonOptions.METADATA.getName()));
+    }
+
+    // --- Geometry: most VTS source connectors emit Geometry as String. Milvus CDC
+    //     can emit raw WKB bytes, so the sink must parse ByteBuffer values before
+    //     handing data to the Milvus SDK.
 
     @Test
     public void testConvertByMilvusType_Geometry_StringWkt() {
@@ -534,6 +608,39 @@ public class MilvusSinkConverterTest {
         FieldSchema schema = FieldSchema.builder()
                 .name("loc").dataType(DataType.Geometry).build();
         Assertions.assertNull(converter.convertByMilvusType(schema, null));
+    }
+
+    @Test
+    public void testConvertByMilvusType_Geometry_ByteBufferWkbParsesToWkt() {
+        FieldSchema schema = FieldSchema.builder()
+                .name("loc").dataType(DataType.Geometry).build();
+        byte[] wkb = hexToBytes("0101000000000000000000F03F000000000000F03F");
+
+        Object result = converter.convertByMilvusType(schema, ByteBuffer.wrap(wkb));
+
+        Assertions.assertEquals("POINT (1 1)", result);
+    }
+
+    @Test
+    public void testBuildMilvusData_Geometry_ByteBufferWkbDoesNotSerializeByteBuffer() {
+        SeaTunnelRowType rowType = new SeaTunnelRowType(
+                new String[]{"loc"},
+                new SeaTunnelDataType<?>[]{GeometryType.GEOMETRY_TYPE});
+        CatalogTable catalogTable = buildCatalogTable(rowType);
+        DescribeCollectionResp describeCollectionResp = buildDescribeCollectionResp(
+                FieldSchema.builder()
+                        .name("loc")
+                        .dataType(DataType.Geometry)
+                        .build());
+        byte[] wkb = hexToBytes("0101000000000000000000F03F000000000000F03F");
+
+        JsonObject data = converter.buildMilvusData(
+                catalogTable,
+                describeCollectionResp,
+                new HashMap<>(),
+                new SeaTunnelRow(new Object[]{ByteBuffer.wrap(wkb)}));
+
+        Assertions.assertEquals("POINT (1 1)", data.get("loc").getAsString());
     }
 
     @Test
@@ -710,18 +817,21 @@ public class MilvusSinkConverterTest {
     }
 
     private static CatalogTable buildCatalogTable(SeaTunnelRowType rowType) {
+        return buildCatalogTable(rowType, Collections.emptyMap());
+    }
+
+    private static CatalogTable buildCatalogTable(
+            SeaTunnelRowType rowType, Map<String, Map<String, Object>> columnOptions) {
         TableSchema.Builder schemaBuilder = TableSchema.builder();
         String[] fieldNames = rowType.getFieldNames();
         for (int i = 0; i < fieldNames.length; i++) {
-            schemaBuilder.column(PhysicalColumn.of(
-                    fieldNames[i],
-                    rowType.getFieldType(i),
-                    0L,
-                    true,
-                    null,
-                    null,
-                    null,
-                    null));
+            schemaBuilder.column(
+                    PhysicalColumn.builder()
+                            .name(fieldNames[i])
+                            .dataType(rowType.getFieldType(i))
+                            .nullable(true)
+                            .options(columnOptions.get(fieldNames[i]))
+                            .build());
         }
         return CatalogTable.of(
                 TableIdentifier.of("test", TablePath.of("default", "test_collection")),
@@ -744,5 +854,20 @@ public class MilvusSinkConverterTest {
                 .autoID(false)
                 .collectionSchema(schema)
                 .build();
+    }
+
+    private static Map<String, Object> metadataOptions() {
+        Map<String, Object> options = new HashMap<>();
+        options.put(CommonOptions.METADATA.getName(), true);
+        return options;
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] out = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            out[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return out;
     }
 }

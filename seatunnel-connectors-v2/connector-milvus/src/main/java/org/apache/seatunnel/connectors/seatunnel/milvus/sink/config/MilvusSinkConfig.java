@@ -208,10 +208,22 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .defaultValue(1000)
                         .withDescription("writer batch size");
 
+        public static final Option<Long> CDC_BATCH_FLUSH_INTERVAL_MS = Options.key("cdc_batch_flush_interval_ms")
+                        .longType()
+                        .defaultValue(1000L)
+                        .withDescription(
+                                        "CDC writer message-triggered batch flush interval in milliseconds");
+
         public static final Option<Map<String, String>> BULK_WRITER_CONFIG = Options.key("bulk_writer_config")
                         .mapType()
                         .defaultValue(new HashMap<>())
                         .withDescription("bulk writer config");
+
+        public static final Option<MilvusSinkWriteMode> WRITE_MODE = Options.key("write_mode")
+                        .enumType(MilvusSinkWriteMode.class)
+                        .defaultValue(MilvusSinkWriteMode.APPEND)
+                        .withDescription(
+                                        "Milvus sink write mode. APPEND uses the normal batch or bulk writer. CDC upserts INSERT and UPDATE_AFTER rows, deletes DELETE rows, and ignores UPDATE_BEFORE rows.");
 
         /**
          * How to interpret bare "x,y" coordinate strings flowing into a Geometry field.

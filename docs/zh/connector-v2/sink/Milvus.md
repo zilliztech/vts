@@ -47,11 +47,14 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 | token                | String  | 是      | -                            | 用户：密码                                             |
 | database             | String  | 否       | -                            | 将数据写入哪个数据库，默认为源数据库。 |
 | schema_save_mode     | enum    | 否       | CREATE_SCHEMA_WHEN_NOT_EXIST | 当表不存在时自动创建表。                   |
+| data_save_mode       | enum    | 否       | APPEND_DATA                  | 数据保存模式。CDC 写模式只支持 `APPEND_DATA`。 |
 | create_index         | boolean | 否       | true                         | 自动创建 collection 时是否创建索引。       |
 | enable_auto_id       | boolean | 否       | false                        | 主键列启用autoId。                         |
 | enable_upsert        | boolean | 否       | false                        | 是否启用upsert。                                   |
 | enable_dynamic_field | boolean | 否       | true                         | 是否启用带动态字段的创建表。                   |
 | batch_size           | int     | 否       | 1000                         | 写入批大小。                                         |
+| cdc_batch_flush_interval_ms | long | 否       | 1000                         | CDC 模式下，收到新 row 时，如果距上次成功 flush 已达到该间隔，则 flush 未完成批次。单位为毫秒。 |
+| write_mode           | enum    | 否       | APPEND                       | 写入模式。`APPEND` 使用普通 batch 或 bulk writer 写入 insert row；`CDC` 对 INSERT 和 UPDATE_AFTER 执行 upsert，对 DELETE 执行删除，并忽略 UPDATE_BEFORE。 |
 | partition_key        | String  | 否       |                              | Milvus分区键字段                                |
 | partition_num        | int     | 否       |                              | 透传给 Milvus create collection 请求的分区数量。当前主要用于 Milvus 分区键模式。 |
 | collection_rename    | Map     | 否       | {}                           | 重命名集合：`{源名称 = "目标名称"}`       |
@@ -94,6 +97,22 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 
 **注意：** 如果源端字段中混合存在带时区和不带时区的值（如 Elasticsearch `date` 字段使用多种格式），不要配置 `timezone`。现有的 systemDefault 转换机制会正确处理带时区的值；额外配置 `timezone` 会导致这些值被双重转换。
 
+## CDC 写模式
+
+当上游 source 输出 CDC changelog row 时，尤其是使用 `Milvus-CDC` source 时，需要设置 `write_mode = "CDC"`。
+
+CDC 写模式有以下限制：
+
+- `schema_save_mode` 必须为 `ERROR_WHEN_SCHEMA_NOT_EXIST`。启动 CDC 任务前需要先创建目标 collection schema。
+- `data_save_mode` 必须为 `APPEND_DATA`。
+- 不支持 `bulk_writer_config`。
+- 目标 collection 不能启用 autoID。
+- 目标 collection 必须只有一个主键字段。
+
+CDC writer 接受通用的 keyed changelog row，不依赖 `Milvus-CDC` 私有消息元数据。INSERT 和 UPDATE_AFTER row 会按 upsert 写入，DELETE row 会按主键删除，UPDATE_BEFORE row 会被忽略。Milvus 主键必须对应稳定的源 CDC key；源端主键变化必须由 reader 表达为旧主键的 DELETE，随后是新主键的 INSERT。同一个 upsert batch 内的重复主键保留最后一条。连续的相同目标操作达到 `batch_size` 时会 flush；每次将 row 加入待写 batch 时还会检查 `cdc_batch_flush_interval_ms`，如果距上次成功 flush 已达到该间隔，则将当前 row 一并 flush。任何目标操作切换都会先 flush 上一个待写 batch；从 DELETE 切换到 upsert 时，当前 upsert 也会立即 flush，避免旧主键已经删除后新主键仍等待后续消息或 checkpoint。从 upsert 切换到 DELETE 时，当前 DELETE 仍按正常的 batch、interval、checkpoint 或 writer close 规则 flush。
+
+`cdc_batch_flush_interval_ms` 是由新消息触发的检查，不是后台定时器。如果最后一条 row 进入 buffer 后不再有新 row，它仍会等待 checkpoint 或 writer close。数据库割接前应等待最后一次 checkpoint 成功，或者正常停止同步任务。事务 row 在 source 侧按源端事务 commit 位点推进 checkpoint，但目标 Milvus 仍按普通 INSERT 和 DELETE 操作写入，不提供目标端事务原子性。
+
 ## 任务示例
 
 ### 基础用法
@@ -123,6 +142,45 @@ sink {
       {field_name = "created_at", data_type = 26, is_nullable = true, timezone = "Asia/Shanghai"}
       {field_name = "embedding", data_type = 101, dimension = 768}
     ]
+  }
+}
+```
+
+### Milvus CDC 到 Milvus
+
+```bash
+source {
+  "Milvus-CDC" {
+    url = "http://127.0.0.1:19530"
+    token = "root:Milvus"
+    database_collections = {
+      "default" = ["source_collection"]
+    }
+    startup_mode = "cdc"
+    channel_positions = [
+      {
+        pchannel = "by-dev-rootcoord-dml_0"
+        start = {
+          wal_name = "RocksMQ"
+          resume_message_id = "-1"
+          timetick = 0
+        }
+      }
+    ]
+  }
+}
+
+sink {
+  Milvus {
+    url = "http://127.0.0.1:19530"
+    token = "root:Milvus"
+    database = "default"
+    collection_rename = {
+      "source_collection" = "target_collection"
+    }
+    write_mode = "CDC"
+    schema_save_mode = "ERROR_WHEN_SCHEMA_NOT_EXIST"
+    data_save_mode = "APPEND_DATA"
   }
 }
 ```

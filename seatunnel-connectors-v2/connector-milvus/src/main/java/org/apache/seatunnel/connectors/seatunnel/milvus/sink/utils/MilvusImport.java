@@ -17,6 +17,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.GetImportProgressResp;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.InnerImportRequest;
 
+import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.DEFAULT_PARTITION;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -81,7 +83,7 @@ public class MilvusImport {
         if(StringUtils.isNotEmpty(dbName) && !dbName.equals("default")){
             importRequest.setDbName(dbName);
         }
-        if(StringUtils.isNotEmpty(partitionName) && !partitionName.equals("_default")){
+        if(StringUtils.isNotEmpty(partitionName) && !partitionName.equals(DEFAULT_PARTITION)){
             importRequest.setPartitionName(partitionName);
         }
         log.info("import objectUrl: " + objectUrl + " to collection: " + collectionName + " partition: " + partitionName);

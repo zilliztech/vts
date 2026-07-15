@@ -100,6 +100,7 @@ public class MilvusSink
         if (catalogTable == null) {
             return Optional.empty();
         }
+        MilvusSinkFactory.validateCdcSaveMode(config);
 
         CatalogFactory catalogFactory = new MilvusCatalogFactory();
         Catalog catalog = catalogFactory.createCatalog(catalogTable.getCatalogName(), config);

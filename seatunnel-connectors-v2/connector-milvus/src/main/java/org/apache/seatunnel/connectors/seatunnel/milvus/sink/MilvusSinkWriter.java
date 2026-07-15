@@ -30,20 +30,16 @@ import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.DEFAULT_PARTITION;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
-import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
-
-import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BULK_WRITER_CONFIG;
 
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusCommitInfo;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.state.MilvusSinkState;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StageHelper;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBufferBatchWriter;
-import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusBulkWriter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriterFactory;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter;
 
 import java.io.IOException;
@@ -68,12 +64,17 @@ public class MilvusSinkWriter
     private final String collection;
     private final ReadonlyConfig config;
     private final MilvusClientV2 milvusClient;
-    private final Boolean useBulkWriter;
-    private final StageBucket stageBucket;
+    private final MilvusWriterFactory writerFactory;
     private final DescribeCollectionResp  describeCollectionResp;
     private final Boolean hasPartitionKey;
 
     private final AtomicLong writeCount = new AtomicLong(0);
+
+    private static String redactSensitiveConfig(ReadonlyConfig config) {
+        return String.valueOf(config)
+                .replaceAll("(\"token\"\\s*:\\s*\")[^\"]*(\")", "$1******$2")
+                .replaceAll("(token\\s*=\\s*)[^,}\\s]+", "$1******");
+    }
 
     public MilvusSinkWriter(
             Context context,
@@ -84,13 +85,17 @@ public class MilvusSinkWriter
         this.catalogTable = catalogTable;
         this.collection = catalogTable.getTablePath().getTableName();
         log.info("create Milvus sink writer success");
-        log.info("MilvusSinkWriter config: " + config);
+        log.info("MilvusSinkWriter config: {}", redactSensitiveConfig(config));
         this.milvusClient = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
-        describeCollectionResp = milvusClient.describeCollection(DescribeCollectionReq.builder().collectionName(collection).build());
-        hasPartitionKey = describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream().anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
-        useBulkWriter = !config.get(BULK_WRITER_CONFIG).isEmpty();
-        // apply for a stage session bucket to store parquet files
-        stageBucket = StageHelper.getStageBucket(config.get(BULK_WRITER_CONFIG));
+        describeCollectionResp =
+                milvusClient.describeCollection(
+                        DescribeCollectionReq.builder().collectionName(collection).build());
+        hasPartitionKey =
+                describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()
+                        .anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
+        writerFactory =
+                new MilvusWriterFactory(
+                        catalogTable, config, milvusClient, describeCollectionResp);
     }
 
     /**
@@ -100,7 +105,11 @@ public class MilvusSinkWriter
      */
     @Override
     public void write(SeaTunnelRow element) {
-        String partition = StringUtils.isEmpty(element.getPartitionName()) ? DEFAULT_PARTITION : element.getPartitionName();
+        writerFactory.validateRow(element);
+        String partition =
+                StringUtils.isEmpty(element.getPartitionName())
+                        ? DEFAULT_PARTITION
+                        : element.getPartitionName();
         if (hasPartitionKey) {
             partition = DEFAULT_PARTITION;
         }
@@ -130,19 +139,17 @@ public class MilvusSinkWriter
                         }
                     }
                 }
-                synchronized (batchWriters) {
-                    // flush all data before creating new writer
-                    try {
-                        for (MilvusWriter writer : batchWriters.values()) {
+                // flush all data before creating new writer
+                try {
+                    for (MilvusWriter writer : batchWriters.values()) {
+                        synchronized (writer) {
                             writer.commit(true);
                         }
-                    } catch (Exception e) {
-                        throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
                     }
+                } catch (Exception e) {
+                    throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
                 }
-                return useBulkWriter
-                        ? new MilvusBulkWriter(this.catalogTable, config, stageBucket, describeCollectionResp, finalPartition)
-                        : new MilvusBufferBatchWriter(this.catalogTable, config, milvusClient, describeCollectionResp, finalPartition);
+                return writerFactory.create(finalPartition);
             }
         });
 
@@ -164,6 +171,12 @@ public class MilvusSinkWriter
         }
     }
 
+    @Override
+    public void applySchemaChange(SchemaChangeEvent event) throws IOException {
+        throw new IOException(
+                "Milvus sink does not support runtime schema changes: " + event);
+    }
+
     /**
      * prepare the commit, will be called before {@link #snapshotState(long checkpointId)}. If you
      * need to use 2pc, you can return the commit info in this method, and receive the commit info
@@ -174,6 +187,20 @@ public class MilvusSinkWriter
      */
     @Override
     public Optional<MilvusCommitInfo> prepareCommit() throws IOException {
+        synchronized (batchWriters) {
+            for (MilvusWriter writer : batchWriters.values()) {
+                synchronized (writer) {
+                    if (!writer.needCommit()) {
+                        continue;
+                    }
+                    try {
+                        writer.commit(true);
+                    } catch (Exception e) {
+                        throw new IOException("Flush Milvus writer before checkpoint failed", e);
+                    }
+                }
+            }
+        }
         return Optional.empty();
     }
 

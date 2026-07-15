@@ -2,6 +2,7 @@
 
 | Change | Commit | Version |
 | --- | --- | --- |
+|[Feature][Connector-V2][Milvus] Support CDC write mode|-|-|
 |[Fix][Connector-V2] Fix load state check in MilvusSourceReader to consider partition-level status (#8937)|https://github.com/apache/seatunnel/commit/bde235090|2.3.10|
 |[Improve][dist]add shade check rule (#8136)|https://github.com/apache/seatunnel/commit/51ef80001|2.3.9|
 |[Improve][Core] Refactor common options of column/row (#7911)|https://github.com/apache/seatunnel/commit/d1582afee|2.3.9|

@@ -33,6 +33,7 @@ import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
+import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.DEFAULT_PARTITION;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BATCH_SIZE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
@@ -100,7 +101,6 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
 
     @Override
     public void write(SeaTunnelRow element) {
-        // put data to cache by partition
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
                         catalogTable, descriptionCollectionResp, milvusFieldMapper, element);
@@ -132,7 +132,6 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
             return;
         }
 
-        // default to use upsertReq, but upsert only works when autoID is disabled
         insertWrite(partitionName, milvusDataCache);
 
         writeCount.addAndGet(this.writeCache.get());
@@ -163,7 +162,9 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
                         .data(data)
                         .build();
 
-        if (StringUtils.isNotEmpty(partitionName) && !partitionName.equals("_default") &&  !this.hasPartitionKey) {
+        if (StringUtils.isNotEmpty(partitionName)
+                && !partitionName.equals(DEFAULT_PARTITION)
+                && !this.hasPartitionKey) {
             insertReq.setPartitionName(partitionName);
         }
 

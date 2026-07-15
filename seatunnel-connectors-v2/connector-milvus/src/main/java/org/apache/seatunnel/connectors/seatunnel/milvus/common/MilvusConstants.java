@@ -21,6 +21,8 @@ public class MilvusConstants {
 
     // Partition constants
     public static final String DEFAULT_PARTITION = "_default";
+    public static final String EMPTY_JSON_ARRAY = "[]";
+    public static final String MILVUS_INTERNAL_DYNAMIC_FIELD = "$meta";
 
     // Collection options
     public static final String ENABLE_DYNAMIC_FIELD = "enableDynamicField";
@@ -48,4 +50,11 @@ public class MilvusConstants {
     public static final String IS_NULLABLE = "is_nullable";
     public static final String DEFAULT_VALUE = "default_value";
     public static final String STRUCT_FIELDS = "struct_fields";
+
+    // Serialized source index metadata keys
+    public static final String INDEX_FIELD_NAME = "fieldName";
+    public static final String INDEX_NAME = "indexName";
+    public static final String INDEX_TYPE = "indexType";
+    public static final String METRIC_TYPE = "metricType";
+    public static final String EXTRA_PARAMS = "extraParams";
 }
