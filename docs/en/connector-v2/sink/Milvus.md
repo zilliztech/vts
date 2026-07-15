@@ -55,6 +55,8 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
 | cdc_batch_flush_interval_ms | long | No       | 1000                         | In CDC mode, flush pending rows when a newly received row observes that this interval has elapsed since the last successful flush. |
 | write_mode           | enum    | No       | APPEND                       | Write mode. `APPEND` writes normal insert rows by batch or bulk writer. `CDC` upserts INSERT and UPDATE_AFTER rows, deletes DELETE rows, and ignores UPDATE_BEFORE rows. |
+| geometry_convert_mode | String | No       | passthrough                  | How to handle String values for Milvus Geometry fields. `passthrough` sends the value unchanged; `parse` converts WKT/EWKT/GeoJSON/WKB hex and supported coordinate formats to WKT. |
+| geometry_string_coord_order | String | No | lat_lon                     | Coordinate order for bare numeric pair strings in `parse` mode. Supported values are `lat_lon` and `lon_lat`. WKT, GeoJSON and WKB inputs are unaffected. |
 | partition_key        | String  | No       |                              | Milvus partition key field                                |
 | partition_num        | int     | No       |                              | Number of partitions passed to Milvus create collection request. Currently used by Milvus partition key mode. |
 | collection_rename    | Map     | No       | {}                           | Rename collections: `{source_name = "target_name"}`       |
@@ -108,6 +110,8 @@ CDC write mode has the following constraints:
 - `bulk_writer_config` is not supported.
 - The target collection must not use autoID.
 - The target collection must have exactly one primary key field.
+
+For PostgreSQL CDC sources containing PostGIS `GEOMETRY` or `GEOGRAPHY` columns, set `geometry_convert_mode = "parse"`. PostgreSQL CDC emits these values as WKB/EWKB hexadecimal strings, and the Milvus sink converts them to WKT. The target collection must already define the corresponding field as Milvus `GEOMETRY`.
 
 The CDC writer accepts generic keyed changelog rows and does not require `Milvus-CDC`-specific message metadata. INSERT and UPDATE_AFTER rows are applied by upsert, DELETE rows are applied by primary key delete, and UPDATE_BEFORE rows are ignored. The Milvus primary key must correspond to a stable source CDC key; a primary-key change must be emitted by the source as DELETE for the old key followed by INSERT for the new key. Duplicate primary keys within one upsert batch keep the last row. Consecutive rows with the same target operation are flushed when they reach `batch_size`. Whenever a row is added to the pending batch, the writer also checks `cdc_batch_flush_interval_ms`; when the interval since the last successful flush has elapsed, it flushes the pending batch including the current row. Any target-operation change flushes the previous pending batch. When switching from DELETE to upsert, the current upsert is also flushed immediately so the new key does not remain pending after the old key has been deleted. When switching from upsert to DELETE, the current DELETE continues to follow the normal batch, interval, checkpoint, or writer-close flush rules.
 

@@ -27,7 +27,7 @@ Postgre CDC 连接器允许从 Postgre 数据库读取快照数据和增量数�
 | 数据源      |                     支持的版本                      |        驱动        |                  Url                  |                                  Maven                                   |
 |------------|-----------------------------------------------------|---------------------|---------------------------------------|--------------------------------------------------------------------------|
 | PostgreSQL | 不同的依赖版本有不同的驱动类。                       | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [下载](https://mvnrepository.com/artifact/org.postgresql/postgresql) |
-| PostgreSQL | 如果您想在 PostgreSQL 中操作 GEOMETRY 类型。        | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [下载](https://mvnrepository.com/artifact/net.postgis/postgis-jdbc)  |
+| PostgreSQL | 如果您想在 PostgreSQL 中操作 GEOMETRY/GEOGRAPHY 类型。        | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [下载](https://mvnrepository.com/artifact/net.postgis/postgis-jdbc)  |
 
 ## 使用依赖
 
@@ -83,6 +83,12 @@ ALTER TABLE your_table_name REPLICA IDENTITY FULL;
 | TIME<br/>                                                                               | TIME                                                                                                                                           |
 | DATE<br/>                                                                               | DATE                                                                                                                                           |
 | 其他数据类型                                                                            | 尚不支持                                                                                                                                       |
+
+### PostGIS Geometry 和 Geography
+
+PostgreSQL CDC 会将 Debezium `Geometry` 和 `Geography` logical value 转换为大写的 WKB/EWKB 十六进制字符串。初始化快照和 WAL 增量事件都会使用该转换逻辑。
+
+将这些字段写入 Milvus `GEOMETRY` 字段时，需要在 Milvus sink 中配置 `geometry_convert_mode = "parse"`。parse 模式会在写入 Milvus 前将十六进制 WKB/EWKB 转换成 WKT，但不会在不同空间参考系统之间执行坐标重投影。
 
 ## 源选项
 
