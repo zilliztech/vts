@@ -55,6 +55,8 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 | batch_size           | int     | 否       | 1000                         | 写入批大小。                                         |
 | cdc_batch_flush_interval_ms | long | 否       | 1000                         | CDC 模式下，收到新 row 时，如果距上次成功 flush 已达到该间隔，则 flush 未完成批次。单位为毫秒。 |
 | write_mode           | enum    | 否       | APPEND                       | 写入模式。`APPEND` 使用普通 batch 或 bulk writer 写入 insert row；`CDC` 对 INSERT 和 UPDATE_AFTER 执行 upsert，对 DELETE 执行删除，并忽略 UPDATE_BEFORE。 |
+| geometry_convert_mode | String | 否       | passthrough                  | Milvus Geometry 字段的 String 值处理方式。`passthrough` 原样发送；`parse` 将 WKT/EWKT/GeoJSON/WKB hex 和支持的坐标格式转换为 WKT。 |
+| geometry_string_coord_order | String | 否 | lat_lon                     | `parse` 模式下裸数字坐标字符串的顺序，支持 `lat_lon` 和 `lon_lat`。不影响 WKT、GeoJSON 和 WKB 输入。 |
 | partition_key        | String  | 否       |                              | Milvus分区键字段                                |
 | partition_num        | int     | 否       |                              | 透传给 Milvus create collection 请求的分区数量。当前主要用于 Milvus 分区键模式。 |
 | collection_rename    | Map     | 否       | {}                           | 重命名集合：`{源名称 = "目标名称"}`       |
@@ -108,6 +110,8 @@ CDC 写模式有以下限制：
 - 不支持 `bulk_writer_config`。
 - 目标 collection 不能启用 autoID。
 - 目标 collection 必须只有一个主键字段。
+
+如果 PostgreSQL CDC source 包含 PostGIS `GEOMETRY` 或 `GEOGRAPHY` 列，需要设置 `geometry_convert_mode = "parse"`。PostgreSQL CDC 会将这些值输出为 WKB/EWKB 十六进制字符串，Milvus sink 会将其转换为 WKT。目标 collection 中对应字段必须预先定义为 Milvus `GEOMETRY`。
 
 CDC writer 接受通用的 keyed changelog row，不依赖 `Milvus-CDC` 私有消息元数据。INSERT 和 UPDATE_AFTER row 会按 upsert 写入，DELETE row 会按主键删除，UPDATE_BEFORE row 会被忽略。Milvus 主键必须对应稳定的源 CDC key；源端主键变化必须由 reader 表达为旧主键的 DELETE，随后是新主键的 INSERT。同一个 upsert batch 内的重复主键保留最后一条。连续的相同目标操作达到 `batch_size` 时会 flush；每次将 row 加入待写 batch 时还会检查 `cdc_batch_flush_interval_ms`，如果距上次成功 flush 已达到该间隔，则将当前 row 一并 flush。任何目标操作切换都会先 flush 上一个待写 batch；从 DELETE 切换到 upsert 时，当前 upsert 也会立即 flush，避免旧主键已经删除后新主键仍等待后续消息或 checkpoint。从 upsert 切换到 DELETE 时，当前 DELETE 仍按正常的 batch、interval、checkpoint 或 writer close 规则 flush。
 

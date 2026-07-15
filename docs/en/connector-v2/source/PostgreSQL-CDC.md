@@ -28,7 +28,7 @@ describes how to set up the Postgre CDC connector to run SQL queries against Pos
 | Datasource |                     Supported versions                     |        Driver         |                  Url                  |                                  Maven                                   |
 |------------|------------------------------------------------------------|-----------------------|---------------------------------------|--------------------------------------------------------------------------|
 | PostgreSQL | Different dependency version has different driver class.   | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [Download](https://mvnrepository.com/artifact/org.postgresql/postgresql) |
-| PostgreSQL | If you want to manipulate the GEOMETRY type in PostgreSQL. | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [Download](https://mvnrepository.com/artifact/net.postgis/postgis-jdbc)  |
+| PostgreSQL | If you want to manipulate the GEOMETRY/GEOGRAPHY type in PostgreSQL. | org.postgresql.Driver | jdbc:postgresql://localhost:5432/test | [Download](https://mvnrepository.com/artifact/net.postgis/postgis-jdbc)  |
 
 ## Using Dependency
 
@@ -85,6 +85,12 @@ ALTER TABLE your_table_name REPLICA IDENTITY FULL;
 | TIME<br/>                                                                               | TIME                                                                                                                                           |
 | DATE<br/>                                                                               | DATE                                                                                                                                           |
 | OTHER DATA TYPES                                                                        | NOT SUPPORTED YET                                                                                                                              |
+
+### PostGIS Geometry And Geography
+
+PostgreSQL CDC converts Debezium `Geometry` and `Geography` logical values to uppercase WKB/EWKB hexadecimal strings. This conversion is used for both the initial snapshot and WAL change events.
+
+When writing these fields to a Milvus `GEOMETRY` field, configure the Milvus sink with `geometry_convert_mode = "parse"`. The parse mode converts the hexadecimal WKB/EWKB value to WKT before writing it to Milvus. It does not reproject coordinates between spatial reference systems.
 
 ## Source Options
 
