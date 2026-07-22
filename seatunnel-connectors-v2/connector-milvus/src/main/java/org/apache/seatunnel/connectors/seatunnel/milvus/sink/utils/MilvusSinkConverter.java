@@ -476,6 +476,7 @@ public class MilvusSinkConverter {
                 return Double.parseDouble(value.toString());
             case Bool:
                 return Boolean.parseBoolean(value.toString());
+            case Text:
             case VarChar:
             case String:
                 return value.toString();

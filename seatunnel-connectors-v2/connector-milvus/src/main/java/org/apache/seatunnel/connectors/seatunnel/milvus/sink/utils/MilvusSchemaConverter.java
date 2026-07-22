@@ -30,8 +30,9 @@ public class MilvusSchemaConverter {
             Column column, PrimaryKey primaryKey) {
 
         SeaTunnelDataType<?> seaTunnelDataType = column.getDataType();
+        Map<String, Object> options = column.getOptions();
 
-        io.milvus.v2.common.DataType milvusDataType = convertSqlTypeToDataType(seaTunnelDataType.getSqlType());
+        io.milvus.v2.common.DataType milvusDataType = getColumnMilvusDataType(column);
 
         CreateCollectionReq.FieldSchema fieldSchema = CreateCollectionReq.FieldSchema.builder()
                 .name(column.getName())
@@ -39,7 +40,6 @@ public class MilvusSchemaConverter {
                 .build();
         // Handle column options safely - these come from source metadata
         boolean nullableSetFromOptions = false;
-        Map<String, Object> options = column.getOptions();
         if (options != null) {
             // Handle analyzer settings from source
             Boolean enableAnalyzer = (Boolean) options.get(MilvusConstants.ENABLE_ANALYZER);
@@ -150,8 +150,8 @@ public class MilvusSchemaConverter {
                         && (Boolean) column.getOptions().get(CommonOptions.JSON.getName())) {
                     // check if is json
                     fieldSchema.setDataType(io.milvus.v2.common.DataType.JSON);
-                } else if (column.getOptions() != null && column.getOptions().get(MilvusConstants.MAX_LENGTH) != null) {
-                    fieldSchema.setMaxLength((Integer) column.getOptions().get(MilvusConstants.MAX_LENGTH));
+                } else if (options != null && options.get(MilvusConstants.MAX_LENGTH) != null) {
+                    fieldSchema.setMaxLength((Integer) options.get(MilvusConstants.MAX_LENGTH));
                 } else {
                     fieldSchema.setMaxLength(65535);
                 }
@@ -222,6 +222,19 @@ public class MilvusSchemaConverter {
         }
 
         return fieldSchema;
+    }
+
+    private static io.milvus.v2.common.DataType getColumnMilvusDataType(Column column) {
+        io.milvus.v2.common.DataType dataType =
+                convertSqlTypeToDataType(column.getDataType().getSqlType());
+        Map<String, Object> options = column.getOptions();
+        if (options != null
+                && Objects.equals(
+                        options.get(MilvusConstants.MILVUS_DATA_TYPE),
+                        io.milvus.v2.common.DataType.Text.getCode())) {
+            return io.milvus.v2.common.DataType.Text;
+        }
+        return dataType;
     }
 
     public static io.milvus.v2.common.DataType convertSqlTypeToDataType(SqlType sqlType) {
