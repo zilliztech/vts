@@ -407,6 +407,7 @@ public class CatalogUtils {
                     return Float.valueOf(defaultValue.toString());
                 case Double:
                     return Double.valueOf(defaultValue.toString());
+                case Text:
                 case VarChar:
                 case String:
                     return defaultValue.toString();

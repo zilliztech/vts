@@ -329,9 +329,15 @@ public class MilvusSourceConverter {
             case Double:
                 builder.dataType(BasicType.DOUBLE_TYPE);
                 break;
+            case Text:
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
+                if (dataType == DataType.Text) {
+                    optionsMap.put(
+                            MilvusConstants.MILVUS_DATA_TYPE, DataType.Text.getCode());
+                } else {
+                    optionsMap.put(MilvusConstants.MAX_LENGTH, fieldSchema.getMaxLength());
+                }
                 if (fieldSchema.getEnableAnalyzer() != null) {
                     optionsMap.put(MilvusConstants.ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
                 }
@@ -347,7 +353,6 @@ public class MilvusSourceConverter {
                     optionsMap.put(MilvusConstants.MULTI_ANALYZER_PARAMS,
                             gson.toJson(fieldSchema.getMultiAnalyzerParams()));
                 }
-
                 break;
             case String:
                 builder.dataType(BasicType.STRING_TYPE);

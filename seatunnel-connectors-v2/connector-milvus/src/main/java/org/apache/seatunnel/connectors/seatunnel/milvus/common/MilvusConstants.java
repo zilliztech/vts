@@ -45,6 +45,7 @@ public class MilvusConstants {
     public static final String TIMEZONE = "timezone";
 
     // Field properties from source metadata
+    public static final String MILVUS_DATA_TYPE = "milvus_data_type";
     public static final String IS_PARTITION_KEY = "is_partition_key";
     public static final String AUTO_ID = "auto_id";
     public static final String IS_NULLABLE = "is_nullable";
