@@ -46,6 +46,7 @@ public class TextSupportTest {
 
         Assertions.assertEquals(BasicType.STRING_TYPE, column.getDataType());
         Assertions.assertEquals("Text", column.getSourceType());
+        Assertions.assertEquals("TEXT field with analyzer", column.getComment());
         Assertions.assertEquals(
                 DataType.Text.getCode(), column.getOptions().get(MilvusConstants.MILVUS_DATA_TYPE));
         Assertions.assertEquals(true, column.getOptions().get(MilvusConstants.ENABLE_ANALYZER));
@@ -82,6 +83,7 @@ public class TextSupportTest {
         Assertions.assertEquals(DataType.Text, targetField.getDataType());
         Assertions.assertTrue(targetField.getEnableAnalyzer());
         Assertions.assertTrue(targetField.getEnableMatch());
+        Assertions.assertEquals("TEXT field with analyzer", targetField.getDescription());
         Assertions.assertEquals(
                 Collections.singletonMap("type", "standard"), targetField.getAnalyzerParams());
     }
@@ -133,6 +135,7 @@ public class TextSupportTest {
         return FieldSchema.builder()
                 .name("content")
                 .dataType(DataType.Text)
+                .description("TEXT field with analyzer")
                 .isNullable(true)
                 .enableAnalyzer(true)
                 .enableMatch(true)
