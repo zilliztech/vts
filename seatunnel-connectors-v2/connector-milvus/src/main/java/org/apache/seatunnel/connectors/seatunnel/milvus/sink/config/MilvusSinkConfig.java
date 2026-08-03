@@ -128,6 +128,10 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
          * {source_field_name = "metadata.tags", field_name = "tags", data_type = 22,
          * element_type = 21}
          * ]
+         *
+         * Optional field properties include description, is_nullable, default_value,
+         * is_primary_key, auto_id, is_partition_key, enable_analyzer, analyzer_params,
+         * and enable_match.
          */
         public static final Option<List<Object>> FIELD_SCHEMA = Options.key("field_schema")
                         .listType(Object.class)

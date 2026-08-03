@@ -455,7 +455,7 @@ public class CatalogUtils {
      * This is used when field_schema is supplied - all field definitions come from
      * config.
      */
-    private CreateCollectionReq.FieldSchema createFieldSchemaFromConfig(MilvusFieldSchema milvusFieldSchema) {
+    CreateCollectionReq.FieldSchema createFieldSchemaFromConfig(MilvusFieldSchema milvusFieldSchema) {
         // Validate that data_type is provided
         if (milvusFieldSchema.getDataType() == null) {
             throw new MilvusConnectorException(
@@ -467,6 +467,10 @@ public class CatalogUtils {
                 .name(milvusFieldSchema.getEffectiveFieldName())
                 .dataType(DataType.forNumber(milvusFieldSchema.getDataType()))
                 .build();
+
+        if (StringUtils.isNotEmpty(milvusFieldSchema.getDescription())) {
+            fieldSchema.setDescription(milvusFieldSchema.getDescription());
+        }
 
         // Set element type for Array fields
         if (milvusFieldSchema.getElementType() != null) {

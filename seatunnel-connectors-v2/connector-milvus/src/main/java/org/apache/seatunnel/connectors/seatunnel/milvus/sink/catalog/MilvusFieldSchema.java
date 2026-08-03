@@ -39,6 +39,9 @@ public class MilvusFieldSchema {
     @SerializedName("dimension")
     private Integer dimension;
 
+    @SerializedName("description")
+    private String description;
+
     // Field properties
     @SerializedName("is_nullable")
     private Boolean isNullable;
