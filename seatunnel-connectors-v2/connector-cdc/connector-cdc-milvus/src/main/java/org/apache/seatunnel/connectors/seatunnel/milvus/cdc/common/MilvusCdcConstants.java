@@ -1,0 +1,57 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common;
+
+public final class MilvusCdcConstants {
+
+    private MilvusCdcConstants() {}
+
+    public static final String CATALOG_NAME = "milvus";
+    public static final String MILVUS_INTERNAL_DYNAMIC_FIELD = "$meta";
+    public static final String EMPTY_JSON_ARRAY = "[]";
+
+    public static final String STRUCT_CHILD_OPEN = "[";
+    public static final String STRUCT_CHILD_CLOSE = "]";
+    public static final char STRUCT_CHILD_OPEN_CHAR = '[';
+
+    // Collection options shared through CatalogTable metadata.
+    public static final String ENABLE_DYNAMIC_FIELD = "enableDynamicField";
+    public static final String ENABLE_AUTO_ID = "enableAutoId";
+    public static final String CONSISTENCY_LEVEL = "consistencyLevel";
+    public static final String ELEMENT_TYPE = "elementType";
+    public static final String MAX_CAPACITY = "maxCapacity";
+    public static final String MAX_LENGTH = "maxLength";
+    public static final String FUNCTION_LIST = "functionList";
+    public static final String INDEX_LIST = "indexList";
+    public static final String SHARDS_NUM = "shardsNum";
+    public static final String PARTITION_NUM = "partitionNum";
+    public static final String PARTITION_KEY_FIELD = "partitionKeyField";
+    public static final String PARTITION_NAMES = "partitionNames";
+    public static final String TIMEZONE = "timezone";
+
+    // Field properties from source metadata.
+    public static final String IS_PARTITION_KEY = "is_partition_key";
+    public static final String AUTO_ID = "auto_id";
+    public static final String IS_NULLABLE = "is_nullable";
+    public static final String DEFAULT_VALUE = "default_value";
+    public static final String ENABLE_ANALYZER = "enable_analyzer";
+    public static final String ENABLE_MATCH = "enable_match";
+    public static final String ANALYZER_PARAMS = "analyzer_params";
+    public static final String MULTI_ANALYZER_PARAMS = "multi_analyzer_params";
+    public static final String STRUCT_FIELDS = "struct_fields";
+}

@@ -210,6 +210,7 @@
                 <include>org.apache.seatunnel:connector-console:jar</include>
                 <include>org.apache.seatunnel:connector-milvus:jar</include>
                 <include>org.apache.seatunnel:connector-cdc-postgres:jar</include>
+                <include>org.apache.seatunnel:connector-cdc-milvus:jar</include>
                 <include>org.apache.seatunnel:connector-jdbc:jar</include>
                 <include>org.apache.seatunnel:connector-elasticsearch:jar</include>
                 <include>org.apache.seatunnel:connector-pinecone:jar</include>

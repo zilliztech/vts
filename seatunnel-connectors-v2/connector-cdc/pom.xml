@@ -34,6 +34,7 @@
     <modules>
         <module>connector-cdc-base</module>
         <module>connector-cdc-postgres</module>
+        <module>connector-cdc-milvus</module>
     </modules>
 
     <properties>
