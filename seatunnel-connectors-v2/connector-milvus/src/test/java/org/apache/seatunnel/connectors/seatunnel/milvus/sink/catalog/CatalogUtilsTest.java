@@ -170,6 +170,20 @@ public class CatalogUtilsTest {
         Assertions.assertFalse(result.contains("id"));
     }
 
+    @Test
+    void testCreateFieldSchemaFromConfig_preservesDescription() {
+        MilvusFieldSchema fieldConfig = MilvusFieldSchema.builder()
+                .fieldName("content")
+                .dataType(DataType.Text.getCode())
+                .description("TEXT field with analyzer")
+                .build();
+
+        CreateCollectionReq.FieldSchema result =
+                catalogUtils.createFieldSchemaFromConfig(fieldConfig);
+
+        Assertions.assertEquals("TEXT field with analyzer", result.getDescription());
+    }
+
     // ========================
     // buildIndexParam
     // ========================

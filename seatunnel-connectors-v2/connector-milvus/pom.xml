@@ -28,6 +28,9 @@
 
     <artifactId>connector-milvus</artifactId>
     <name>SeaTunnel : Connectors V2 : Milvus</name>
+    <properties>
+        <milvus.sdk.version>3.0.6</milvus.sdk.version>
+    </properties>
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -41,7 +44,7 @@
         <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java</artifactId>
-            <version>3.0.2</version>
+            <version>${milvus.sdk.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
@@ -52,7 +55,7 @@
         <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java-bulkwriter</artifactId>
-            <version>3.0.2</version>
+            <version>${milvus.sdk.version}</version>
         </dependency>
         <dependency>
             <groupId>org.locationtech.jts</groupId>
@@ -70,10 +73,10 @@
                 <version>3.3.0</version>
                 <executions>
                     <execution>
-                        <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
+                        <phase>package</phase>
                         <configuration>
                             <relocations>
                                 <relocation>
