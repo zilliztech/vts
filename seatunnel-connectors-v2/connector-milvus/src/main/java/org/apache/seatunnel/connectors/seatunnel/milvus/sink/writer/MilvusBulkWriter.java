@@ -6,8 +6,6 @@ import com.google.gson.reflect.TypeToken;
 import io.milvus.bulkwriter.RemoteBulkWriter;
 import io.milvus.bulkwriter.RemoteBulkWriterParam;
 import io.milvus.bulkwriter.common.clientenum.BulkFileType;
-import io.milvus.bulkwriter.connect.AzureConnectParam;
-import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
 import io.milvus.param.collection.CollectionSchemaParam;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
@@ -25,13 +23,13 @@ import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.Milvu
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusImport;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.StorageConnectParamFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
@@ -77,24 +75,7 @@ public class MilvusBulkWriter implements MilvusWriter {
         }
 
         String collectionName = catalogTable.getTablePath().getTableName();
-        StorageConnectParam storageConnectParam;
-        if(Objects.equals(stageBucket.getCloudId(), "az") || Objects.equals(stageBucket.getCloudId(), "azure")){
-            String connectionStr = "DefaultEndpointsProtocol=https;AccountName=" + stageBucket.getAccessKey() +
-                    ";AccountKey=" + stageBucket.getSecretKey() + ";EndpointSuffix=core.windows.net";
-            storageConnectParam = AzureConnectParam.newBuilder()
-                    .withConnStr(connectionStr)
-                    .withContainerName(stageBucket.getBucketName())
-                    .build();
-        }else {
-            storageConnectParam = S3ConnectParam.newBuilder()
-                    .withEndpoint(stageBucket.getMinioUrl())
-                    .withRegion(stageBucket.getRegionId())
-                    .withAccessKey(stageBucket.getAccessKey())
-                    .withSecretKey(stageBucket.getSecretKey())
-                    .withBucketName(stageBucket.getBucketName())
-                    .withCloudName(stageBucket.getCloudId())
-                    .build();
-        }
+        StorageConnectParam storageConnectParam = StorageConnectParamFactory.create(stageBucket);
 
         RemoteBulkWriterParam remoteBulkWriterParam = RemoteBulkWriterParam.newBuilder()
                 .withCollectionSchema(describeCollectionResp.getCollectionSchema())

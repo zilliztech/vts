@@ -43,4 +43,10 @@ public class StageBucket {
     @Builder.Default
     @SerializedName("inner_call")
     private Boolean innerCall = false;
+
+    // when true, no static credentials are provided; the writer authenticates to the
+    // bucket through the workload identity of the cluster it runs in
+    // (EKS IRSA / AKS workload identity / GKE workload identity)
+    @SerializedName("use_workload_identity")
+    private Boolean useWorkloadIdentity;
 }
