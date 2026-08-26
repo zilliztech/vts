@@ -115,17 +115,12 @@ public class MilvusImport {
         HashSet<String> jobIds = new HashSet<>(objectUrlsMap.values());
         for(String jobId : jobIds) {
             log.info("wait import job: " + jobId + " finish");
-            CloudDescribeImportRequest importProgress = CloudDescribeImportRequest.builder()
-                            .apiKey(apiKey)
-                            .clusterId(clusterId)
-                            .jobId(jobId)
-                            .build();
-            String body = BulkImportUtils.getImportProgress(this.baseUrl, importProgress);
-            RestfulResponse<GetImportProgressResp> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<GetImportProgressResp>>() {
-            }).getType());
-            if(response.getData().getState().equals("Completed")) {
+            String state = StringUtils.isNotEmpty(stageBucket.getCloudApiUrl())
+                    ? probeImportState(jobId)
+                    : cloudImportState(jobId);
+            if("Completed".equals(state)) {
                 log.info("import job: " + jobId + " finish");
-            }else if(response.getData().getState().equals("Failed")) {
+            }else if("Failed".equals(state)) {
                 log.info("import job: " + jobId + "failed");
                 throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, "import job: " + jobId + "failed");
             }else {
@@ -133,6 +128,43 @@ public class MilvusImport {
             }
         }
         return true;
+    }
+
+    private String cloudImportState(String jobId) {
+        CloudDescribeImportRequest importProgress = CloudDescribeImportRequest.builder()
+                        .apiKey(apiKey)
+                        .clusterId(clusterId)
+                        .jobId(jobId)
+                        .build();
+        String body = BulkImportUtils.getImportProgress(this.baseUrl, importProgress);
+        RestfulResponse<GetImportProgressResp> response = JsonUtils.fromJson(body, (new TypeToken<RestfulResponse<GetImportProgressResp>>() {
+        }).getType());
+        return response.getData().getState();
+    }
+
+    private String probeImportState(String jobId) {
+        String requestURL = stageBucket.getCloudApiUrl() + "/dv/v1/vts/probe/import_progress";
+        Map<String, Object> body = new HashMap<>();
+        body.put("regionId", stageBucket.getRegionId());
+        body.put("vpcId", stageBucket.getVpcId());
+        body.put("instanceId", clusterId);
+        body.put("jobId", jobId);
+        body.put("dbName", dbName);
+        body.put("collectionName", collectionName);
+        body.put("apiKey", apiKey);
+
+        HttpResponse<String> response = Unirest.post(requestURL)
+                .connectTimeout(60000)
+                .headers(httpHeaders(apiKey))
+                .body(JsonUtils.toJson(body))
+                .asString();
+
+        RestfulResponse<Map> parsed = JsonUtils.fromJson(response.getBody(), (new TypeToken<RestfulResponse<Map>>() {
+        }).getType());
+        if(parsed.getCode() != 0) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, parsed.getMessage());
+        }
+        return (String) parsed.getData().get("state");
     }
 
     // mint a fresh token per request instead of caching the one from writer init:
@@ -150,6 +182,9 @@ public class MilvusImport {
     }
 
     private BulkImportResponse importToCloud(String baseUrl, InnerImportRequest importRequest) {
+        if (StringUtils.isNotEmpty(stageBucket.getCloudApiUrl())) {
+            return importViaProbe(importRequest);
+        }
         String requestURL = baseUrl + "/v2/vectordb/jobs/import/create";
 
         HttpResponse<String> body = Unirest.post(requestURL)
@@ -164,6 +199,40 @@ public class MilvusImport {
             throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, importResponseRestfulResponse.getMessage());
         }
         return importResponseRestfulResponse.getData();
+    }
+
+    // byoc: the probe channel on data-service bridges the call into the normal import
+    // flow, so the control plane keeps the full job lifecycle as in saas
+    private BulkImportResponse importViaProbe(InnerImportRequest importRequest) {
+        String requestURL = stageBucket.getCloudApiUrl() + "/dv/v1/vts/probe/import_create";
+        Map<String, Object> body = new HashMap<>();
+        body.put("regionId", stageBucket.getRegionId());
+        body.put("vpcId", stageBucket.getVpcId());
+        body.put("instanceId", importRequest.getClusterId());
+        body.put("objectUrl", importRequest.getObjectUrl());
+        body.put("dbName", importRequest.getDbName());
+        body.put("collectionName", importRequest.getCollectionName());
+        body.put("partitionName", importRequest.getPartitionName());
+        body.put("innerCall", importRequest.getInnerCall());
+        body.put("apiKey", importRequest.getApiKey());
+        body.put("accessKey", importRequest.getAccessKey());
+        body.put("secretKey", importRequest.getSecretKey());
+        body.put("token", importRequest.getToken());
+
+        HttpResponse<String> response = Unirest.post(requestURL)
+                .connectTimeout(60000)
+                .headers(httpHeaders(apiKey))
+                .body(JsonUtils.toJson(body))
+                .asString();
+
+        RestfulResponse<Map> parsed = JsonUtils.fromJson(response.getBody(), (new TypeToken<RestfulResponse<Map>>() {
+        }).getType());
+        if(parsed.getCode() != 0) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, parsed.getMessage());
+        }
+        BulkImportResponse importResponse = new BulkImportResponse();
+        importResponse.setJobId((String) parsed.getData().get("jobId"));
+        return importResponse;
     }
 
     protected static Map<String, String> httpHeaders(String apiKey) {

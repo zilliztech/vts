@@ -54,4 +54,9 @@ public class StageBucket {
     // replacing the public cloud api the pod cannot reach from the customer vpc
     @SerializedName("cloud_api_url")
     private String cloudApiUrl;
+
+    // byoc only: the customer vpc the target instance lives in, carried into the probe
+    // calls so the data plane can locate the right cluster
+    @SerializedName("vpc_id")
+    private String vpcId;
 }
