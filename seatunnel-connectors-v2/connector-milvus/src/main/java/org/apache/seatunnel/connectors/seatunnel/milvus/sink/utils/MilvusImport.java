@@ -147,7 +147,7 @@ public class MilvusImport {
         Map<String, Object> body = new HashMap<>();
         body.put("regionId", stageBucket.getRegionId());
         body.put("vpcId", stageBucket.getVpcId());
-        body.put("instanceId", clusterId);
+        body.put("clusterId", clusterId);
         body.put("jobId", jobId);
         body.put("dbName", dbName);
         body.put("collectionName", collectionName);
@@ -202,22 +202,13 @@ public class MilvusImport {
     }
 
     // byoc: the probe channel on data-service bridges the call into the normal import
-    // flow, so the control plane keeps the full job lifecycle as in saas
+    // flow, so the control plane keeps the full job lifecycle as in saas. the payload is
+    // the same shape as the public cloud import api plus the probe routing envelope
     private BulkImportResponse importViaProbe(InnerImportRequest importRequest) {
         String requestURL = stageBucket.getCloudApiUrl() + "/dv/v1/vts/probe/import_create";
-        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> body = new HashMap<>(JsonUtils.fromJson(JsonUtils.toJson(importRequest), Map.class));
         body.put("regionId", stageBucket.getRegionId());
         body.put("vpcId", stageBucket.getVpcId());
-        body.put("instanceId", importRequest.getClusterId());
-        body.put("objectUrl", importRequest.getObjectUrl());
-        body.put("dbName", importRequest.getDbName());
-        body.put("collectionName", importRequest.getCollectionName());
-        body.put("partitionName", importRequest.getPartitionName());
-        body.put("innerCall", importRequest.getInnerCall());
-        body.put("apiKey", importRequest.getApiKey());
-        body.put("accessKey", importRequest.getAccessKey());
-        body.put("secretKey", importRequest.getSecretKey());
-        body.put("token", importRequest.getToken());
 
         HttpResponse<String> response = Unirest.post(requestURL)
                 .connectTimeout(60000)
