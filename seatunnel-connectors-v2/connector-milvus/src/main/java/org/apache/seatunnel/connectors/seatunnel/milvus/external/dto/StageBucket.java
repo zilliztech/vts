@@ -49,4 +49,9 @@ public class StageBucket {
     // (EKS IRSA / AKS workload identity / GKE workload identity)
     @SerializedName("use_workload_identity")
     private Boolean useWorkloadIdentity;
+
+    // byoc only: the data plane address the import trigger/progress calls are sent to,
+    // replacing the public cloud api the pod cannot reach from the customer vpc
+    @SerializedName("cloud_api_url")
+    private String cloudApiUrl;
 }

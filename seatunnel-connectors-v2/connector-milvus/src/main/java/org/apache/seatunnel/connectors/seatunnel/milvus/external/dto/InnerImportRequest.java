@@ -13,6 +13,9 @@ public class InnerImportRequest {
     private String objectUrl;
     private String accessKey;
     private String secretKey;
+    // workload identity token (gcp access token / aws session token), request-scoped
+    // credential for the server-side storage prevalidation when ak/sk are absent
+    private String token;
     private String clusterId;
     private String apiKey;
     private String dbName;

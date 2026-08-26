@@ -48,7 +48,9 @@ public class WorkloadIdentityCredentials {
     private static final int HTTP_TIMEOUT_MS = 10_000;
     private static final String GCP_TOKEN_URL =
             "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
-    private static final int AWS_SESSION_DURATION_SECONDS = 3600;
+    // AWS web identity sessions allow up to 12h (no extra IAM permission needed);
+    // the pod role only needs AssumeRoleWithWebIdentity, which BYOC already grants
+    private static final int AWS_SESSION_DURATION_SECONDS = 43200;
 
     @Value
     public static class AwsSessionCredentials {

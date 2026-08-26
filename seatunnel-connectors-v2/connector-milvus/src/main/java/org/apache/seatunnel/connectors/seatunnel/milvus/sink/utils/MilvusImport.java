@@ -43,7 +43,11 @@ public class MilvusImport {
         this.collectionName = collectionName;
         this.partitionName = partitionName;
         this.apiKey = stageBucket.getApiKey();
-        this.baseUrl = ControllerAPI.getControllerAPI(url);
+        // byoc pods cannot reach the public cloud api; the import trigger and progress
+        // polls go to the data plane address handed down in the stage bucket config
+        this.baseUrl = StringUtils.isNotEmpty(stageBucket.getCloudApiUrl())
+                ? stageBucket.getCloudApiUrl()
+                : ControllerAPI.getControllerAPI(url);
     }
     public void importDatas(List<List<String>> objectUrls) {
         for(List<String> objectUrl : objectUrls) {
@@ -77,6 +81,7 @@ public class MilvusImport {
                 .objectUrl(objectUrlStr)
                 .accessKey(stageBucket.getAccessKey())
                 .secretKey(stageBucket.getSecretKey())
+                .token(workloadIdentityToken())
                 //the import job will be executed in the background, not showup in the console
                 .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall())
                 .build();
@@ -128,6 +133,20 @@ public class MilvusImport {
             }
         }
         return true;
+    }
+
+    // mint a fresh token per request instead of caching the one from writer init:
+    // the upload phase may approach the token lifetime, and the import trigger must
+    // not inherit a nearly-expired credential
+    private String workloadIdentityToken() {
+        if (!Boolean.TRUE.equals(stageBucket.getUseWorkloadIdentity())) {
+            return null;
+        }
+        if ("gcp".equals(stageBucket.getCloudId())) {
+            return WorkloadIdentityCredentials.fetchGcpAccessToken();
+        }
+        return WorkloadIdentityCredentials
+                .assumeAwsRoleWithWebIdentity(stageBucket.getRegionId()).getSessionToken();
     }
 
     private BulkImportResponse importToCloud(String baseUrl, InnerImportRequest importRequest) {
