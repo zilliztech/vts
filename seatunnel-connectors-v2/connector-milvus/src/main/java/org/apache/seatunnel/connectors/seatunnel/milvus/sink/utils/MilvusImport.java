@@ -1,5 +1,6 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 import io.milvus.bulkwriter.restful.BulkImportUtils;
 import io.milvus.bulkwriter.request.describe.CloudDescribeImportRequest;
@@ -159,12 +160,7 @@ public class MilvusImport {
                 .body(JsonUtils.toJson(body))
                 .asString();
 
-        RestfulResponse<Map> parsed = JsonUtils.fromJson(response.getBody(), (new TypeToken<RestfulResponse<Map>>() {
-        }).getType());
-        if(parsed.getCode() != 0) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, parsed.getMessage());
-        }
-        return (String) parsed.getData().get("state");
+        return (String) parseProbeResponse(response.getBody(), "import_progress").data.get("state");
     }
 
     // mint a fresh token per request instead of caching the one from writer init:
@@ -216,14 +212,37 @@ public class MilvusImport {
                 .body(JsonUtils.toJson(body))
                 .asString();
 
-        RestfulResponse<Map> parsed = JsonUtils.fromJson(response.getBody(), (new TypeToken<RestfulResponse<Map>>() {
-        }).getType());
-        if(parsed.getCode() != 0) {
-            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED, parsed.getMessage());
-        }
+        // the probe channel answers with the data-service Result shape (Code/Message/Data)
+        ProbeResponse parsed = parseProbeResponse(response.getBody(), "import_create");
         BulkImportResponse importResponse = new BulkImportResponse();
-        importResponse.setJobId((String) parsed.getData().get("jobId"));
+        importResponse.setJobId((String) parsed.data.get("jobId"));
         return importResponse;
+    }
+
+    // data-service's Result uses capitalized field names, unlike the lowercase
+    // RestfulResponse of the public cloud api
+    private static class ProbeResponse {
+        @SerializedName("Code")
+        int code;
+        @SerializedName("Message")
+        String message;
+        @SerializedName("Data")
+        Map<String, Object> data;
+    }
+
+    private ProbeResponse parseProbeResponse(String body, String operation) {
+        ProbeResponse parsed;
+        try {
+            parsed = JsonUtils.fromJson(body, ProbeResponse.class);
+        } catch (Exception e) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED,
+                    "probe " + operation + " returned an unparsable response: " + body);
+        }
+        if (parsed == null || parsed.code != 0 || parsed.data == null) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.IMPORT_JOB_FAILED,
+                    "probe " + operation + " failed: " + body);
+        }
+        return parsed;
     }
 
     protected static Map<String, String> httpHeaders(String apiKey) {
