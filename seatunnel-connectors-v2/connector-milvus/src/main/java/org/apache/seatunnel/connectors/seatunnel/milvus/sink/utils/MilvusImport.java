@@ -74,17 +74,15 @@ public class MilvusImport {
         }
         String objectUrlStr = processUrl(objectUrl);
         log.info("import objectUrl: " + objectUrl);
-        InnerImportRequest importRequest = InnerImportRequest.builder()
+        InnerImportRequest.InnerImportRequestBuilder requestBuilder = InnerImportRequest.builder()
                 .apiKey(apiKey)
                 .clusterId(clusterId)
                 .collectionName(collectionName)
                 .objectUrl(objectUrlStr)
-                .accessKey(stageBucket.getAccessKey())
-                .secretKey(stageBucket.getSecretKey())
-                .token(workloadIdentityToken())
                 //the import job will be executed in the background, not showup in the console
-                .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall())
-                .build();
+                .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall());
+        applyStorageCredentials(requestBuilder);
+        InnerImportRequest importRequest = requestBuilder.build();
         if(StringUtils.isNotEmpty(dbName) && !dbName.equals("default")){
             importRequest.setDbName(dbName);
         }
@@ -135,18 +133,34 @@ public class MilvusImport {
         return true;
     }
 
-    // mint a fresh token per request instead of caching the one from writer init:
-    // the upload phase may approach the token lifetime, and the import trigger must
-    // not inherit a nearly-expired credential
-    private String workloadIdentityToken() {
+    // Workload identity credentials have to cross into the control plane, which sits
+    // outside the identity's trust boundary, so they are minted here as one frozen
+    // credential. They are minted per import call rather than reused from writer init:
+    // the upload phase may approach the writer credential's lifetime, and the import
+    // trigger must not inherit a nearly-expired credential.
+    private void applyStorageCredentials(InnerImportRequest.InnerImportRequestBuilder builder) {
         if (!Boolean.TRUE.equals(stageBucket.getUseWorkloadIdentity())) {
-            return null;
+            builder.accessKey(stageBucket.getAccessKey())
+                    .secretKey(stageBucket.getSecretKey());
+            return;
         }
         if ("gcp".equals(stageBucket.getCloudId())) {
-            return WorkloadIdentityCredentials.fetchGcpAccessToken();
+            // GCS accepts a standalone bearer token, no ak/sk needed
+            builder.token(WorkloadIdentityCredentials.fetchGcpAccessToken());
+            return;
         }
-        return WorkloadIdentityCredentials
-                .assumeAwsRoleWithWebIdentity(stageBucket.getRegionId()).getSessionToken();
+        if ("az".equals(stageBucket.getCloudId()) || "azure".equals(stageBucket.getCloudId())) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.INIT_WRITER_ERROR,
+                    "workload identity import is not supported for azure yet");
+        }
+        // AWS session credentials only authenticate as a full ak/sk/sessionToken triple;
+        // the session duration is fixed at mint time, so it stays configurable via
+        // VTS_AWS_SESSION_DURATION_SECONDS (default 1h, the IAM role default)
+        WorkloadIdentityCredentials.AwsSessionCredentials credentials =
+                WorkloadIdentityCredentials.assumeAwsRoleWithWebIdentity(stageBucket.getRegionId());
+        builder.accessKey(credentials.getAccessKey())
+                .secretKey(credentials.getSecretKey())
+                .token(credentials.getSessionToken());
     }
 
     private BulkImportResponse importToCloud(String baseUrl, InnerImportRequest importRequest) {

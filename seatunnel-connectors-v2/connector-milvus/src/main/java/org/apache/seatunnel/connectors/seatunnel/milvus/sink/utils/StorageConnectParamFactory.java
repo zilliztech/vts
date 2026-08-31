@@ -2,6 +2,7 @@ package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import io.milvus.bulkwriter.connect.AzureConnectParam;
+import io.milvus.bulkwriter.connect.GcpMetadataServerCredentialsProvider;
 import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
@@ -83,16 +84,15 @@ public class StorageConnectParamFactory {
 
     private static StorageConnectParam s3WithWorkloadIdentity(StageBucket stageBucket) {
         S3ConnectParam.Builder builder = s3Builder(stageBucket);
+        // self-refreshing providers: a long-running writer never touches an expired
+        // credential, and no fixed session duration has to be negotiated with the
+        // customer role
         if (Objects.equals(stageBucket.getCloudId(), "gcp")) {
             // the bulk writer sends the token as a Bearer credential against the GCS XML API
-            return builder.withSessionToken(WorkloadIdentityCredentials.fetchGcpAccessToken()).build();
+            return builder.withCredentialsProvider(new GcpMetadataServerCredentialsProvider()).build();
         }
-        WorkloadIdentityCredentials.AwsSessionCredentials credentials =
-                WorkloadIdentityCredentials.assumeAwsRoleWithWebIdentity(stageBucket.getRegionId());
-        return builder.withAccessKey(credentials.getAccessKey())
-                .withSecretKey(credentials.getSecretKey())
-                .withSessionToken(credentials.getSessionToken())
-                .build();
+        return builder.withCredentialsProvider(
+                WorkloadIdentityCredentials.awsWebIdentityProvider(stageBucket.getRegionId())).build();
     }
 
     private static S3ConnectParam.Builder s3Builder(StageBucket stageBucket) {
