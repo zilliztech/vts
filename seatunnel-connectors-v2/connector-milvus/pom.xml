@@ -30,9 +30,10 @@
     <name>SeaTunnel : Connectors V2 : Milvus</name>
     <properties>
         <milvus.sdk.version>3.0.6</milvus.sdk.version>
-        <!-- local fork build carrying the refreshable workload-identity credentials;
-             revert to ${milvus.sdk.version} once the change lands upstream -->
-        <milvus.bulkwriter.version>3.0.6-vts.1</milvus.bulkwriter.version>
+        <!-- internal build from milvus-sdk-java master carrying the merged refreshable
+             workload-identity credentials (milvus-io/milvus-sdk-java#2058); revert to
+             ${milvus.sdk.version} once an upstream release includes it -->
+        <milvus.bulkwriter.version>3.0.8-vts.1</milvus.bulkwriter.version>
     </properties>
     <dependencyManagement>
         <dependencies>
