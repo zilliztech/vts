@@ -136,10 +136,11 @@ public class WorkloadIdentityCredentials {
         if (isEmpty(sessionName)) {
             sessionName = "vts-bulk-writer";
         }
-        String stsEndpoint = System.getenv("AWS_STS_ENDPOINT");
-        if (isEmpty(stsEndpoint)) {
-            stsEndpoint = "https://sts." + region + ".amazonaws.com";
-        }
+        // regional STS endpoint, matching the AWS_STS_REGIONAL_ENDPOINTS=regional the pod
+        // spec injects; deliberately not configurable — nothing injects such an override
+        // today, and an unused knob is worse than adding one back when a real VPC-endpoint
+        // case shows up
+        String stsEndpoint = "https://sts." + region + ".amazonaws.com";
         return new AwsWebIdentityEnv(roleArn, tokenFile, sessionName, stsEndpoint);
     }
 
