@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 @Data
@@ -19,8 +20,12 @@ public class StageBucket {
     private String minioUrl;
     @SerializedName("region_id")
     private String regionId;
+    // credentials live in this config; keep them out of toString so an accidental
+    // log of the stage bucket never leaks them
+    @ToString.Exclude
     @SerializedName("access_key")
     private String accessKey;
+    @ToString.Exclude
     @SerializedName("secret_key")
     private String secretKey;
     @SerializedName("bucket_name")
@@ -35,6 +40,7 @@ public class StageBucket {
     //config for import
     @SerializedName("instance_id")
     private String instanceId;
+    @ToString.Exclude
     @SerializedName("api_key")
     private String apiKey;
     @Builder.Default

@@ -5,6 +5,7 @@ import io.milvus.bulkwriter.connect.GcpMetadataServerCredentialsProvider;
 import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.InnerImportRequest;
 import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,34 @@ public class WorkloadIdentityCredentialsTest {
                 "{\"cloud_id\":\"aws\",\"bucket_name\":\"b\"}",
                 StageBucket.class);
         Assertions.assertNull(absent.getSessionDurationSeconds());
+    }
+
+    @Test
+    public void credentialsNeverLeakIntoToString() {
+        StageBucket stageBucket = StageBucket.builder()
+                .cloudId("aws")
+                .bucketName("bucket")
+                .accessKey("secret-ak")
+                .secretKey("secret-sk")
+                .apiKey("secret-api-key")
+                .build();
+        String rendered = stageBucket.toString();
+        Assertions.assertFalse(rendered.contains("secret-ak"));
+        Assertions.assertFalse(rendered.contains("secret-sk"));
+        Assertions.assertFalse(rendered.contains("secret-api-key"));
+
+        InnerImportRequest importRequest = InnerImportRequest.builder()
+                .accessKey("secret-ak")
+                .secretKey("secret-sk")
+                .token("secret-token")
+                .apiKey("secret-api-key")
+                .objectUrl("https://bucket.s3.us-west-2.amazonaws.com/path")
+                .build();
+        String renderedRequest = importRequest.toString();
+        Assertions.assertFalse(renderedRequest.contains("secret-ak"));
+        Assertions.assertFalse(renderedRequest.contains("secret-sk"));
+        Assertions.assertFalse(renderedRequest.contains("secret-token"));
+        Assertions.assertFalse(renderedRequest.contains("secret-api-key"));
     }
 
     @Test
