@@ -36,11 +36,11 @@ import java.nio.file.Paths;
  *       (AWS_ROLE_ARN / AWS_WEB_IDENTITY_TOKEN_FILE) for session credentials and
  *       refreshes them automatically before expiry, so long-running jobs never hit an
  *       expired session.</li>
- *   <li>AWS import path: {@link #assumeAwsRoleWithWebIdentity(String)} mints one session
- *       triple that is forwarded to the control plane, whose environment sits outside the
- *       identity's trust boundary. Its lifetime is fixed at mint time, so it stays
- *       configurable via VTS_AWS_SESSION_DURATION_SECONDS (default 1h, the IAM role
- *       default) instead of a hardcoded value that stock roles reject.</li>
+ *   <li>AWS import path: {@link #assumeAwsRoleWithWebIdentity(String, Integer)} mints one
+ *       session triple that is forwarded to the control plane, whose environment sits
+ *       outside the identity's trust boundary. Its lifetime is fixed at mint time, so the
+ *       caller passes it explicitly (the stage bucket config handed down by the control
+ *       plane); absent means 1h, the IAM role default that stock roles accept.</li>
  *   <li>GCP: {@link #fetchGcpAccessToken()} fetches an OAuth2 access token from the GKE
  *       metadata server for the import path; the write path uses the bulk writer's
  *       self-refreshing GCP provider instead.</li>
@@ -55,8 +55,8 @@ public class WorkloadIdentityCredentials {
     private static final String GCP_TOKEN_URL =
             "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
     // 1h matches the IAM role default MaxSessionDuration, so stock BYOC roles work
-    // unmodified; raise only when the target role allows a longer MaxSessionDuration
-    public static final String AWS_SESSION_DURATION_ENV = "VTS_AWS_SESSION_DURATION_SECONDS";
+    // unmodified; raise via the stage bucket config only when the target role allows a
+    // longer MaxSessionDuration
     public static final int DEFAULT_AWS_SESSION_DURATION_SECONDS = 3600;
 
     @Value
@@ -91,18 +91,19 @@ public class WorkloadIdentityCredentials {
 
     /**
      * Mints one session triple for the import path, where the credentials must cross
-     * into the control plane and are consumed asynchronously.
+     * into the control plane and are consumed asynchronously. durationSeconds comes from
+     * the stage bucket config; null falls back to the IAM role default (1h).
      */
-    public static AwsSessionCredentials assumeAwsRoleWithWebIdentity(String region) {
+    public static AwsSessionCredentials assumeAwsRoleWithWebIdentity(String region, Integer durationSeconds) {
         AwsWebIdentityEnv env = awsWebIdentityEnv(region);
-        int durationSeconds = configuredSessionDurationSeconds();
+        int duration = validateSessionDurationSeconds(durationSeconds);
         try {
             String webIdentityToken = readTokenFile(env.getTokenFile());
             String body = "Action=AssumeRoleWithWebIdentity&Version=2011-06-15"
                     + "&RoleArn=" + urlEncode(env.getRoleArn())
                     + "&RoleSessionName=" + urlEncode(env.getSessionName())
                     + "&WebIdentityToken=" + urlEncode(webIdentityToken)
-                    + "&DurationSeconds=" + durationSeconds;
+                    + "&DurationSeconds=" + duration;
             String response = httpRequest("POST", env.getStsEndpoint(),
                     "application/x-www-form-urlencoded", null, body);
             AwsSessionCredentials credentials = new AwsSessionCredentials(
@@ -111,7 +112,7 @@ public class WorkloadIdentityCredentials {
                     xmlTagValue(response, "SessionToken"),
                     xmlTagValue(response, "Expiration"));
             log.info("Obtained AWS session credentials via web identity, roleArn={}, durationSeconds={}, expiration={}",
-                    env.getRoleArn(), durationSeconds, credentials.getExpiration());
+                    env.getRoleArn(), duration, credentials.getExpiration());
             return credentials;
         } catch (MilvusConnectorException e) {
             throw e;
@@ -142,28 +143,16 @@ public class WorkloadIdentityCredentials {
         return new AwsWebIdentityEnv(roleArn, tokenFile, sessionName, stsEndpoint);
     }
 
-    static int configuredSessionDurationSeconds() {
-        return parseSessionDurationSeconds(System.getenv(AWS_SESSION_DURATION_ENV));
-    }
-
-    static int parseSessionDurationSeconds(String raw) {
-        if (isEmpty(raw)) {
+    static int validateSessionDurationSeconds(Integer durationSeconds) {
+        if (durationSeconds == null) {
             return DEFAULT_AWS_SESSION_DURATION_SECONDS;
         }
-        final int duration;
-        try {
-            duration = Integer.parseInt(raw.trim());
-        } catch (NumberFormatException e) {
+        if (durationSeconds <= 0) {
             throw new MilvusConnectorException(
                     MilvusConnectionErrorCode.INIT_WRITER_ERROR,
-                    AWS_SESSION_DURATION_ENV + " must be a positive integer, got: " + raw);
+                    "session_duration_seconds must be a positive integer, got: " + durationSeconds);
         }
-        if (duration <= 0) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.INIT_WRITER_ERROR,
-                    AWS_SESSION_DURATION_ENV + " must be a positive integer, got: " + raw);
-        }
-        return duration;
+        return durationSeconds;
     }
 
     private static String readTokenFile(String tokenFile) {

@@ -1,5 +1,6 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
 
+import com.google.gson.Gson;
 import io.milvus.bulkwriter.connect.GcpMetadataServerCredentialsProvider;
 import io.milvus.bulkwriter.connect.S3ConnectParam;
 import io.milvus.bulkwriter.connect.StorageConnectParam;
@@ -13,24 +14,20 @@ public class WorkloadIdentityCredentialsTest {
     @Test
     public void sessionDurationDefaultsToOneHour() {
         Assertions.assertEquals(3600,
-                WorkloadIdentityCredentials.parseSessionDurationSeconds(null));
-        Assertions.assertEquals(3600,
-                WorkloadIdentityCredentials.parseSessionDurationSeconds("  "));
+                WorkloadIdentityCredentials.validateSessionDurationSeconds(null));
     }
 
     @Test
     public void sessionDurationAcceptsPositiveInteger() {
-        Assertions.assertEquals(7200, WorkloadIdentityCredentials.parseSessionDurationSeconds("7200"));
+        Assertions.assertEquals(7200, WorkloadIdentityCredentials.validateSessionDurationSeconds(7200));
     }
 
     @Test
-    public void sessionDurationRejectsGarbage() {
+    public void sessionDurationRejectsNonPositive() {
         Assertions.assertThrows(MilvusConnectorException.class,
-                () -> WorkloadIdentityCredentials.parseSessionDurationSeconds("abc"));
+                () -> WorkloadIdentityCredentials.validateSessionDurationSeconds(0));
         Assertions.assertThrows(MilvusConnectorException.class,
-                () -> WorkloadIdentityCredentials.parseSessionDurationSeconds("0"));
-        Assertions.assertThrows(MilvusConnectorException.class,
-                () -> WorkloadIdentityCredentials.parseSessionDurationSeconds("-100"));
+                () -> WorkloadIdentityCredentials.validateSessionDurationSeconds(-100));
     }
 
     @Test
@@ -60,6 +57,19 @@ public class WorkloadIdentityCredentialsTest {
                 .build();
         Assertions.assertThrows(MilvusConnectorException.class,
                 () -> StorageConnectParamFactory.create(stageBucket));
+    }
+
+    @Test
+    public void stageBucketCarriesSessionDurationFromJobConfig() {
+        StageBucket withValue = new Gson().fromJson(
+                "{\"cloud_id\":\"aws\",\"bucket_name\":\"b\",\"session_duration_seconds\":7200}",
+                StageBucket.class);
+        Assertions.assertEquals(7200, withValue.getSessionDurationSeconds());
+
+        StageBucket absent = new Gson().fromJson(
+                "{\"cloud_id\":\"aws\",\"bucket_name\":\"b\"}",
+                StageBucket.class);
+        Assertions.assertNull(absent.getSessionDurationSeconds());
     }
 
     @Test

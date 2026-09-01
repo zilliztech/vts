@@ -50,6 +50,13 @@ public class StageBucket {
     @SerializedName("use_workload_identity")
     private Boolean useWorkloadIdentity;
 
+    // aws workload identity, import path only: lifetime of the session credentials
+    // minted for the control plane, whose environment sits outside the identity's trust
+    // boundary and therefore cannot refresh them. Absent means 3600 (the IAM role
+    // default MaxSessionDuration), which stock customer roles accept unmodified
+    @SerializedName("session_duration_seconds")
+    private Integer sessionDurationSeconds;
+
     // byoc only: the data plane address the import trigger/progress calls are sent to,
     // replacing the public cloud api the pod cannot reach from the customer vpc
     @SerializedName("cloud_api_url")

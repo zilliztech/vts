@@ -154,10 +154,12 @@ public class MilvusImport {
                     "workload identity import is not supported for azure yet");
         }
         // AWS session credentials only authenticate as a full ak/sk/sessionToken triple;
-        // the session duration is fixed at mint time, so it stays configurable via
-        // VTS_AWS_SESSION_DURATION_SECONDS (default 1h, the IAM role default)
+        // the session duration is fixed at mint time, so it is taken from the stage
+        // bucket config handed down by the control plane (absent = 1h, the IAM role
+        // default that stock customer roles accept)
         WorkloadIdentityCredentials.AwsSessionCredentials credentials =
-                WorkloadIdentityCredentials.assumeAwsRoleWithWebIdentity(stageBucket.getRegionId());
+                WorkloadIdentityCredentials.assumeAwsRoleWithWebIdentity(stageBucket.getRegionId(),
+                        stageBucket.getSessionDurationSeconds());
         builder.accessKey(credentials.getAccessKey())
                 .secretKey(credentials.getSecretKey())
                 .token(credentials.getSessionToken());
