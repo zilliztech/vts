@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 @Data
@@ -19,8 +20,12 @@ public class StageBucket {
     private String minioUrl;
     @SerializedName("region_id")
     private String regionId;
+    // credentials live in this config; keep them out of toString so an accidental
+    // log of the stage bucket never leaks them
+    @ToString.Exclude
     @SerializedName("access_key")
     private String accessKey;
+    @ToString.Exclude
     @SerializedName("secret_key")
     private String secretKey;
     @SerializedName("bucket_name")
@@ -35,6 +40,7 @@ public class StageBucket {
     //config for import
     @SerializedName("instance_id")
     private String instanceId;
+    @ToString.Exclude
     @SerializedName("api_key")
     private String apiKey;
     @Builder.Default
@@ -43,4 +49,27 @@ public class StageBucket {
     @Builder.Default
     @SerializedName("inner_call")
     private Boolean innerCall = false;
+
+    // when true, no static credentials are provided; the writer authenticates to the
+    // bucket through the workload identity of the cluster it runs in
+    // (EKS IRSA / AKS workload identity / GKE workload identity)
+    @SerializedName("use_workload_identity")
+    private Boolean useWorkloadIdentity;
+
+    // aws workload identity, import path only: lifetime of the session credentials
+    // minted for the control plane, whose environment sits outside the identity's trust
+    // boundary and therefore cannot refresh them. Absent means 3600 (the IAM role
+    // default MaxSessionDuration), which stock customer roles accept unmodified
+    @SerializedName("session_duration_seconds")
+    private Integer sessionDurationSeconds;
+
+    // byoc only: the data plane address the import trigger/progress calls are sent to,
+    // replacing the public cloud api the pod cannot reach from the customer vpc
+    @SerializedName("cloud_api_url")
+    private String cloudApiUrl;
+
+    // byoc only: the customer vpc the target instance lives in, carried into the probe
+    // calls so the data plane can locate the right cluster
+    @SerializedName("vpc_id")
+    private String vpcId;
 }

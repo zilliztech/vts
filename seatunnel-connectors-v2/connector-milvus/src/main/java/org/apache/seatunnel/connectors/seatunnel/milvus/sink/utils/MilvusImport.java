@@ -43,7 +43,11 @@ public class MilvusImport {
         this.collectionName = collectionName;
         this.partitionName = partitionName;
         this.apiKey = stageBucket.getApiKey();
-        this.baseUrl = ControllerAPI.getControllerAPI(url);
+        // byoc pods cannot reach the public cloud api; the import trigger and progress
+        // polls go to the data plane address handed down in the stage bucket config
+        this.baseUrl = StringUtils.isNotEmpty(stageBucket.getCloudApiUrl())
+                ? stageBucket.getCloudApiUrl()
+                : ControllerAPI.getControllerAPI(url);
     }
     public void importDatas(List<List<String>> objectUrls) {
         for(List<String> objectUrl : objectUrls) {
@@ -70,16 +74,15 @@ public class MilvusImport {
         }
         String objectUrlStr = processUrl(objectUrl);
         log.info("import objectUrl: " + objectUrl);
-        InnerImportRequest importRequest = InnerImportRequest.builder()
+        InnerImportRequest.InnerImportRequestBuilder requestBuilder = InnerImportRequest.builder()
                 .apiKey(apiKey)
                 .clusterId(clusterId)
                 .collectionName(collectionName)
                 .objectUrl(objectUrlStr)
-                .accessKey(stageBucket.getAccessKey())
-                .secretKey(stageBucket.getSecretKey())
                 //the import job will be executed in the background, not showup in the console
-                .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall())
-                .build();
+                .innerCall(stageBucket.getInnerCall() == null || stageBucket.getInnerCall());
+        applyStorageCredentials(requestBuilder);
+        InnerImportRequest importRequest = requestBuilder.build();
         if(StringUtils.isNotEmpty(dbName) && !dbName.equals("default")){
             importRequest.setDbName(dbName);
         }
@@ -128,6 +131,38 @@ public class MilvusImport {
             }
         }
         return true;
+    }
+
+    // Workload identity credentials have to cross into the control plane, which sits
+    // outside the identity's trust boundary, so they are minted here as one frozen
+    // credential. They are minted per import call rather than reused from writer init:
+    // the upload phase may approach the writer credential's lifetime, and the import
+    // trigger must not inherit a nearly-expired credential.
+    private void applyStorageCredentials(InnerImportRequest.InnerImportRequestBuilder builder) {
+        if (!Boolean.TRUE.equals(stageBucket.getUseWorkloadIdentity())) {
+            builder.accessKey(stageBucket.getAccessKey())
+                    .secretKey(stageBucket.getSecretKey());
+            return;
+        }
+        if ("gcp".equals(stageBucket.getCloudId())) {
+            // GCS accepts a standalone bearer token, no ak/sk needed
+            builder.token(WorkloadIdentityCredentials.fetchGcpAccessToken());
+            return;
+        }
+        if ("az".equals(stageBucket.getCloudId()) || "azure".equals(stageBucket.getCloudId())) {
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.INIT_WRITER_ERROR,
+                    "workload identity import is not supported for azure yet");
+        }
+        // AWS session credentials only authenticate as a full ak/sk/sessionToken triple;
+        // the session duration is fixed at mint time, so it is taken from the stage
+        // bucket config handed down by the control plane (absent = 1h, the IAM role
+        // default that stock customer roles accept)
+        WorkloadIdentityCredentials.AwsSessionCredentials credentials =
+                WorkloadIdentityCredentials.assumeAwsRoleWithWebIdentity(stageBucket.getRegionId(),
+                        stageBucket.getSessionDurationSeconds());
+        builder.accessKey(credentials.getAccessKey())
+                .secretKey(credentials.getSecretKey())
+                .token(credentials.getSessionToken());
     }
 
     private BulkImportResponse importToCloud(String baseUrl, InnerImportRequest importRequest) {

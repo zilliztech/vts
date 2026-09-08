@@ -1,0 +1,119 @@
+package org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils;
+
+import com.google.gson.Gson;
+import io.milvus.bulkwriter.connect.GcpMetadataServerCredentialsProvider;
+import io.milvus.bulkwriter.connect.S3ConnectParam;
+import io.milvus.bulkwriter.connect.StorageConnectParam;
+import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.InnerImportRequest;
+import org.apache.seatunnel.connectors.seatunnel.milvus.external.dto.StageBucket;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+public class WorkloadIdentityCredentialsTest {
+
+    @Test
+    public void sessionDurationDefaultsToOneHour() {
+        Assertions.assertEquals(3600,
+                WorkloadIdentityCredentials.validateSessionDurationSeconds(null));
+    }
+
+    @Test
+    public void sessionDurationAcceptsPositiveInteger() {
+        Assertions.assertEquals(7200, WorkloadIdentityCredentials.validateSessionDurationSeconds(7200));
+    }
+
+    @Test
+    public void sessionDurationRejectsNonPositive() {
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> WorkloadIdentityCredentials.validateSessionDurationSeconds(0));
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> WorkloadIdentityCredentials.validateSessionDurationSeconds(-100));
+    }
+
+    @Test
+    public void gcpWorkloadIdentityUsesMetadataServerProvider() {
+        StageBucket stageBucket = StageBucket.builder()
+                .cloudId("gcp")
+                .regionId("us-west1")
+                .bucketName("bucket")
+                .minioUrl("storage.googleapis.com")
+                .useWorkloadIdentity(true)
+                .build();
+        StorageConnectParam param = StorageConnectParamFactory.create(stageBucket);
+        Assertions.assertTrue(param instanceof S3ConnectParam);
+        Assertions.assertTrue(((S3ConnectParam) param).getCredentialsProvider()
+                instanceof GcpMetadataServerCredentialsProvider);
+    }
+
+    @Test
+    public void awsWorkloadIdentityFailsFastWithoutIrsaEnv() {
+        // no AWS_ROLE_ARN/AWS_WEB_IDENTITY_TOKEN_FILE in the test environment
+        StageBucket stageBucket = StageBucket.builder()
+                .cloudId("aws")
+                .regionId("us-west-2")
+                .bucketName("bucket")
+                .minioUrl("s3.us-west-2.amazonaws.com")
+                .useWorkloadIdentity(true)
+                .build();
+        Assertions.assertThrows(MilvusConnectorException.class,
+                () -> StorageConnectParamFactory.create(stageBucket));
+    }
+
+    @Test
+    public void stageBucketCarriesSessionDurationFromJobConfig() {
+        StageBucket withValue = new Gson().fromJson(
+                "{\"cloud_id\":\"aws\",\"bucket_name\":\"b\",\"session_duration_seconds\":7200}",
+                StageBucket.class);
+        Assertions.assertEquals(7200, withValue.getSessionDurationSeconds());
+
+        StageBucket absent = new Gson().fromJson(
+                "{\"cloud_id\":\"aws\",\"bucket_name\":\"b\"}",
+                StageBucket.class);
+        Assertions.assertNull(absent.getSessionDurationSeconds());
+    }
+
+    @Test
+    public void credentialsNeverLeakIntoToString() {
+        StageBucket stageBucket = StageBucket.builder()
+                .cloudId("aws")
+                .bucketName("bucket")
+                .accessKey("secret-ak")
+                .secretKey("secret-sk")
+                .apiKey("secret-api-key")
+                .build();
+        String rendered = stageBucket.toString();
+        Assertions.assertFalse(rendered.contains("secret-ak"));
+        Assertions.assertFalse(rendered.contains("secret-sk"));
+        Assertions.assertFalse(rendered.contains("secret-api-key"));
+
+        InnerImportRequest importRequest = InnerImportRequest.builder()
+                .accessKey("secret-ak")
+                .secretKey("secret-sk")
+                .token("secret-token")
+                .apiKey("secret-api-key")
+                .objectUrl("https://bucket.s3.us-west-2.amazonaws.com/path")
+                .build();
+        String renderedRequest = importRequest.toString();
+        Assertions.assertFalse(renderedRequest.contains("secret-ak"));
+        Assertions.assertFalse(renderedRequest.contains("secret-sk"));
+        Assertions.assertFalse(renderedRequest.contains("secret-token"));
+        Assertions.assertFalse(renderedRequest.contains("secret-api-key"));
+    }
+
+    @Test
+    public void staticKeysStillWork() {
+        StageBucket stageBucket = StageBucket.builder()
+                .cloudId("aws")
+                .regionId("us-west-2")
+                .bucketName("bucket")
+                .minioUrl("s3.us-west-2.amazonaws.com")
+                .accessKey("ak")
+                .secretKey("sk")
+                .build();
+        S3ConnectParam param = (S3ConnectParam) StorageConnectParamFactory.create(stageBucket);
+        Assertions.assertNull(param.getCredentialsProvider());
+        Assertions.assertEquals("ak", param.getAccessKey());
+        Assertions.assertEquals("sk", param.getSecretKey());
+    }
+}
