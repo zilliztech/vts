@@ -31,7 +31,7 @@ jobs:
     
     - name: Install Maven Daemon
       run: |
-        curl -s https://downloads.apache.org/maven/mvnd/1.0.2/maven-mvnd-1.0.2-linux-amd64.zip -o mvnd.zip
+        curl -sf https://archive.apache.org/dist/maven/mvnd/1.0.2/maven-mvnd-1.0.2-linux-amd64.zip -o mvnd.zip
         unzip mvnd.zip
         sudo mv maven-mvnd-1.0.2-linux-amd64 /opt/mvnd
         sudo ln -s /opt/mvnd/bin/mvnd /usr/local/bin/mvnd
