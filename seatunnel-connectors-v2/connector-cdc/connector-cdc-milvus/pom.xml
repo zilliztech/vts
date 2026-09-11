@@ -29,11 +29,17 @@
     <artifactId>connector-cdc-milvus</artifactId>
     <name>SeaTunnel : Connectors V2 : CDC : Milvus</name>
 
+    <properties>
+        <!-- Must stay aligned with connector-milvus: DataType.Text only exists
+             from 3.0.4 onwards, so the SDK has to be able to deserialize it. -->
+        <milvus.sdk.version>3.0.9</milvus.sdk.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java</artifactId>
-            <version>3.0.2</version>
+            <version>${milvus.sdk.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>

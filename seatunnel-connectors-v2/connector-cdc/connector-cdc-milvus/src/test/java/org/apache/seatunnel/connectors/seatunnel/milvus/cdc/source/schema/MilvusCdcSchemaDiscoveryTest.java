@@ -35,7 +35,12 @@ import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collections;
 
+import static org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common.MilvusCdcConstants.ANALYZER_PARAMS;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common.MilvusCdcConstants.ENABLE_ANALYZER;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common.MilvusCdcConstants.ENABLE_MATCH;
+import static org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common.MilvusCdcConstants.MAX_LENGTH;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.cdc.common.MilvusCdcConstants.MILVUS_INTERNAL_DYNAMIC_FIELD;
 
 class MilvusCdcSchemaDiscoveryTest {
@@ -49,13 +54,7 @@ class MilvusCdcSchemaDiscoveryTest {
                         .isNullable(true)
                         .build();
 
-        Method convertColumn =
-                MilvusCdcSchemaDiscovery.class.getDeclaredMethod(
-                        "convertColumn", CreateCollectionReq.FieldSchema.class);
-        convertColumn.setAccessible(true);
-
-        PhysicalColumn column =
-                (PhysicalColumn) convertColumn.invoke(new MilvusCdcSchemaDiscovery(), fieldSchema);
+        PhysicalColumn column = convertColumn(fieldSchema);
 
         Assertions.assertTrue(column.isNullable());
     }
@@ -90,17 +89,58 @@ class MilvusCdcSchemaDiscoveryTest {
                         .dimension(4)
                         .build();
 
-        Method convertColumn =
-                MilvusCdcSchemaDiscovery.class.getDeclaredMethod(
-                        "convertColumn", CreateCollectionReq.FieldSchema.class);
-        convertColumn.setAccessible(true);
-
-        PhysicalColumn column =
-                (PhysicalColumn) convertColumn.invoke(new MilvusCdcSchemaDiscovery(), fieldSchema);
+        PhysicalColumn column = convertColumn(fieldSchema);
 
         Assertions.assertEquals(VectorType.VECTOR_INT8_TYPE, column.getDataType());
         Assertions.assertEquals("Int8Vector", column.getSourceType());
         Assertions.assertEquals(4, column.getScale());
+    }
+
+    @Test
+    void convertTextColumnKeepsAnalyzerOptions() throws Exception {
+        CreateCollectionReq.FieldSchema fieldSchema =
+                CreateCollectionReq.FieldSchema.builder()
+                        .name("content")
+                        .dataType(DataType.Text)
+                        .enableAnalyzer(true)
+                        .enableMatch(true)
+                        .analyzerParams(Collections.singletonMap("type", "standard"))
+                        .build();
+
+        PhysicalColumn column = convertColumn(fieldSchema);
+
+        Assertions.assertEquals(BasicType.STRING_TYPE, column.getDataType());
+        Assertions.assertEquals("Text", column.getSourceType());
+        Assertions.assertEquals(true, column.getOptions().get(ENABLE_ANALYZER));
+        Assertions.assertEquals(true, column.getOptions().get(ENABLE_MATCH));
+        Assertions.assertEquals(
+                "{\"type\":\"standard\"}", column.getOptions().get(ANALYZER_PARAMS));
+        Assertions.assertFalse(column.getOptions().containsKey(MAX_LENGTH));
+    }
+
+    @Test
+    void convertVarCharColumnKeepsMaxLength() throws Exception {
+        CreateCollectionReq.FieldSchema fieldSchema =
+                CreateCollectionReq.FieldSchema.builder()
+                        .name("title")
+                        .dataType(DataType.VarChar)
+                        .maxLength(128)
+                        .build();
+
+        PhysicalColumn column = convertColumn(fieldSchema);
+
+        Assertions.assertEquals(BasicType.STRING_TYPE, column.getDataType());
+        Assertions.assertEquals("VarChar", column.getSourceType());
+        Assertions.assertEquals(128, column.getOptions().get(MAX_LENGTH));
+    }
+
+    private PhysicalColumn convertColumn(CreateCollectionReq.FieldSchema fieldSchema)
+            throws Exception {
+        Method convertColumn =
+                MilvusCdcSchemaDiscovery.class.getDeclaredMethod(
+                        "convertColumn", CreateCollectionReq.FieldSchema.class);
+        convertColumn.setAccessible(true);
+        return (PhysicalColumn) convertColumn.invoke(new MilvusCdcSchemaDiscovery(), fieldSchema);
     }
 
     @Test
