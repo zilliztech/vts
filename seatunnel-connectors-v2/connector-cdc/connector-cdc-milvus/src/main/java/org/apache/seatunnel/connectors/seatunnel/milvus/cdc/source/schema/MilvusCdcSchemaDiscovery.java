@@ -341,9 +341,12 @@ public class MilvusCdcSchemaDiscovery {
             case Double:
                 builder.dataType(BasicType.DOUBLE_TYPE);
                 break;
+            case Text:
             case VarChar:
                 builder.dataType(BasicType.STRING_TYPE);
-                options.put(MAX_LENGTH, fieldSchema.getMaxLength());
+                if (fieldSchema.getDataType() != DataType.Text) {
+                    options.put(MAX_LENGTH, fieldSchema.getMaxLength());
+                }
                 if (fieldSchema.getEnableAnalyzer() != null) {
                     options.put(ENABLE_ANALYZER, fieldSchema.getEnableAnalyzer());
                 }
