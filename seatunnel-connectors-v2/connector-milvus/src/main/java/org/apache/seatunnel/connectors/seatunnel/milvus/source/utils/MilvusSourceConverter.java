@@ -211,14 +211,14 @@ public class MilvusSourceConverter {
                             case FLOAT:
                                 Float[] floatArrays = new Float[list.size()];
                                 for (int i = 0; i < list.size(); i++) {
-                                    floatArrays[i] = Float.parseFloat(list.get(i).toString());
+                                    floatArrays[i] = ((Number) list.get(i)).floatValue();
                                 }
                                 seatunnelField[fieldIndex] = floatArrays;
                                 break;
                             case DOUBLE:
                                 Double[] doubleArrays = new Double[list.size()];
                                 for (int i = 0; i < list.size(); i++) {
-                                    doubleArrays[i] = Double.parseDouble(list.get(i).toString());
+                                    doubleArrays[i] = ((Number) list.get(i)).doubleValue();
                                 }
                                 seatunnelField[fieldIndex] = doubleArrays;
                                 break;
@@ -237,8 +237,9 @@ public class MilvusSourceConverter {
                     if (filedValues instanceof List) {
                         List list = (List) filedValues;
                         Float[] arrays = new Float[list.size()];
+                        // Boxed Floats from the SDK: skip the per-element string round-trip.
                         for (int i = 0; i < list.size(); i++) {
-                            arrays[i] = Float.parseFloat(list.get(i).toString());
+                            arrays[i] = ((Number) list.get(i)).floatValue();
                         }
                         seatunnelField[fieldIndex] = BufferUtils.toByteBuffer(arrays);
                         break;
