@@ -125,6 +125,33 @@ class MilvusSourceConverterTest {
     }
 
     @Test
+    void testSmallintFieldStaysShort() {
+        // Regression test for the scalar SMALLINT branch missing a break and
+        // falling through to INT, which overwrote the Short with an Integer.
+        TableSchema tableSchema =
+                TableSchema.builder()
+                        .columns(
+                                Arrays.asList(
+                                        PhysicalColumn.builder()
+                                                .name("id")
+                                                .dataType(BasicType.LONG_TYPE)
+                                                .build(),
+                                        PhysicalColumn.builder()
+                                                .name("age")
+                                                .dataType(BasicType.SHORT_TYPE)
+                                                .build()))
+                        .build();
+        MilvusSourceConverter converter = new MilvusSourceConverter(tableSchema);
+        QueryResultsWrapper.RowRecord record = new QueryResultsWrapper.RowRecord();
+        record.put("id", 1L);
+        record.put("age", (short) 7);
+
+        SeaTunnelRow row = converter.convertToSeaTunnelRow(record, tableSchema, "coll", "part");
+
+        Assertions.assertEquals(Short.valueOf((short) 7), row.getField(1));
+    }
+
+    @Test
     void testStringElementInFloatArrayFailsFast() {
         TableSchema tableSchema = schemaWithFloatFields();
         MilvusSourceConverter converter = new MilvusSourceConverter(tableSchema);
