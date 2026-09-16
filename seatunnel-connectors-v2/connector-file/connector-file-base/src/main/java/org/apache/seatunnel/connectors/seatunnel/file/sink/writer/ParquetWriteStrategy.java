@@ -63,11 +63,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.JulianFields;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -263,6 +266,25 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
                     return new GenericData.Fixed(schema.getField(name).schema(), (byte[]) data);
                 }
                 return ByteBuffer.wrap((byte[]) data);
+            case FLOAT_VECTOR:
+                // dense float vector travels as a big-endian packed ByteBuffer
+                // (see BufferUtils.toByteBuffer); decode it into a plain float list so the
+                // parquet column is a standard list<f32> readable by any engine
+                ByteBuffer vectorBuffer = ((ByteBuffer) data).duplicate();
+                int vectorDim = vectorBuffer.remaining() / Float.BYTES;
+                ArrayList<Object> vectorValues = new ArrayList<>(vectorDim);
+                for (int i = 0; i < vectorDim; i++) {
+                    vectorValues.add(vectorBuffer.getFloat());
+                }
+                return vectorValues;
+            case BINARY_VECTOR:
+            case INT8_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+                // raw bytes in Milvus wire layout, lossless pass-through
+                return ((ByteBuffer) data).duplicate();
+            case SPARSE_FLOAT_VECTOR:
+                return resolveSparseVector((Map<?, ?>) data);
             case ROW:
                 SeaTunnelRow seaTunnelRow = (SeaTunnelRow) data;
                 SeaTunnelDataType<?>[] fieldTypes =
@@ -388,6 +410,37 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
                 return Types.primitive(
                                 PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.OPTIONAL)
                         .named(fieldName);
+            case FLOAT_VECTOR:
+                // standard 2-level list<f32>, same bag shape the ARRAY branch emits so the
+                // avro conversion pipeline treats it as an ordinary array
+                return Types.optionalGroup()
+                        .as(OriginalType.LIST)
+                        .addField(
+                                Types.repeatedGroup()
+                                        .addField(
+                                                Types.primitive(
+                                                                PrimitiveType.PrimitiveTypeName
+                                                                        .FLOAT,
+                                                                Type.Repetition.OPTIONAL)
+                                                        .named("array_element"))
+                                        .named("bag"))
+                        .named(fieldName);
+            case BINARY_VECTOR:
+            case INT8_VECTOR:
+            case FLOAT16_VECTOR:
+            case BFLOAT16_VECTOR:
+                return Types.primitive(
+                                PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.OPTIONAL)
+                        .named(fieldName);
+            case SPARSE_FLOAT_VECTOR:
+                // struct{indices: list<int32>, values: list<float32>}; mirrors the layout
+                // Milvus bulk import reads sparse vectors from
+                return Types.optionalGroup()
+                        .addField(sparseVectorListField("indices",
+                                PrimitiveType.PrimitiveTypeName.INT32))
+                        .addField(sparseVectorListField("values",
+                                PrimitiveType.PrimitiveTypeName.FLOAT))
+                        .named(fieldName);
             case ROW:
                 SeaTunnelDataType<?>[] fieldTypes =
                         ((SeaTunnelRowType) seaTunnelDataType).getFieldTypes();
@@ -407,6 +460,49 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
                 throw new FileConnectorException(
                         CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE, errorMsg);
         }
+    }
+
+    private static Type sparseVectorListField(
+            String name, PrimitiveType.PrimitiveTypeName elementType) {
+        return Types.optionalGroup()
+                .as(OriginalType.LIST)
+                .addField(
+                        Types.repeatedGroup()
+                                .addField(Types.primitive(elementType, Type.Repetition.OPTIONAL)
+                                        .named("array_element"))
+                                .named("bag"))
+                .named(name);
+    }
+
+    private Object resolveSparseVector(Map<?, ?> sparseVector) {
+        // sparse vectors arrive as a {index: value} map from the milvus source; emit the
+        // indices/values pair sorted by index so the output is deterministic
+        List<Map.Entry<?, ?>> entries = new ArrayList<>(sparseVector.entrySet());
+        entries.sort(Comparator.comparingLong(e -> sparseIndex(e.getKey())));
+        ArrayList<Object> indices = new ArrayList<>(entries.size());
+        ArrayList<Object> values = new ArrayList<>(entries.size());
+        for (Map.Entry<?, ?> entry : entries) {
+            indices.add((int) sparseIndex(entry.getKey()));
+            values.add(((Number) entry.getValue()).floatValue());
+        }
+        Schema sparseSchema =
+                Schema.createRecord("sparse", null, null, false);
+        sparseSchema.setFields(
+                Arrays.asList(
+                        new Schema.Field(
+                                "indices", Schema.createArray(Schema.create(Schema.Type.INT))),
+                        new Schema.Field(
+                                "values", Schema.createArray(Schema.create(Schema.Type.FLOAT)))));
+        GenericRecordBuilder recordBuilder = new GenericRecordBuilder(sparseSchema);
+        recordBuilder.set("indices", indices);
+        recordBuilder.set("values", values);
+        return recordBuilder.build();
+    }
+
+    private static long sparseIndex(Object key) {
+        return key instanceof Number
+                ? ((Number) key).longValue()
+                : Long.parseLong(key.toString());
     }
 
     private Schema buildAvroSchemaWithRowType(
