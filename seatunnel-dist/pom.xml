@@ -624,6 +624,20 @@
                     <scope>provided</scope>
                 </dependency>
 
+                <!-- file connectors: generic parquet export to object storage -->
+                <dependency>
+                    <groupId>org.apache.seatunnel</groupId>
+                    <artifactId>connector-file-base</artifactId>
+                    <version>${project.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.seatunnel</groupId>
+                    <artifactId>connector-file-s3</artifactId>
+                    <version>${project.version}</version>
+                    <scope>provided</scope>
+                </dependency>
+
                 <!-- transforms v2 -->
                 <dependency>
                     <groupId>org.apache.seatunnel</groupId>
