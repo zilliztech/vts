@@ -30,10 +30,12 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,14 +49,16 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_DEFAULT_NAME
  * indices/values lists. These tests pin both the schema shape and the value round-trip.
  */
 public class ParquetWriteStrategyVectorTest {
-    private static final String TMP_PATH = "file:///tmp/seatunnel/parquet/vector/test";
+    @TempDir
+    Path tempDir;
 
     @DisabledOnOs(OS.WINDOWS)
     @Test
     public void testVectorColumnsRoundTrip() throws Exception {
         Map<String, Object> writeConfig = new HashMap<>();
-        writeConfig.put("tmp_path", TMP_PATH);
-        writeConfig.put("path", "file:///tmp/seatunnel/parquet/vector");
+        String stagingPath = tempDir.resolve("staging").toUri().toString();
+        writeConfig.put("tmp_path", stagingPath);
+        writeConfig.put("path", tempDir.resolve("output").toUri().toString());
         writeConfig.put("file_format_type", FileFormat.PARQUET.name());
 
         SeaTunnelRowType rowType =
@@ -81,6 +85,8 @@ public class ParquetWriteStrategyVectorTest {
         Map<Long, Float> sparseVector = new TreeMap<>();
         sparseVector.put(3L, 0.5f);
         sparseVector.put(17L, -1.25f);
+        sparseVector.put(2147483648L, 0.75f);
+        sparseVector.put(4294967294L, 1.5f);
 
         writeStrategy.write(
                 new SeaTunnelRow(
@@ -95,7 +101,7 @@ public class ParquetWriteStrategyVectorTest {
 
         ParquetReadStrategy readStrategy = new ParquetReadStrategy();
         readStrategy.init(hadoopConf);
-        List<String> readFiles = readStrategy.getFileNamesByPath(TMP_PATH);
+        List<String> readFiles = readStrategy.getFileNamesByPath(stagingPath);
         Assertions.assertEquals(1, readFiles.size());
         String filePath = readFiles.get(0).replace("file://", "");
 
@@ -134,9 +140,8 @@ public class ParquetWriteStrategyVectorTest {
             List<Object> indices = (List<Object>) sparseRecord.get("indices");
             @SuppressWarnings("unchecked")
             List<Object> values = (List<Object>) sparseRecord.get("values");
-            Assertions.assertEquals(2, indices.size());
-            Assertions.assertEquals(3, indices.get(0));
-            Assertions.assertEquals(17, indices.get(1));
+            Assertions.assertEquals(List.of(3L, 17L, 2147483648L, 4294967294L), indices);
+            Assertions.assertEquals(List.of(0.5f, -1.25f, 0.75f, 1.5f), values);
             Assertions.assertEquals(0.5f, (Float) values.get(0), 1e-6);
             Assertions.assertEquals(-1.25f, (Float) values.get(1), 1e-6);
 
@@ -148,8 +153,9 @@ public class ParquetWriteStrategyVectorTest {
     @Test
     public void testNullVectorColumns() throws Exception {
         Map<String, Object> writeConfig = new HashMap<>();
-        writeConfig.put("tmp_path", "file:///tmp/seatunnel/parquet/vectornull/test");
-        writeConfig.put("path", "file:///tmp/seatunnel/parquet/vectornull");
+        String stagingPath = tempDir.resolve("staging").toUri().toString();
+        writeConfig.put("tmp_path", stagingPath);
+        writeConfig.put("path", tempDir.resolve("output").toUri().toString());
         writeConfig.put("file_format_type", FileFormat.PARQUET.name());
 
         SeaTunnelRowType rowType =
@@ -176,7 +182,7 @@ public class ParquetWriteStrategyVectorTest {
         ParquetReadStrategy readStrategy = new ParquetReadStrategy();
         readStrategy.init(hadoopConf);
         List<String> readFiles =
-                readStrategy.getFileNamesByPath("file:///tmp/seatunnel/parquet/vectornull/test");
+                readStrategy.getFileNamesByPath(stagingPath);
         Assertions.assertEquals(1, readFiles.size());
         try (ParquetReader<GenericRecord> reader =
                 AvroParquetReader.<GenericRecord>builder(

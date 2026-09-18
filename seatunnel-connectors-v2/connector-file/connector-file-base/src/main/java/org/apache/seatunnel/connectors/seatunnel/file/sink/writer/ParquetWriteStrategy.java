@@ -433,11 +433,11 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
                                 PrimitiveType.PrimitiveTypeName.BINARY, Type.Repetition.OPTIONAL)
                         .named(fieldName);
             case SPARSE_FLOAT_VECTOR:
-                // struct{indices: list<int32>, values: list<float32>}; mirrors the layout
+                // struct{indices: list<int64>, values: list<float32>}; mirrors the layout
                 // Milvus bulk import reads sparse vectors from
                 return Types.optionalGroup()
                         .addField(sparseVectorListField("indices",
-                                PrimitiveType.PrimitiveTypeName.INT32))
+                                PrimitiveType.PrimitiveTypeName.INT64))
                         .addField(sparseVectorListField("values",
                                 PrimitiveType.PrimitiveTypeName.FLOAT))
                         .named(fieldName);
@@ -482,7 +482,7 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
         ArrayList<Object> indices = new ArrayList<>(entries.size());
         ArrayList<Object> values = new ArrayList<>(entries.size());
         for (Map.Entry<?, ?> entry : entries) {
-            indices.add((int) sparseIndex(entry.getKey()));
+            indices.add(sparseIndex(entry.getKey()));
             values.add(((Number) entry.getValue()).floatValue());
         }
         Schema sparseSchema =
@@ -490,7 +490,7 @@ public class ParquetWriteStrategy extends AbstractWriteStrategy<ParquetWriter<Ge
         sparseSchema.setFields(
                 Arrays.asList(
                         new Schema.Field(
-                                "indices", Schema.createArray(Schema.create(Schema.Type.INT))),
+                                "indices", Schema.createArray(Schema.create(Schema.Type.LONG))),
                         new Schema.Field(
                                 "values", Schema.createArray(Schema.create(Schema.Type.FLOAT)))));
         GenericRecordBuilder recordBuilder = new GenericRecordBuilder(sparseSchema);
