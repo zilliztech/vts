@@ -49,8 +49,8 @@ Transaction control messages are consumed internally. When a Milvus transaction 
 | queue_capacity       | Integer                      | No       | 16                   | Buffered WAL message count per reader. A small value is recommended; increasing it does not fix a slow downstream sink and may increase memory usage for large messages. |
 | client_pem_path      | String                       | No       | -                    | Client certificate PEM path for TLS. |
 | client_key_path      | String                       | No       | -                    | Client private key path for TLS. |
-| ca_pem_path          | String                       | No       | -                    | CA certificate PEM path for TLS. |
-| server_name          | String                       | No       | -                    | Server name used by TLS verification. |
+| ca_pem_path          | String                       | No       | -                    | Trusted certificate PEM path. On its own, enables one-way TLS with custom trust; with both client_pem_path and client_key_path, enables mutual TLS. Client certificate/key options require all three files. |
+| server_name          | String                       | No       | -                    | Server name used by TLS verification. With CA-only TLS, defaults to the URL hostname; override only to match the trusted server certificate. |
 
 ## Channel Position
 
