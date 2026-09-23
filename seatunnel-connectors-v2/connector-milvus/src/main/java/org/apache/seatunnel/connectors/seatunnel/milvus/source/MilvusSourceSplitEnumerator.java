@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,7 @@ public class MilvusSourceSplitEnumerator
     private final Object stateLock = new Object();
     private MilvusClientV2 client = null;
     private Integer parallelism;
+    private long nextAssignment;
 
     private final ReadonlyConfig config;
 
@@ -73,6 +75,7 @@ public class MilvusSourceSplitEnumerator
         } else {
             this.pendingTables = new ConcurrentLinkedQueue<>(sourceState.getPendingTables());
             this.pendingSplits = new HashMap<>(sourceState.getPendingSplits());
+            this.nextAssignment = sourceState.getNextAssignment();
         }
     }
 
@@ -207,16 +210,14 @@ public class MilvusSourceSplitEnumerator
 
     private void addPendingSplit(Collection<MilvusSourceSplit> splits) {
         int readerCount = context.currentParallelism();
-        for (MilvusSourceSplit split : splits) {
-            int ownerReader = getSplitOwner(split.splitId(), readerCount);
+        List<MilvusSourceSplit> sortedSplits = new ArrayList<>(splits);
+        sortedSplits.sort(Comparator.comparing(MilvusSourceSplit::splitId));
+        for (MilvusSourceSplit split : sortedSplits) {
+            int ownerReader = (int) (nextAssignment++ % readerCount);
             log.info("Assigning {} to {} reader.", split, ownerReader);
 
             pendingSplits.computeIfAbsent(ownerReader, r -> new ArrayList<>()).add(split);
         }
-    }
-
-    private static int getSplitOwner(String tp, int numReaders) {
-        return (tp.hashCode() & Integer.MAX_VALUE) % numReaders;
     }
 
     private void assignSplit(Collection<Integer> readers) {
@@ -286,7 +287,9 @@ public class MilvusSourceSplitEnumerator
     public MilvusSourceState snapshotState(long checkpointId) throws Exception {
         synchronized (stateLock) {
             return new MilvusSourceState(
-                    new ArrayList(pendingTables), new HashMap<>(pendingSplits));
+                    new ArrayList<>(pendingTables),
+                    new HashMap<>(pendingSplits),
+                    nextAssignment);
         }
     }
 

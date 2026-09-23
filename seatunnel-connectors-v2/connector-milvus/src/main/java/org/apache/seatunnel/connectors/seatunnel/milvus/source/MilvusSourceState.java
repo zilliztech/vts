@@ -30,4 +30,5 @@ import java.util.Map;
 public class MilvusSourceState implements Serializable {
     private List<TablePath> pendingTables;
     private Map<Integer, List<MilvusSourceSplit>> pendingSplits;
+    private long nextAssignment;
 }
