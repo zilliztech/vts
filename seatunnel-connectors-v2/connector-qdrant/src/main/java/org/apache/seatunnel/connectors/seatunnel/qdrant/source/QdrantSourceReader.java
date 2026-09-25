@@ -20,6 +20,7 @@ package org.apache.seatunnel.connectors.seatunnel.qdrant.source;
 import io.qdrant.client.QdrantClient;
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import io.qdrant.client.WithVectorsSelectorFactory;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -85,7 +86,7 @@ public class QdrantSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> 
                 output.collect(seaTunnelRow);
             }
 
-            Points.PointId offset = response.getNextPageOffset();
+            PointId offset = response.getNextPageOffset();
 
             if (!offset.hasNum() && !offset.hasUuid()) break;
 

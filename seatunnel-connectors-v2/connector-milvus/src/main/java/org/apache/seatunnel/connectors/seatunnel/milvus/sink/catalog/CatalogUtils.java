@@ -73,6 +73,10 @@ public class CatalogUtils {
 
     void createIndex(TablePath tablePath, CatalogTable catalogTable) {
         List<IndexParam> indexParams = parseIndexParamsFromSource(catalogTable);
+        if (indexParams.isEmpty()) {
+            log.info("Skip creating indexes for table {}: no applicable source indexes", tablePath);
+            return;
+        }
 
         log.info("indexParams: {}", indexParams);
         CreateIndexReq createIndexReq = CreateIndexReq.builder()
