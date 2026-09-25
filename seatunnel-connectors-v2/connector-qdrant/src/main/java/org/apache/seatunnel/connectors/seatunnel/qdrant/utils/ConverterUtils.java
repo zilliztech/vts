@@ -21,6 +21,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
@@ -34,6 +35,7 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectionErrorCode;
 
 import java.util.HashMap;
 import java.util.List;
@@ -45,8 +47,8 @@ public class ConverterUtils {
     public static SeaTunnelRow convertToSeaTunnelRowWithMeta(TableSchema tableSchema, Points.RetrievedPoint point) {
         SeaTunnelRowType typeInfo = tableSchema.toPhysicalRowDataType();
         PrimaryKey primaryKey = tableSchema.getPrimaryKey();
-        Points.Vectors vectors = point.getVectors();
-        Map<String, Points.Vector> vectorsMap = new HashMap<>();
+        Points.VectorsOutput vectors = point.getVectors();
+        Map<String, Points.VectorOutput> vectorsMap = new HashMap<>();
         String DEFAULT_VECTOR_KEY = "vector";
         Map<String, JsonWithInt.Value> payloadMap = point.getPayloadMap();
         if (vectors.hasVector()) {
@@ -70,7 +72,7 @@ public class ConverterUtils {
             }
 
             if (isPrimaryKeyField(primaryKey, fieldName)) {
-                Points.PointId id = point.getId();
+                PointId id = point.getId();
                 if (id.hasNum()) {
                     fields[fieldIndex] = id.getNum();
                 } else if (id.hasUuid()) {
@@ -79,25 +81,46 @@ public class ConverterUtils {
                 continue;
             }
 
-            Points.Vector vector = vectorsMap.get(fieldName);
+            Points.VectorOutput vector = vectorsMap.get(fieldName);
             if(vector == null){
                 continue;
+            }
+            if (vector.hasMultiDense() || vector.hasVectorsCount()) {
+                throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
+                        "Multi-dense vector is not supported for field '" + fieldName
+                                + "', point " + point.getId());
             }
             switch (seaTunnelDataType.getSqlType()) {
                 case FLOAT_VECTOR:
                 case BINARY_VECTOR:
                 case FLOAT16_VECTOR:
                 case BFLOAT16_VECTOR:
-                    List<Float> list = vector.getDataList();
+                    if (vector.hasSparse() || vector.hasIndices()) {
+                        throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
+                                "Expected dense vector for field '" + fieldName + "', point " + point.getId());
+                    }
+                    List<Float> list = vector.hasDense() ? vector.getDense().getDataList() : vector.getDataList();
                     Float[] vectorArray = new Float[list.size()];
                     list.toArray(vectorArray);
                     fields[fieldIndex] = BufferUtils.toByteBuffer(vectorArray);
                     break;
                 case SPARSE_FLOAT_VECTOR:
+                    if (vector.hasDense()) {
+                        throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
+                                "Expected sparse vector for field '" + fieldName + "', point " + point.getId());
+                    }
                     Map<Long, Float> sparseMap = new HashMap<>();
-                    Points.SparseIndices sparseIndices = vector.getIndices();
-                    for (int i = 0; i < sparseIndices.getDataCount(); i++) {
-                        sparseMap.put((long) sparseIndices.getData(i), vector.getData(i));
+                    List<Integer> indices = vector.hasSparse()
+                            ? vector.getSparse().getIndicesList() : vector.getIndices().getDataList();
+                    List<Float> values = vector.hasSparse()
+                            ? vector.getSparse().getValuesList() : vector.getDataList();
+                    if (indices.size() != values.size()) {
+                        throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
+                                "Sparse vector indices and values have different lengths for field '"
+                                        + fieldName + "', point " + point.getId());
+                    }
+                    for (int i = 0; i < indices.size(); i++) {
+                        sparseMap.put(Integer.toUnsignedLong(indices.get(i)), values.get(i));
                     }
                     fields[fieldIndex] = sparseMap;
                     break;
