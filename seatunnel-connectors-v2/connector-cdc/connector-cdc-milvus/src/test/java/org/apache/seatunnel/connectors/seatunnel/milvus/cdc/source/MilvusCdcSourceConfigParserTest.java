@@ -22,6 +22,8 @@ import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import io.milvus.v2.client.ConnectConfig;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,6 +32,73 @@ import java.util.List;
 import java.util.Map;
 
 class MilvusCdcSourceConfigParserTest {
+
+    @Test
+    void caOnlyEnablesServerCertificateVerification() {
+        Map<String, Object> options = new HashMap<>();
+        options.put("url", "https://milvus.internal:19530");
+        options.put("ca_pem_path", "/certs/ca.pem");
+        ConnectConfig result =
+                MilvusCdcSourceConfigParser.parseConnectConfig(ReadonlyConfig.fromMap(options));
+        Assertions.assertEquals("/certs/ca.pem", result.getServerPemPath());
+        Assertions.assertEquals("milvus.internal", result.getServerName());
+        options.put("server_name", "localhost");
+        result = MilvusCdcSourceConfigParser.parseConnectConfig(ReadonlyConfig.fromMap(options));
+        Assertions.assertEquals("localhost", result.getServerName());
+    }
+
+    @Test
+    void preservesMutualTlsAndDefaultConnections() {
+        Map<String, Object> options = new HashMap<>();
+        for (String url :
+                Arrays.asList("http://localhost:19530", "https://milvus.example.com:19530")) {
+            options.put("url", url);
+            ConnectConfig result =
+                    MilvusCdcSourceConfigParser.parseConnectConfig(ReadonlyConfig.fromMap(options));
+            Assertions.assertNull(result.getServerPemPath());
+            Assertions.assertEquals(url, result.getUri());
+        }
+        options.put("client_pem_path", "/certs/client.pem");
+        options.put("client_key_path", "/certs/client.key");
+        options.put("ca_pem_path", "/certs/ca.pem");
+        ConnectConfig result =
+                MilvusCdcSourceConfigParser.parseConnectConfig(ReadonlyConfig.fromMap(options));
+        Assertions.assertNull(result.getServerPemPath());
+        Assertions.assertEquals("/certs/client.pem", result.getClientPemPath());
+        Assertions.assertEquals("/certs/client.key", result.getClientKeyPath());
+        Assertions.assertEquals("/certs/ca.pem", result.getCaPemPath());
+    }
+
+    @Test
+    void rejectsIncompleteMutualTlsAndBlankTlsOptions() {
+        for (String field : Arrays.asList("client_pem_path", "client_key_path")) {
+            Map<String, Object> options = new HashMap<>();
+            options.put("url", "https://localhost:19530");
+            options.put(field, "/certs/client.pem");
+            Assertions.assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            MilvusCdcSourceConfigParser.parseConnectConfig(
+                                    ReadonlyConfig.fromMap(options)));
+            options.put("ca_pem_path", "/certs/ca.pem");
+            Assertions.assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            MilvusCdcSourceConfigParser.parseConnectConfig(
+                                    ReadonlyConfig.fromMap(options)));
+        }
+        for (String field :
+                Arrays.asList("client_pem_path", "client_key_path", "ca_pem_path", "server_name")) {
+            Map<String, Object> options = new HashMap<>();
+            options.put("url", "https://localhost:19530");
+            options.put(field, " ");
+            Assertions.assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            MilvusCdcSourceConfigParser.parseConnectConfig(
+                                    ReadonlyConfig.fromMap(options)));
+        }
+    }
 
     @Test
     void parseChannelPositions() {

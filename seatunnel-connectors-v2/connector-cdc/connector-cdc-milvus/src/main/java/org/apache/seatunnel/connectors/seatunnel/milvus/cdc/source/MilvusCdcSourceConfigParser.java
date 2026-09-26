@@ -161,13 +161,37 @@ public class MilvusCdcSourceConfigParser {
                         .connectTimeoutMs(30000)
                         .build();
         config.getOptional(MilvusCdcSourceConfig.CLIENT_PEM_PATH)
-                .ifPresent(connectConfig::setClientPemPath);
+                .ifPresent(
+                        value ->
+                                connectConfig.setClientPemPath(
+                                        requireNonBlank(value, "client_pem_path")));
         config.getOptional(MilvusCdcSourceConfig.CLIENT_KEY_PATH)
-                .ifPresent(connectConfig::setClientKeyPath);
+                .ifPresent(
+                        value ->
+                                connectConfig.setClientKeyPath(
+                                        requireNonBlank(value, "client_key_path")));
         config.getOptional(MilvusCdcSourceConfig.CA_PEM_PATH)
-                .ifPresent(connectConfig::setCaPemPath);
+                .ifPresent(
+                        value -> connectConfig.setCaPemPath(requireNonBlank(value, "ca_pem_path")));
         config.getOptional(MilvusCdcSourceConfig.SERVER_NAME)
-                .ifPresent(connectConfig::setServerName);
+                .ifPresent(
+                        value ->
+                                connectConfig.setServerName(requireNonBlank(value, "server_name")));
+        boolean hasCertificate = connectConfig.getClientPemPath() != null;
+        boolean hasKey = connectConfig.getClientKeyPath() != null;
+        boolean hasCa = connectConfig.getCaPemPath() != null;
+        if (hasCertificate != hasKey || (hasCertificate && !hasCa)) {
+            throw new IllegalArgumentException(
+                    "Milvus-CDC mutual TLS requires client_pem_path, client_key_path and ca_pem_path.");
+        }
+        if (hasCa && !hasCertificate) {
+            // The SDK only consumes caPemPath in its mutual TLS branch.
+            // Server-only authentication uses serverPemPath as the trust bundle.
+            connectConfig.setServerPemPath(connectConfig.getCaPemPath());
+            if (!config.getOptional(MilvusCdcSourceConfig.SERVER_NAME).isPresent()) {
+                connectConfig.setServerName(connectConfig.getHost());
+            }
+        }
         return connectConfig;
     }
 
