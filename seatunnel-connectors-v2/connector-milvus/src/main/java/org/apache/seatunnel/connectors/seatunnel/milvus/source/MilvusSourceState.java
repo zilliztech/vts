@@ -28,6 +28,10 @@ import java.util.Map;
 @Data
 @AllArgsConstructor
 public class MilvusSourceState implements Serializable {
+    // Preserve the implicit UID of the state class before nextAssignment was added.
+    private static final long serialVersionUID = 1718378968826165653L;
+
     private List<TablePath> pendingTables;
     private Map<Integer, List<MilvusSourceSplit>> pendingSplits;
+    private long nextAssignment;
 }

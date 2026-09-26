@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 public class MilvusSourceSplitEnumerator
@@ -56,6 +57,7 @@ public class MilvusSourceSplitEnumerator
     private final Object stateLock = new Object();
     private MilvusClientV2 client = null;
     private Integer parallelism;
+    private final AtomicLong nextAssignment = new AtomicLong();
 
     private final ReadonlyConfig config;
 
@@ -73,6 +75,7 @@ public class MilvusSourceSplitEnumerator
         } else {
             this.pendingTables = new ConcurrentLinkedQueue<>(sourceState.getPendingTables());
             this.pendingSplits = new HashMap<>(sourceState.getPendingSplits());
+            this.nextAssignment.set(sourceState.getNextAssignment());
         }
     }
 
@@ -208,15 +211,11 @@ public class MilvusSourceSplitEnumerator
     private void addPendingSplit(Collection<MilvusSourceSplit> splits) {
         int readerCount = context.currentParallelism();
         for (MilvusSourceSplit split : splits) {
-            int ownerReader = getSplitOwner(split.splitId(), readerCount);
+            int ownerReader = (int) (nextAssignment.getAndIncrement() % readerCount);
             log.info("Assigning {} to {} reader.", split, ownerReader);
 
             pendingSplits.computeIfAbsent(ownerReader, r -> new ArrayList<>()).add(split);
         }
-    }
-
-    private static int getSplitOwner(String tp, int numReaders) {
-        return (tp.hashCode() & Integer.MAX_VALUE) % numReaders;
     }
 
     private void assignSplit(Collection<Integer> readers) {
@@ -286,7 +285,9 @@ public class MilvusSourceSplitEnumerator
     public MilvusSourceState snapshotState(long checkpointId) throws Exception {
         synchronized (stateLock) {
             return new MilvusSourceState(
-                    new ArrayList(pendingTables), new HashMap<>(pendingSplits));
+                    new ArrayList<>(pendingTables),
+                    new HashMap<>(pendingSplits),
+                    nextAssignment.get());
         }
     }
 
