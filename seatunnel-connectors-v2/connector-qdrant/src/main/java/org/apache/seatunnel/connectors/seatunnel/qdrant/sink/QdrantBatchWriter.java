@@ -21,6 +21,7 @@ import static io.qdrant.client.PointIdFactory.id;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.ValueFactory;
 import io.qdrant.client.VectorFactory;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.apache.commons.collections4.CollectionUtils;
@@ -136,7 +137,7 @@ public class QdrantBatchWriter {
         }
     }
 
-    public static Points.PointId pointId(SeaTunnelDataType<?> fieldType, Object value) {
+    public static PointId pointId(SeaTunnelDataType<?> fieldType, Object value) {
         SqlType sqlType = fieldType.getSqlType();
         switch (sqlType) {
             case INT:

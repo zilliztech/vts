@@ -21,9 +21,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.ToNumberPolicy;
 import com.google.gson.reflect.TypeToken;
+import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.common.IndexParam;
 import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.index.request.CreateIndexReq;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
@@ -40,6 +42,11 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.source.utils.MilvusSourc
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -433,6 +440,64 @@ public class CatalogUtilsTest {
     // ========================
     // parseIndexParamsFromSource (integration)
     // ========================
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"[]", "null"})
+    void testCreateIndex_skipsMissingOrEmptySourceIndexes(String indexList) {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogUtils utils = new CatalogUtils(client, ReadonlyConfig.fromMap(new HashMap<>()));
+        Map<String, String> options = new HashMap<>();
+        if (indexList != null) {
+            options.put(MilvusConstants.INDEX_LIST, indexList);
+        }
+        CatalogTable table = buildCatalogTable(
+                Arrays.asList(buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null)), options);
+
+        utils.createIndex(TablePath.of("default", "target"), table);
+
+        Mockito.verifyNoInteractions(client);
+    }
+
+    @Test
+    void testCreateIndex_skipsIndexesFilteredByTargetSchema() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogUtils utils = new CatalogUtils(client, ReadonlyConfig.fromMap(new HashMap<>()));
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.INDEX_LIST,
+                "[{\"fieldName\":\"removed_field\",\"indexType\":\"INVERTED\"}]");
+        options.put(MilvusConstants.ENABLE_DYNAMIC_FIELD, "false");
+        CatalogTable table = buildCatalogTable(
+                Arrays.asList(buildColumn("id", BasicType.LONG_TYPE, null)), options);
+
+        utils.createIndex(TablePath.of("default", "target"), table);
+
+        Mockito.verifyNoInteractions(client);
+    }
+
+    @Test
+    void testCreateIndex_submitsApplicableSourceIndexes() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogUtils utils = new CatalogUtils(client, ReadonlyConfig.fromMap(new HashMap<>()));
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.INDEX_LIST,
+                "[{\"fieldName\":\"vec\",\"indexName\":\"vec_idx\",\"indexType\":\"HNSW\",\"metricType\":\"L2\"}]");
+        CatalogTable table = buildCatalogTable(
+                Arrays.asList(buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null)), options);
+
+        utils.createIndex(TablePath.of("default", "target"), table);
+
+        ArgumentCaptor<CreateIndexReq> captor = ArgumentCaptor.forClass(CreateIndexReq.class);
+        Mockito.verify(client).createIndex(captor.capture());
+        CreateIndexReq request = captor.getValue();
+        Assertions.assertEquals("target", request.getCollectionName());
+        Assertions.assertEquals(1, request.getIndexParams().size());
+        IndexParam index = request.getIndexParams().get(0);
+        Assertions.assertEquals("vec", index.getFieldName());
+        Assertions.assertEquals("vec_idx", index.getIndexName());
+        Assertions.assertEquals(IndexParam.IndexType.HNSW, index.getIndexType());
+        Assertions.assertEquals(IndexParam.MetricType.L2, index.getMetricType());
+    }
 
     @Test
     void testParseIndexParamsFromSource_noIndexList() {

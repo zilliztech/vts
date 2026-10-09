@@ -22,6 +22,7 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import static io.qdrant.client.WithPayloadSelectorFactory.enable;
 import io.qdrant.client.WithVectorsSelectorFactory;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -78,7 +79,7 @@ public class ConnectorUtils {
             if(points.isEmpty()){
                 throw new QdrantConnectorException(QdrantConnectionErrorCode.EMPTY_COLLECTION, "No data in collection");
             }
-            Points.PointId id = points.get(0).getId();
+            PointId id = points.get(0).getId();
             if (id.hasNum()) {
                 PhysicalColumn idColumn = PhysicalColumn.builder()
                         .name("id")

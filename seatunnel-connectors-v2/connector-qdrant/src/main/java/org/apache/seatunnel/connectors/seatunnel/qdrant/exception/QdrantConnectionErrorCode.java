@@ -23,7 +23,8 @@ import org.apache.seatunnel.common.exception.SeaTunnelErrorCode;
 @Getter
 public enum QdrantConnectionErrorCode implements SeaTunnelErrorCode {
     FAILED_CONNECT_QDRANT("QDRANT-01", "Failed to connect to Qdrant"),
-    EMPTY_COLLECTION("QDRANT-02", "No data in collection" );
+    EMPTY_COLLECTION("QDRANT-02", "No data in collection" ),
+    INVALID_VECTOR("QDRANT-03", "Invalid or unsupported vector data");
 
     private final String code;
     private final String description;
