@@ -142,7 +142,6 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     @Override
     public void close() throws Exception {
         commit(true);
-        this.milvusClient.close(10);
     }
 
     @Override

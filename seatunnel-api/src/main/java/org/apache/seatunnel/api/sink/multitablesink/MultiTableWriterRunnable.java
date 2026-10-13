@@ -25,12 +25,14 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class MultiTableWriterRunnable implements Runnable {
 
     private final Map<String, SinkWriter<SeaTunnelRow, ?, ?>> tableIdWriterMap;
     private final BlockingQueue<SeaTunnelRow> queue;
+    private final AtomicInteger pendingRowRequests = new AtomicInteger();
     private volatile Throwable throwable;
     private volatile String currentTableId;
 
@@ -76,12 +78,29 @@ public class MultiTableWriterRunnable implements Runnable {
                         String.format("MultiTableWriterRunnable error when write row %s", row), e);
                 throwable = e;
                 break;
+            } finally {
+                if (row != null) {
+                    pendingRowRequests.decrementAndGet();
+                }
             }
         }
     }
 
     public Throwable getThrowable() {
         return throwable;
+    }
+
+    public boolean hasPendingRowRequests() {
+        return pendingRowRequests.get() > 0;
+    }
+
+    SeaTunnelRow countedRowRequest(SeaTunnelRow row) {
+        pendingRowRequests.incrementAndGet();
+        return row;
+    }
+
+    void cancelCountedRowRequest() {
+        pendingRowRequests.decrementAndGet();
     }
 
     public String getCurrentTableId() {

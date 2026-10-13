@@ -17,12 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 
-import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.common.DataType;
-import io.milvus.v2.service.collection.request.CreateCollectionReq;
-import io.milvus.v2.service.collection.response.DescribeCollectionResp;
-import io.milvus.v2.service.vector.request.DeleteReq;
-import io.milvus.v2.service.vector.request.UpsertReq;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -34,8 +28,16 @@ import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.CreateCollectionReq;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import io.milvus.v2.service.vector.request.DeleteReq;
+import io.milvus.v2.service.vector.request.UpsertReq;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -51,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -61,6 +64,19 @@ class MilvusCdcWriterTest {
 
     private static final String CURRENT_MESSAGE_ID = "MilvusCdcCurrentMessageId";
     private static final String MESSAGE_END = "MilvusCdcMessageEnd";
+
+    @Test
+    void closeFlushesPendingRowsWithoutClosingSharedClient() throws Exception {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = newWriter(client, 10);
+        writer.write(rowWithoutMilvusMetadata(1L, "alice", RowKind.INSERT));
+
+        writer.close();
+
+        verify(client).upsert(any(UpsertReq.class));
+        verify(client, never()).close(anyLong());
+        assertFalse(writer.needCommit());
+    }
 
     @Test
     void metadataFreeRowsFlushAtConfiguredBatchSize() {
@@ -387,8 +403,7 @@ class MilvusCdcWriterTest {
                 currentTimeMillis::get);
     }
 
-    private static SeaTunnelRow rowWithoutMilvusMetadata(
-            long id, String name, RowKind rowKind) {
+    private static SeaTunnelRow rowWithoutMilvusMetadata(long id, String name, RowKind rowKind) {
         SeaTunnelRow row = new SeaTunnelRow(new Object[] {id, name});
         row.setRowKind(rowKind);
         return row;
