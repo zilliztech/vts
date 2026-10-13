@@ -183,30 +183,43 @@ public class MultiTableSinkWriter
         }
         subSinkErrorCheck();
         Optional<Integer> primaryKey = sinkPrimaryKeys.get(element.getTableId());
+        int index;
+        if ((primaryKey == null && sinkPrimaryKeys.size() == 1)
+                || (primaryKey != null && !primaryKey.isPresent())) {
+            index = random.nextInt(blockingQueues.size());
+        } else if (primaryKey == null) {
+            throw new RuntimeException(
+                    "multi table sink can not write table: " + element.getTableId());
+        } else {
+            Object object = element.getField(primaryKey.get());
+            index = 0;
+            if (object != null) {
+                index = Math.abs(object.hashCode()) % blockingQueues.size();
+            }
+        }
+        offerRowElement(index, element);
+    }
+
+    private void offerQueueElement(BlockingQueue<SeaTunnelRow> queue, SeaTunnelRow queueElement)
+            throws IOException {
         try {
-            if ((primaryKey == null && sinkPrimaryKeys.size() == 1)
-                    || (primaryKey != null && !primaryKey.isPresent())) {
-                int index = random.nextInt(blockingQueues.size());
-                BlockingQueue<SeaTunnelRow> queue = blockingQueues.get(index);
-                while (!queue.offer(element, 500, TimeUnit.MILLISECONDS)) {
-                    subSinkErrorCheck();
-                }
-            } else if (primaryKey == null) {
-                throw new RuntimeException(
-                        "multi table sink can not write table: " + element.getTableId());
-            } else {
-                Object object = element.getField(primaryKey.get());
-                int index = 0;
-                if (object != null) {
-                    index = Math.abs(object.hashCode()) % blockingQueues.size();
-                }
-                BlockingQueue<SeaTunnelRow> queue = blockingQueues.get(index);
-                while (!queue.offer(element, 500, TimeUnit.MILLISECONDS)) {
-                    subSinkErrorCheck();
-                }
+            while (!queue.offer(queueElement, 500, TimeUnit.MILLISECONDS)) {
+                subSinkErrorCheck();
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new IOException(e);
+        }
+    }
+
+    private void offerRowElement(int index, SeaTunnelRow element) throws IOException {
+        MultiTableWriterRunnable writerRunnable = runnable.get(index);
+        SeaTunnelRow queueElement = writerRunnable.countedRowRequest(element);
+        try {
+            offerQueueElement(blockingQueues.get(index), queueElement);
+        } catch (IOException | RuntimeException error) {
+            writerRunnable.cancelCountedRowRequest();
+            throw error;
         }
     }
 
@@ -350,16 +363,31 @@ public class MultiTableSinkWriter
         }
     }
 
-    private void checkQueueRemain() {
+    private void checkQueueRemain() throws IOException {
         try {
-            for (BlockingQueue<SeaTunnelRow> blockingQueue : blockingQueues) {
-                while (!blockingQueue.isEmpty()) {
-                    Thread.sleep(100);
-                    subSinkErrorCheck();
-                }
+            while (hasPendingRuntimeWrites()) {
+                Thread.sleep(100);
+                subSinkErrorCheck();
             }
+            // A failed write also releases its pending count; never treat it as a successful drain.
+            subSinkErrorCheck();
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
+            throw new IOException(e);
         }
+    }
+
+    private boolean hasPendingRuntimeWrites() {
+        for (BlockingQueue<SeaTunnelRow> blockingQueue : blockingQueues) {
+            if (!blockingQueue.isEmpty()) {
+                return true;
+            }
+        }
+        for (MultiTableWriterRunnable writerRunnable : runnable) {
+            if (writerRunnable.hasPendingRowRequests()) {
+                return true;
+            }
+        }
+        return false;
     }
 }
