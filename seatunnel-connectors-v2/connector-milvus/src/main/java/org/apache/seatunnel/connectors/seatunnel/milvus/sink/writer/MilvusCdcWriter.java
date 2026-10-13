@@ -171,7 +171,6 @@ public class MilvusCdcWriter implements MilvusWriter {
     @Override
     public void close() throws Exception {
         commit(true);
-        this.milvusClient.close(10);
     }
 
     @Override
@@ -304,7 +303,8 @@ public class MilvusCdcWriter implements MilvusWriter {
         SeaTunnelRow first = rows.get(0);
         SeaTunnelRow last = rows.get(rows.size() - 1);
         log.info(
-                "Milvus CDC sink applied batch: collection={}, partition={}, type={}, rowCount={}, firstPrimaryKey={}, lastPrimaryKey={}, applyTimestampMs={}, applyCostMs={}",
+                "Milvus CDC sink applied batch: collection={}, partition={}, type={}, rowCount={},"
+                    + " firstPrimaryKey={}, lastPrimaryKey={}, applyTimestampMs={}, applyCostMs={}",
                 collectionName,
                 effectivePartitionName(first),
                 rowKind,

@@ -81,12 +81,26 @@ public class MilvusSinkWriter
             CatalogTable catalogTable,
             ReadonlyConfig config,
             List<MilvusSinkState> milvusSinkStates) {
+        this(
+                context,
+                catalogTable,
+                config,
+                milvusSinkStates,
+                new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config)));
+    }
+
+    MilvusSinkWriter(
+            Context context,
+            CatalogTable catalogTable,
+            ReadonlyConfig config,
+            List<MilvusSinkState> milvusSinkStates,
+            MilvusClientV2 milvusClient) {
         this.config = config;
         this.catalogTable = catalogTable;
         this.collection = catalogTable.getTablePath().getTableName();
         log.info("create Milvus sink writer success");
         log.info("MilvusSinkWriter config: {}", redactSensitiveConfig(config));
-        this.milvusClient = new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
+        this.milvusClient = milvusClient;
         describeCollectionResp =
                 milvusClient.describeCollection(
                         DescribeCollectionReq.builder().collectionName(collection).build());
@@ -225,26 +239,47 @@ public class MilvusSinkWriter
             return;
         }
         List<CompletableFuture<Void>> futures = new ArrayList<>();
+        List<Exception> failures = new ArrayList<>();
         synchronized (batchWriters) {
             if (!closed.get()) {
+                closed.set(true);
                 log.info("Stopping Milvus Client");
                 for (MilvusWriter batchWriter : batchWriters.values()) {
                     try {
                         batchWriter.close();
+                        // Execute asynchronous wait job finish
+                        futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
                     } catch (Exception e) {
-                        throw new MilvusConnectorException(MilvusConnectionErrorCode.CLOSE_CLIENT_ERROR, e);
+                        failures.add(e);
                     }
-                    // Execute asynchronous wait job finish
-                    futures.add(CompletableFuture.runAsync(batchWriter::waitJobFinish));
                 }
-                log.info("Successfully put {} records to Milvus, collection: {}", writeCount.get(), this.collection);
-                log.info("Stop Milvus Client success");
-                closed.set(true); // Mark as closed
+                // Partition writers share this client; release it only after every flush attempt.
+                try {
+                    milvusClient.close(10);
+                } catch (Exception e) {
+                    failures.add(e);
+                }
             } else {
                 log.info("BatchWriter already closed");
             }
         }
         // Wait for all waitJobFinish calls to complete
-        futures.forEach(CompletableFuture::join);
+        for (CompletableFuture<Void> future : futures) {
+            try {
+                future.join();
+            } catch (Exception e) {
+                failures.add(e);
+            }
+        }
+        if (!failures.isEmpty()) {
+            IOException error = new IOException("Close Milvus sink failed", failures.get(0));
+            failures.stream().skip(1).forEach(error::addSuppressed);
+            throw error;
+        }
+        log.info(
+                "Successfully put {} records to Milvus, collection: {}",
+                writeCount.get(),
+                this.collection);
+        log.info("Stop Milvus Client success");
     }
 }
