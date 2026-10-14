@@ -58,6 +58,104 @@ public class MilvusSinkConverterTest {
 
     private final MilvusSinkConverter converter = new MilvusSinkConverter();
 
+    @Test
+    void autoIdPrimaryKeyConversionRespectsTargetProperty() {
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"source_id"},
+                        new SeaTunnelDataType<?>[] {BasicType.STRING_TYPE});
+        CatalogTable table = buildCatalogTable(rowType);
+        FieldSchema id =
+                FieldSchema.builder()
+                        .name("id")
+                        .dataType(DataType.VarChar)
+                        .isPrimaryKey(true)
+                        .autoID(true)
+                        .maxLength(128)
+                        .build();
+        for (String permission : Arrays.asList(null, "false", "True")) {
+            DescribeCollectionResp description =
+                    DescribeCollectionResp.builder()
+                            .autoID(true)
+                            .primaryFieldName("id")
+                            .enableDynamicField(false)
+                            .collectionSchema(buildDescribeCollectionResp(id).getCollectionSchema())
+                            .properties(
+                                    permission == null
+                                            ? null
+                                            : Collections.singletonMap(
+                                                    "allow_insert_auto_id", permission))
+                            .build();
+            JsonObject data =
+                    converter.buildMilvusData(
+                            table,
+                            description,
+                            Collections.singletonMap("source_id", "id"),
+                            new SeaTunnelRow(new Object[] {"9007199254740993"}),
+                            MilvusConnectorUtils.allowInsertAutoId(description));
+            if ("True".equals(permission)) {
+                Assertions.assertEquals("9007199254740993", data.get("id").getAsString());
+            } else {
+                Assertions.assertFalse(data.has("id"));
+            }
+            Assertions.assertFalse(data.has("source_id"));
+        }
+    }
+
+    @Test
+    void bulkPrimaryKeyConversionRespectsAutoIdRegardlessOfTargetProperty() {
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"source_id", "name"},
+                        new SeaTunnelDataType<?>[] {BasicType.STRING_TYPE, BasicType.STRING_TYPE});
+        CatalogTable table = buildCatalogTable(rowType);
+        for (boolean autoId : Arrays.asList(false, true)) {
+            FieldSchema id =
+                    FieldSchema.builder()
+                            .name("id")
+                            .dataType(DataType.VarChar)
+                            .isPrimaryKey(true)
+                            .autoID(autoId)
+                            .maxLength(128)
+                            .build();
+            FieldSchema name =
+                    FieldSchema.builder()
+                            .name("name")
+                            .dataType(DataType.VarChar)
+                            .maxLength(128)
+                            .build();
+            for (String permission : Arrays.asList(null, "false", "true")) {
+                DescribeCollectionResp description =
+                        DescribeCollectionResp.builder()
+                                .autoID(autoId)
+                                .primaryFieldName("id")
+                                .enableDynamicField(false)
+                                .collectionSchema(
+                                        buildDescribeCollectionResp(id, name).getCollectionSchema())
+                                .properties(
+                                        permission == null
+                                                ? null
+                                                : Collections.singletonMap(
+                                                        "allow_insert_auto_id", permission))
+                                .build();
+                JsonObject data =
+                        converter.buildMilvusData(
+                                table,
+                                description,
+                                Collections.singletonMap("source_id", "id"),
+                                new SeaTunnelRow(new Object[] {"9007199254740993", "alice"}),
+                                false);
+                if (autoId) {
+                    Assertions.assertFalse(data.has("id"));
+                } else {
+                    Assertions.assertEquals("9007199254740993", data.get("id").getAsString());
+                }
+                Assertions.assertEquals("alice", data.get("name").getAsString());
+                Assertions.assertFalse(data.has("source_id"));
+            }
+        }
+    }
+
     // --- C1: convertBySeaTunnelType TIMESTAMP_TZ returns ISO 8601 String ---
 
     @Test
@@ -471,7 +569,7 @@ public class MilvusSinkConverterTest {
         fieldMap.put("msid", "milvus_msid");
 
         JsonObject data = converter.buildMilvusData(
-                catalogTable, describeCollectionResp, fieldMap, row);
+                catalogTable, describeCollectionResp, fieldMap, row, false);
 
         Assertions.assertTrue(data.get("store_id").getAsJsonPrimitive().isString());
         Assertions.assertEquals("100001", data.get("store_id").getAsString());
@@ -493,7 +591,7 @@ public class MilvusSinkConverterTest {
 
         JsonObject data =
                 converter.buildMilvusData(
-                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row);
+                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row, false);
 
         Assertions.assertEquals("dynamic-value", data.get("dynamic_key").getAsString());
         Assertions.assertFalse(data.has(MilvusConstants.MILVUS_INTERNAL_DYNAMIC_FIELD));
@@ -529,7 +627,7 @@ public class MilvusSinkConverterTest {
         fieldMap.put("tags", "tags");
 
         JsonObject data = converter.buildMilvusData(
-                catalogTable, describeCollectionResp, fieldMap, row);
+                catalogTable, describeCollectionResp, fieldMap, row, false);
 
         JsonArray result = data.getAsJsonArray("tags");
         Assertions.assertTrue(result.get(0).getAsJsonPrimitive().isNumber());
@@ -551,7 +649,7 @@ public class MilvusSinkConverterTest {
 
         JsonObject data =
                 converter.buildMilvusData(
-                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row);
+                        catalogTable, buildDescribeCollectionResp(), new HashMap<>(), row, false);
 
         Assertions.assertEquals("legacy-value", data.get("legacy_key").getAsString());
         Assertions.assertFalse(data.has(CommonOptions.METADATA.getName()));
@@ -577,7 +675,7 @@ public class MilvusSinkConverterTest {
 
         JsonObject data =
                 converter.buildMilvusData(
-                        catalogTable, describeCollectionResp, new HashMap<>(), row);
+                        catalogTable, describeCollectionResp, new HashMap<>(), row, false);
 
         Assertions.assertEquals("legacy-value", data.get("legacy_key").getAsString());
         Assertions.assertFalse(data.has(CommonOptions.METADATA.getName()));
@@ -638,7 +736,7 @@ public class MilvusSinkConverterTest {
                 catalogTable,
                 describeCollectionResp,
                 new HashMap<>(),
-                new SeaTunnelRow(new Object[]{ByteBuffer.wrap(wkb)}));
+                new SeaTunnelRow(new Object[]{ByteBuffer.wrap(wkb)}), false);
 
         Assertions.assertEquals("POINT (1 1)", data.get("loc").getAsString());
     }

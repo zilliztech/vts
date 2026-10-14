@@ -34,6 +34,7 @@ import org.apache.seatunnel.api.table.factory.TableSinkFactoryContext;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusFieldSchema;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkWriteMode;
+import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriterFactory;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -63,6 +64,7 @@ public class MilvusSinkFactory implements TableSinkFactory {
 
     public TableSink createSink(TableSinkFactoryContext context) {
         ReadonlyConfig config = context.getOptions();
+        MilvusWriterFactory.validateCdcReplica(config);
         validateCdcSaveMode(config);
         validateFieldTimezones(config);
         CatalogTable catalogTable = renameCatalogTable(config, context.getCatalogTable());

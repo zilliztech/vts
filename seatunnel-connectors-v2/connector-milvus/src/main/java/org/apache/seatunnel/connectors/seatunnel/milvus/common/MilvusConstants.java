@@ -32,6 +32,7 @@ public class MilvusConstants {
     public static final String PARTITION_NAMES = "partitionNames";
     public static final String MILVUS = "milvus";
     public static final String ENABLE_AUTO_ID = "enableAutoId";
+    public static final String ALLOW_INSERT_AUTO_ID = "allow_insert_auto_id";
     public static final String CONSISTENCY_LEVEL = "consistencyLevel";
     public static final String ELEMENT_TYPE = "elementType";
     public static final String MAX_CAPACITY = "maxCapacity";

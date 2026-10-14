@@ -17,15 +17,6 @@
 
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
-import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.collection.response.DescribeCollectionResp;
-import io.milvus.v2.service.vector.request.DeleteReq;
-import io.milvus.v2.service.vector.request.UpsertReq;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
@@ -37,25 +28,43 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.catalog.MilvusField
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.milvus.sink.utils.MilvusSinkConverter;
 
+import org.apache.commons.lang3.StringUtils;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.exception.MilvusClientException;
+import io.milvus.v2.service.collection.response.DescribeCollectionResp;
+import io.milvus.v2.service.partition.request.CreatePartitionReq;
+import io.milvus.v2.service.partition.request.HasPartitionReq;
+import io.milvus.v2.service.vector.request.DeleteReq;
+import io.milvus.v2.service.vector.request.InsertReq;
+import lombok.extern.slf4j.Slf4j;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
+
 import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.DEFAULT_PARTITION;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.BATCH_SIZE;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.CDC_BATCH_FLUSH_INTERVAL_MS;
 import static org.apache.seatunnel.connectors.seatunnel.milvus.sink.config.MilvusSinkConfig.FIELD_SCHEMA;
 
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongSupplier;
-
 @Slf4j
 public class MilvusCdcWriter implements MilvusWriter {
+    // Milvus server error code for ErrPartitionNotFound (pkg/util/merr).
+    private static final int PARTITION_NOT_FOUND = 200;
     private final CatalogTable catalogTable;
     private final String collectionName;
-    private final String partitionName;
     private final Boolean hasPartitionKey;
     private final MilvusClientV2 milvusClient;
     private final DescribeCollectionResp descriptionCollectionResp;
@@ -66,7 +75,9 @@ public class MilvusCdcWriter implements MilvusWriter {
     private final long cdcBatchFlushIntervalMs;
     private final LongSupplier currentTimeMillisSupplier;
     private final Map<Object, SeaTunnelRow> pendingRows;
+    private final Set<String> knownPartitions = new HashSet<>();
     private RowKind pendingRowKind;
+    private String pendingPartitionName;
     private RowKind lastTargetRowKind;
     private long lastFlushTime;
     private final AtomicLong writeCache = new AtomicLong();
@@ -76,15 +87,8 @@ public class MilvusCdcWriter implements MilvusWriter {
             CatalogTable catalogTable,
             ReadonlyConfig config,
             MilvusClientV2 milvusClient,
-            DescribeCollectionResp describeCollectionResp,
-            String partitionName) {
-        this(
-                catalogTable,
-                config,
-                milvusClient,
-                describeCollectionResp,
-                partitionName,
-                System::currentTimeMillis);
+            DescribeCollectionResp describeCollectionResp) {
+        this(catalogTable, config, milvusClient, describeCollectionResp, System::currentTimeMillis);
     }
 
     MilvusCdcWriter(
@@ -92,11 +96,9 @@ public class MilvusCdcWriter implements MilvusWriter {
             ReadonlyConfig config,
             MilvusClientV2 milvusClient,
             DescribeCollectionResp describeCollectionResp,
-            String partitionName,
             LongSupplier currentTimeMillisSupplier) {
         this.catalogTable = catalogTable;
         this.collectionName = catalogTable.getTablePath().getTableName();
-        this.partitionName = partitionName;
         this.milvusClient = milvusClient;
         this.descriptionCollectionResp = describeCollectionResp;
         this.hasPartitionKey = MilvusConnectorUtils.hasPartitionKey(describeCollectionResp);
@@ -113,22 +115,25 @@ public class MilvusCdcWriter implements MilvusWriter {
 
     @Override
     public void write(SeaTunnelRow element) {
-        // Milvus is a keyed/upsert sink. UPDATE_BEFORE is only the retract image of a
-        // keyed update; primary-key changes must be represented as DELETE + INSERT.
-        if (element.getRowKind() == RowKind.UPDATE_BEFORE) {
-            return;
-        }
         RowKind targetRowKind = targetRowKind(element);
         Object primaryKey = requirePrimaryKeyValue(element, targetRowKind);
-        boolean operationChanged = !pendingRows.isEmpty() && pendingRowKind != targetRowKind;
+        String partitionName = targetPartition(element, targetRowKind);
+        boolean batchChanged =
+                !pendingRows.isEmpty()
+                        && (pendingRowKind != targetRowKind
+                                || !Objects.equals(pendingPartitionName, partitionName));
+        // Keep repeated inserts in separate requests instead of replacing a pending row.
+        boolean duplicateInsert =
+                targetRowKind == RowKind.INSERT && pendingRows.containsKey(primaryKey);
         // After a primary-key change, do not leave the new row pending until the next
         // message or checkpoint once the old key has already been deleted.
         boolean flushCurrentAfterSwitch =
                 lastTargetRowKind == RowKind.DELETE && targetRowKind == RowKind.INSERT;
-        if (operationChanged) {
+        if (batchChanged || duplicateInsert) {
             flushPending();
         }
         pendingRowKind = targetRowKind;
+        pendingPartitionName = partitionName;
         pendingRows.remove(primaryKey);
         pendingRows.put(primaryKey, element);
         long pendingEventCount = writeCache.incrementAndGet();
@@ -140,12 +145,13 @@ public class MilvusCdcWriter implements MilvusWriter {
         lastTargetRowKind = targetRowKind;
     }
 
-    private void writeRows(RowKind rowKind, List<SeaTunnelRow> rows) {
+    private void writeRows(RowKind rowKind, String partitionName, List<SeaTunnelRow> rows) {
         long applyStartTimestampMs = System.currentTimeMillis();
         if (rowKind == RowKind.DELETE) {
             delete(partitionName, primaryKeys(rows));
         } else if (rowKind == RowKind.INSERT) {
-            upsert(partitionName, rows);
+            ensurePartition(partitionName);
+            insert(partitionName, rows);
         } else {
             throw new MilvusConnectorException(
                     MilvusConnectionErrorCode.WRITE_DATA_FAIL,
@@ -154,7 +160,7 @@ public class MilvusCdcWriter implements MilvusWriter {
         }
         long applyTimestampMs = System.currentTimeMillis();
         long applyCostMs = applyTimestampMs - applyStartTimestampMs;
-        logAppliedBatch(rowKind, rows, applyTimestampMs, applyCostMs);
+        logAppliedBatch(rowKind, partitionName, rows, applyTimestampMs, applyCostMs);
         writeCount.addAndGet(rows.size());
     }
 
@@ -181,27 +187,77 @@ public class MilvusCdcWriter implements MilvusWriter {
     @Override
     public void waitJobFinish() {}
 
-    private void upsert(String partitionName, List<SeaTunnelRow> elements) {
+    private void insert(String partitionName, List<SeaTunnelRow> elements) {
+        // Replay source inserts with their original primary keys. Retries after an
+        // ambiguous failure can insert duplicate rows; this operation is not idempotent.
+        InsertReq insertReq =
+                InsertReq.builder()
+                        .collectionName(collectionName)
+                        .data(buildData(elements))
+                        .build();
+        if (hasExplicitPartition(partitionName)) {
+            insertReq.setPartitionName(partitionName);
+        }
+        try {
+            milvusClient.insert(insertReq);
+        } catch (Exception e) {
+            throw new MilvusConnectorException(
+                    MilvusConnectionErrorCode.WRITE_DATA_FAIL, "insert CDC data failed", e);
+        }
+    }
+
+    private List<JsonObject> buildData(List<SeaTunnelRow> elements) {
         List<JsonObject> data = new ArrayList<>(elements.size());
         for (SeaTunnelRow element : elements) {
             data.add(
                     milvusSinkConverter.buildMilvusData(
-                            catalogTable, descriptionCollectionResp, milvusFieldMapper, element));
+                            catalogTable,
+                            descriptionCollectionResp,
+                            milvusFieldMapper,
+                            element,
+                            MilvusConnectorUtils.allowInsertAutoId(descriptionCollectionResp)));
         }
-        UpsertReq upsertReq =
-                UpsertReq.builder().collectionName(this.collectionName).data(data).build();
+        return data;
+    }
 
-        if (StringUtils.isNotEmpty(partitionName)
-                && !partitionName.equals(DEFAULT_PARTITION)
-                && !this.hasPartitionKey) {
-            upsertReq.setPartitionName(partitionName);
+    private boolean hasExplicitPartition(String partitionName) {
+        return StringUtils.isNotEmpty(partitionName) && !hasPartitionKey;
+    }
+
+    private String targetPartition(SeaTunnelRow row, RowKind rowKind) {
+        if (hasPartitionKey) {
+            return null;
         }
+        String partition = row.getPartitionName();
+        if (StringUtils.isEmpty(partition)) {
+            // An unspecified delete covers all partitions; an insert uses the default one.
+            return rowKind == RowKind.DELETE ? null : DEFAULT_PARTITION;
+        }
+        return partition.replace('-', '_');
+    }
 
+    private void ensurePartition(String partitionName) {
+        if (!hasExplicitPartition(partitionName)
+                || DEFAULT_PARTITION.equals(partitionName)
+                || knownPartitions.contains(partitionName)) {
+            return;
+        }
         try {
-            milvusClient.upsert(upsertReq);
+            if (!Boolean.TRUE.equals(
+                    milvusClient.hasPartition(
+                            HasPartitionReq.builder()
+                                    .collectionName(collectionName)
+                                    .partitionName(partitionName)
+                                    .build()))) {
+                milvusClient.createPartition(
+                        CreatePartitionReq.builder()
+                                .collectionName(collectionName)
+                                .partitionName(partitionName)
+                                .build());
+            }
+            knownPartitions.add(partitionName);
         } catch (Exception e) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.WRITE_DATA_FAIL, "upsert CDC data failed", e);
+            throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_PARTITION_ERROR, e);
         }
     }
 
@@ -209,15 +265,32 @@ public class MilvusCdcWriter implements MilvusWriter {
         DeleteReq.DeleteReqBuilder builder =
                 DeleteReq.builder().collectionName(this.collectionName).ids(primaryKeys);
 
-        if (StringUtils.isNotEmpty(partitionName)
-                && !partitionName.equals(DEFAULT_PARTITION)
-                && !this.hasPartitionKey) {
+        if (hasExplicitPartition(partitionName)) {
             builder.partitionName(partitionName);
         }
 
         try {
             milvusClient.delete(builder.build());
         } catch (Exception e) {
+            // Check only after a partition-not-found error, keeping normal deletes to one RPC.
+            if (hasExplicitPartition(partitionName)
+                    && !DEFAULT_PARTITION.equals(partitionName)
+                    && e instanceof MilvusClientException
+                    && ((MilvusClientException) e).getServerErrCode() == PARTITION_NOT_FOUND) {
+                try {
+                    if (Boolean.FALSE.equals(
+                            milvusClient.hasPartition(
+                                    HasPartitionReq.builder()
+                                            .collectionName(collectionName)
+                                            .partitionName(partitionName)
+                                            .build()))) {
+                        knownPartitions.remove(partitionName);
+                        return;
+                    }
+                } catch (Exception lookupError) {
+                    e.addSuppressed(lookupError);
+                }
+            }
             throw new MilvusConnectorException(
                     MilvusConnectionErrorCode.WRITE_DATA_FAIL, "delete CDC data failed", e);
         }
@@ -254,7 +327,7 @@ public class MilvusCdcWriter implements MilvusWriter {
                     MilvusConnectionErrorCode.WRITE_DATA_FAIL,
                     targetRowKind == RowKind.DELETE
                             ? "delete row primary key must not be null"
-                            : "upsert row primary key must not be null");
+                            : "insert row primary key must not be null");
         }
         return primaryKey;
     }
@@ -269,7 +342,7 @@ public class MilvusCdcWriter implements MilvusWriter {
         if (rowKind == RowKind.INSERT || rowKind == RowKind.UPDATE_AFTER) {
             return RowKind.INSERT;
         }
-        if (rowKind == RowKind.DELETE) {
+        if (rowKind == RowKind.DELETE || rowKind == RowKind.UPDATE_BEFORE) {
             return RowKind.DELETE;
         }
         throw new MilvusConnectorException(
@@ -281,10 +354,11 @@ public class MilvusCdcWriter implements MilvusWriter {
         if (pendingRows.isEmpty()) {
             return;
         }
-        writeRows(pendingRowKind, new ArrayList<>(pendingRows.values()));
+        writeRows(pendingRowKind, pendingPartitionName, new ArrayList<>(pendingRows.values()));
         lastFlushTime = currentTimeMillisSupplier.getAsLong();
         pendingRows.clear();
         pendingRowKind = null;
+        pendingPartitionName = null;
         writeCache.set(0L);
     }
 
@@ -299,24 +373,24 @@ public class MilvusCdcWriter implements MilvusWriter {
     }
 
     private void logAppliedBatch(
-            RowKind rowKind, List<SeaTunnelRow> rows, long applyTimestampMs, long applyCostMs) {
+            RowKind rowKind,
+            String partitionName,
+            List<SeaTunnelRow> rows,
+            long applyTimestampMs,
+            long applyCostMs) {
         SeaTunnelRow first = rows.get(0);
         SeaTunnelRow last = rows.get(rows.size() - 1);
         log.info(
                 "Milvus CDC sink applied batch: collection={}, partition={}, type={}, rowCount={},"
                     + " firstPrimaryKey={}, lastPrimaryKey={}, applyTimestampMs={}, applyCostMs={}",
                 collectionName,
-                effectivePartitionName(first),
+                partitionName,
                 rowKind,
                 rows.size(),
                 primaryKeyValue(first),
                 primaryKeyValue(last),
                 applyTimestampMs,
                 applyCostMs);
-    }
-
-    private String effectivePartitionName(SeaTunnelRow element) {
-        return StringUtils.defaultIfEmpty(partitionName, element.getPartitionName());
     }
 
     private static int primaryKeyIndex(

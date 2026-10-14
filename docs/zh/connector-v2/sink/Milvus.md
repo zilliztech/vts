@@ -14,7 +14,7 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 ## 主要特性
 
 - [x] [batch](../../concept/connector-v2-features.md)
-- [x] [exactly-once](../../concept/connector-v2-features.md)
+- [x] [exactly-once](../../concept/connector-v2-features.md)（不适用于 CDC 模式）
 - [ ] [column projection](../../concept/connector-v2-features.md)
 
 ##数据类型映射
@@ -54,7 +54,7 @@ Milvus sink连接器将数据写入Milvus或Zilliz Cloud，它具有以下功能
 | enable_dynamic_field | boolean | 否       | true                         | 是否启用带动态字段的创建表。                   |
 | batch_size           | int     | 否       | 1000                         | 写入批大小。                                         |
 | cdc_batch_flush_interval_ms | long | 否       | 1000                         | CDC 模式下，收到新 row 时，如果距上次成功 flush 已达到该间隔，则 flush 未完成批次。单位为毫秒。 |
-| write_mode           | enum    | 否       | APPEND                       | 写入模式。`APPEND` 使用普通 batch 或 bulk writer 写入 insert row；`CDC` 对 INSERT 和 UPDATE_AFTER 执行 upsert，对 DELETE 执行删除，并忽略 UPDATE_BEFORE。 |
+| write_mode           | enum    | 否       | APPEND                       | 写入模式。`APPEND` 使用普通 batch 或 bulk writer 写入 insert row；`CDC` 对 INSERT 和 UPDATE_AFTER 携带源主键执行 insert，对 DELETE 和 UPDATE_BEFORE 执行 delete。AutoID 目标必须开启 `allow_insert_auto_id = "true"`。 |
 | geometry_convert_mode | String | 否       | passthrough                  | Milvus Geometry 字段的 String 值处理方式。`passthrough` 原样发送；`parse` 将 WKT/EWKT/GeoJSON/WKB hex 和支持的坐标格式转换为 WKT。 |
 | geometry_string_coord_order | String | 否 | lat_lon                     | `parse` 模式下裸数字坐标字符串的顺序，支持 `lat_lon` 和 `lon_lat`。不影响 WKT、GeoJSON 和 WKB 输入。 |
 | partition_key        | String  | 否       |                              | Milvus分区键字段                                |
@@ -108,12 +108,29 @@ CDC 写模式有以下限制：
 - `schema_save_mode` 必须为 `ERROR_WHEN_SCHEMA_NOT_EXIST`。启动 CDC 任务前需要先创建目标 collection schema。
 - `data_save_mode` 必须为 `APPEND_DATA`。
 - 不支持 `bulk_writer_config`。
-- 目标 collection 不能启用 autoID。
+- 目标 collection 开启 `autoID = true` 时，必须设置 collection property `allow_insert_auto_id = "true"`。Sink 在启动时读取目标端属性，缺省按 false 处理；该属性应配置在 Milvus collection 上，不是 sink 配置项，任务运行期间应保持不变。
 - 目标 collection 必须只有一个主键字段。
 
 如果 PostgreSQL CDC source 包含 PostGIS `GEOMETRY` 或 `GEOGRAPHY` 列，需要设置 `geometry_convert_mode = "parse"`。PostgreSQL CDC 会将这些值输出为 WKB/EWKB 十六进制字符串，Milvus sink 会将其转换为 WKT。目标 collection 中对应字段必须预先定义为 Milvus `GEOMETRY`。
 
-CDC writer 接受通用的 keyed changelog row，不依赖 `Milvus-CDC` 私有消息元数据。INSERT 和 UPDATE_AFTER row 会按 upsert 写入，DELETE row 会按主键删除，UPDATE_BEFORE row 会被忽略。Milvus 主键必须对应稳定的源 CDC key；源端主键变化必须由 reader 表达为旧主键的 DELETE，随后是新主键的 INSERT。同一个 upsert batch 内的重复主键保留最后一条。连续的相同目标操作达到 `batch_size` 时会 flush；每次将 row 加入待写 batch 时还会检查 `cdc_batch_flush_interval_ms`，如果距上次成功 flush 已达到该间隔，则将当前 row 一并 flush。任何目标操作切换都会先 flush 上一个待写 batch；从 DELETE 切换到 upsert 时，当前 upsert 也会立即 flush，避免旧主键已经删除后新主键仍等待后续消息或 checkpoint。从 upsert 切换到 DELETE 时，当前 DELETE 仍按正常的 batch、interval、checkpoint 或 writer close 规则 flush。
+CDC writer 接受 keyed changelog row，不依赖 `Milvus-CDC` 私有消息元数据。无论目标是否开启 AutoID，INSERT 和 UPDATE_AFTER row 都**携带源主键调用 insert**，DELETE 和 UPDATE_BEFORE row 都按各自携带的主键删除。Sink 独立处理每条事件，不要求或校验 BEFORE/AFTER 是否成对；单独收到 UPDATE_BEFORE 就删除，单独收到 UPDATE_AFTER 就插入，UPDATE_AFTER 本身不会替换已有行。需要替换旧行的源端，应先发出对应的 DELETE 或 UPDATE_BEFORE；主键变化时，删除事件应携带旧主键。
+
+连续的相同目标操作、相同分区范围的 row 达到 `batch_size` 时会 flush；每次将 row 加入待写 batch 时还会检查 `cdc_batch_flush_interval_ms`，如果距上次成功 flush 已达到该间隔，则将当前 row 一并 flush。任何目标操作或分区范围切换都会先 flush 上一个待写 batch。INSERT 或 UPDATE_AFTER 的主键已存在于待写 insert batch 中时，先同步 flush 旧 batch，再缓存新 row，使重复插入分别发送，避免覆盖待写记录。同一 batch 中的重复删除可以合并。从 DELETE 切换到 INSERT 时，当前 INSERT 也会立即 flush，避免旧行已经删除后新行仍等待后续消息或 checkpoint。从 INSERT 切换到 DELETE 时，当前 DELETE 仍按正常的 batch、interval、checkpoint 或 writer close 规则 flush。
+
+启动任务前，在已创建的目标 collection 上开启属性，例如使用 PyMilvus：
+
+```python
+client.alter_collection_properties(
+    collection_name="target_collection",
+    properties={"allow_insert_auto_id": "true"},
+)
+```
+
+CDC 在每个 sink 实例内使用一个 Collection 级 writer。连续的相同操作、相同分区范围的 row 组成批次；操作或分区范围变化时，先同步 flush 前一批。DELETE 未指定分区表示删除全部分区，明确指定 `_default` 则只删除默认分区。目标使用 Partition Key 时，忽略源端物理分区名，由 Milvus 根据数据中的分区键路由写入。普通命名分区只在写入时按需创建，删除不创建分区。仅在删除返回分区不存在错误、且再次确认目标命名分区确实不存在时，将该删除视为成功的空操作；正常删除不查询分区是否存在。APPEND 模式继续使用按分区划分的 writer。
+
+CDC 要求 `multi_table_sink_replica = 1`（默认值）且实际 sink parallelism 为 1，其他值会被拒绝。并行度根据运行时 Context 校验，从 checkpoint 恢复时同样检查。Collection 级 writer 不保证不同 sink 实例或不同任务之间的顺序。
+
+**恢复限制：** AutoID 和非 AutoID 目标的 CDC 写入都采用至少一次重放语义。Insert 不保证主键唯一性；请求结果不确定时的失败重试，或 checkpoint 恢复重放，都可能写入重复主键。遇到重复 INSERT 先 flush 是为了保留收到的事件，并不消除重试产生的重复。Flush 失败会向上传播并保留待写数据；此模式不保证幂等重放或最终状态精确一次。
 
 `cdc_batch_flush_interval_ms` 是由新消息触发的检查，不是后台定时器。如果最后一条 row 进入 buffer 后不再有新 row，它仍会等待 checkpoint 或 writer close。数据库割接前应等待最后一次 checkpoint 成功，或者正常停止同步任务。事务 row 在 source 侧按源端事务 commit 位点推进 checkpoint，但目标 Milvus 仍按普通 INSERT 和 DELETE 操作写入，不提供目标端事务原子性。
 
