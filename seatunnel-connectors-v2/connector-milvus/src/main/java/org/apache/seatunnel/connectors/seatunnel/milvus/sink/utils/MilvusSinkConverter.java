@@ -247,7 +247,8 @@ public class MilvusSinkConverter {
             CatalogTable catalogTable,
             DescribeCollectionResp describeCollectionResp,
             Map<String, String> milvusFieldsMap,
-            SeaTunnelRow element) {
+            SeaTunnelRow element,
+            boolean allowInsertAutoId) {
         SeaTunnelRowType seaTunnelRowType = catalogTable.getSeaTunnelRowType();
         List<Column> sourceColumns = catalogTable.getTableSchema().getColumns();
         JsonObject data = new JsonObject();
@@ -259,8 +260,10 @@ public class MilvusSinkConverter {
             Column sourceColumn = i < sourceColumns.size() ? sourceColumns.get(i) : null;
             String sourceFieldName = seaTunnelRowType.getFieldNames()[i];
             String fieldName = milvusFieldsMap.getOrDefault(sourceFieldName, sourceFieldName);
-            // Skip auto-ID primary key fields
-            if (describeCollectionResp.getAutoID() && fieldName.equals(describeCollectionResp.getPrimaryFieldName())) {
+            // Explicit AutoID values require support from both the target and the write path.
+            if (Boolean.TRUE.equals(describeCollectionResp.getAutoID())
+                    && !allowInsertAutoId
+                    && fieldName.equals(describeCollectionResp.getPrimaryFieldName())) {
                 continue;
             }
 

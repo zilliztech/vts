@@ -96,8 +96,9 @@ public class MilvusBulkWriter implements MilvusWriter {
     }
     @Override
     public void write(SeaTunnelRow element) throws IOException, InterruptedException {
+        // The Bulk SDK rejects explicit AutoID primary keys regardless of collection properties.
         JsonObject data = milvusSinkConverter.buildMilvusData(
-                        catalogTable, describeCollectionResp, milvusFieldMapper, element);
+                        catalogTable, describeCollectionResp, milvusFieldMapper, element, false);
         remoteBulkWriter.appendRow(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();

@@ -14,7 +14,7 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 ## Key Features
 
 - [x] [batch](../../concept/connector-v2-features.md)
-- [x] [exactly-once](../../concept/connector-v2-features.md)
+- [x] [exactly-once](../../concept/connector-v2-features.md) (excludes CDC mode)
 - [ ] [column projection](../../concept/connector-v2-features.md)
 
 ## Data Type Mapping
@@ -54,7 +54,7 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
 | cdc_batch_flush_interval_ms | long | No       | 1000                         | In CDC mode, flush pending rows when a newly received row observes that this interval has elapsed since the last successful flush. |
-| write_mode           | enum    | No       | APPEND                       | Write mode. `APPEND` writes normal insert rows by batch or bulk writer. `CDC` upserts INSERT and UPDATE_AFTER rows, deletes DELETE rows, and ignores UPDATE_BEFORE rows. |
+| write_mode           | enum    | No       | APPEND                       | Write mode. `APPEND` writes normal insert rows by batch or bulk writer. `CDC` inserts INSERT and UPDATE_AFTER rows with source primary keys, and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require `allow_insert_auto_id = "true"`. |
 | geometry_convert_mode | String | No       | passthrough                  | How to handle String values for Milvus Geometry fields. `passthrough` sends the value unchanged; `parse` converts WKT/EWKT/GeoJSON/WKB hex and supported coordinate formats to WKT. |
 | geometry_string_coord_order | String | No | lat_lon                     | Coordinate order for bare numeric pair strings in `parse` mode. Supported values are `lat_lon` and `lon_lat`. WKT, GeoJSON and WKB inputs are unaffected. |
 | partition_key        | String  | No       |                              | Milvus partition key field                                |
@@ -108,12 +108,29 @@ CDC write mode has the following constraints:
 - `schema_save_mode` must be `ERROR_WHEN_SCHEMA_NOT_EXIST`. Create the target collection schema before starting the CDC job.
 - `data_save_mode` must be `APPEND_DATA`.
 - `bulk_writer_config` is not supported.
-- The target collection must not use autoID.
+- A target collection with `autoID = true` must have the collection property `allow_insert_auto_id = "true"`. The sink reads this property from the target at startup; a missing property is treated as false. Configure it on Milvus, not as a sink option, and keep it unchanged while the job runs.
 - The target collection must have exactly one primary key field.
 
 For PostgreSQL CDC sources containing PostGIS `GEOMETRY` or `GEOGRAPHY` columns, set `geometry_convert_mode = "parse"`. PostgreSQL CDC emits these values as WKB/EWKB hexadecimal strings, and the Milvus sink converts them to WKT. The target collection must already define the corresponding field as Milvus `GEOMETRY`.
 
-The CDC writer accepts generic keyed changelog rows and does not require `Milvus-CDC`-specific message metadata. INSERT and UPDATE_AFTER rows are applied by upsert, DELETE rows are applied by primary key delete, and UPDATE_BEFORE rows are ignored. The Milvus primary key must correspond to a stable source CDC key; a primary-key change must be emitted by the source as DELETE for the old key followed by INSERT for the new key. Duplicate primary keys within one upsert batch keep the last row. Consecutive rows with the same target operation are flushed when they reach `batch_size`. Whenever a row is added to the pending batch, the writer also checks `cdc_batch_flush_interval_ms`; when the interval since the last successful flush has elapsed, it flushes the pending batch including the current row. Any target-operation change flushes the previous pending batch. When switching from DELETE to upsert, the current upsert is also flushed immediately so the new key does not remain pending after the old key has been deleted. When switching from upsert to DELETE, the current DELETE continues to follow the normal batch, interval, checkpoint, or writer-close flush rules.
+The CDC writer accepts keyed changelog rows and does not require `Milvus-CDC`-specific message metadata. For both AutoID and non-AutoID targets, INSERT and UPDATE_AFTER rows use **insert with the source primary key**, while DELETE and UPDATE_BEFORE rows delete the supplied key. The sink applies each event independently and does not require or validate BEFORE/AFTER pairs. A standalone UPDATE_BEFORE deletes and a standalone UPDATE_AFTER inserts; UPDATE_AFTER alone does not replace an existing row. Sources that need to replace existing rows must emit the corresponding DELETE or UPDATE_BEFORE first, including the old key when the primary key changes.
+
+Consecutive rows with the same target operation and partition scope are flushed when they reach `batch_size`. Whenever a row is added to the pending batch, the writer also checks `cdc_batch_flush_interval_ms`; when the interval since the last successful flush has elapsed, it flushes the pending batch including the current row. Any target-operation or partition-scope change flushes the previous pending batch. An INSERT or UPDATE_AFTER whose primary key already exists in the pending insert batch synchronously flushes that batch before buffering the new row, so repeated inserts are preserved in separate requests instead of overwriting a pending row. Duplicate deletes within the same batch may be combined. When switching from DELETE to INSERT, the current INSERT is also flushed immediately so the new row does not remain pending after the old row has been deleted. When switching from INSERT to DELETE, the current DELETE follows the normal batch, interval, checkpoint, or writer-close flush rules.
+
+Enable the property on the pre-created target before starting the job, for example with PyMilvus:
+
+```python
+client.alter_collection_properties(
+    collection_name="target_collection",
+    properties={"allow_insert_auto_id": "true"},
+)
+```
+
+CDC uses one collection-level writer per sink instance. It batches consecutive rows with the same operation and partition scope, and synchronously flushes before either changes. An unspecified partition on DELETE means all partitions; an explicit `_default` means only the default partition. For partition-key targets, source physical partition names are ignored and Milvus routes inserts using the partition-key field. Named partitions are created on demand for writes, not deletes. A partition-not-found delete error is treated as a successful no-op only after confirming that the named target partition does not exist; normal deletes do not query partition existence. APPEND mode continues to use partition-level writers.
+
+CDC requires `multi_table_sink_replica = 1` (the default) and effective sink parallelism 1; other values are rejected. Parallelism is checked against the runtime context, including on checkpoint restore. A collection-level writer does not provide ordering across separate sink instances or jobs.
+
+**Recovery limitation:** CDC writes use at-least-once replay semantics for both AutoID and non-AutoID targets. Insert does not enforce primary-key uniqueness; a failed request with an unknown outcome or checkpoint replay can insert duplicate primary keys. Flushing before a repeated insert preserves received events but does not deduplicate retries. Failed flushes propagate errors and retain pending rows. This mode does not guarantee idempotent replay or exactly-once final state.
 
 `cdc_batch_flush_interval_ms` is a write-triggered check, not a background timer. If no new row arrives after the last buffered row, that row remains pending until a checkpoint or writer close. Before a database cutover, wait for a final successful checkpoint or stop the synchronization job gracefully. Transaction rows are checkpointed by the source at the source transaction commit offset, but the target Milvus write is still applied as normal INSERT and DELETE operations; it is not a target-side atomic transaction.
 

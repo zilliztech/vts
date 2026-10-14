@@ -10,11 +10,13 @@ Milvus CDC 源连接器通过 Milvus `DumpMessages` 读取 WAL 消息，并输�
 
 当前版本需要用户显式提供 pchannel 起始位点，不会自动执行初始全量快照，并会持续运行，直到通过 SeaTunnel 任务生命周期取消或停止任务。
 
+使用 Milvus CDC sink 时，设置 `multi_table_sink_replica = 1` 且实际 sink parallelism 为 1；sink 会拒绝其他值。每个 sink 实例通过一个 Collection 级 CDC writer 保持不同分区范围之间的接收顺序，包括全分区删除；这不提供多个 sink 实例之间的全局顺序保证。
+
 ## 关键特性
 
 - [ ] [批处理](../../concept/connector-v2-features.md)
 - [x] [流处理](../../concept/connector-v2-features.md)
-- [x] [精确一次](../../concept/connector-v2-features.md)
+- [ ] [精确一次](../../concept/connector-v2-features.md)（Milvus Sink CDC 模式采用至少一次写入）
 - [ ] [列投影](../../concept/connector-v2-features.md)
 - [x] [并行度](../../concept/connector-v2-features.md)
 
@@ -25,16 +27,16 @@ Milvus CDC 源连接器通过 Milvus `DumpMessages` 读取 WAL 消息，并输�
 - `channel_positions` 必须配置物理 pchannel，例如 `by-dev-rootcoord-dml_0`，不能配置带 collection id 后缀的 vchannel。
 - 每个物理 pchannel 在 `channel_positions` 中只能出现一次。
 - Source collection 的 schema 在任务启动后必须保持不变。当前尚不支持运行期间新增、删除或重命名字段以及修改字段类型等 schema change；后续 DML 与启动时 schema 不一致时，Source 会失败，而不会自动执行 schema evolution。
-- 使用 Milvus Sink CDC 模式时，目标 collection schema 必须已经存在，并且目标主键必须配置 `autoID = false`。Source 可以读取源 collection 在 `autoID = true` 时自动生成的主键，但目标端必须接收这些源主键值，CDC upsert 和 delete 才能操作同一条数据。
+- 使用 Milvus Sink CDC 模式时，目标 collection schema 必须已经存在。目标可以使用 `autoID = false`，或在 `autoID = true` 时开启 collection property `allow_insert_auto_id = "true"`。两条路径都会携带源主键执行 insert，存在下文说明的重放限制。参见 [Milvus Sink CDC 模式](../sink/Milvus.md#cdc-写模式)。
 
 ## 支持的消息类型
 
 | Milvus WAL 消息 | SeaTunnel RowKind | 说明 |
 |-----------------|-------------------|------|
-| Insert          | INSERT            | Milvus Sink CDC writer 会按 upsert 写入。 |
+| Insert          | INSERT            | AutoID 和非 AutoID 目标均携带源主键按 insert 写入。 |
 | Delete          | DELETE            | Milvus Sink CDC writer 会按主键删除。 |
 
-事务控制消息由 source 内部消费。如果一个 Milvus 事务被拆成多条 WAL 消息，source 会缓存事务内的 DML row，直到收到事务 commit 消息后再输出，并把 checkpoint 位点推进到 commit 消息。Sink 可能根据 batch size、RowKind 切换、flush interval 和 checkpoint 生命周期，跨原始 DML 消息边界进行批量写入；Milvus Sink CDC 模式不在目标端提供多操作事务原子性。
+事务控制消息由 source 内部消费。如果一个 Milvus 事务被拆成多条 WAL 消息，source 会缓存事务内的 DML row，直到收到事务 commit 消息后再输出，并把 checkpoint 位点推进到 commit 消息。Sink 可能根据 batch size、目标操作或分区范围切换、重复插入主键、flush interval 和 checkpoint 生命周期，跨原始 DML 消息边界进行批量写入；Milvus Sink CDC 模式不在目标端提供多操作事务原子性。
 
 ## 源选项
 
@@ -80,7 +82,7 @@ Source 会先完整输出一条 WAL 消息，再推进 split offset，避免 che
 
 对于事务消息，source 在事务 row 输出后把 checkpoint 位点推进到事务 commit 消息。这样可以保证 source 侧恢复语义。
 
-配合 Milvus Sink CDC 模式时，INSERT row 会按 upsert 写入，DELETE row 会按主键删除，因此失败恢复后的重复写可以通过目标端幂等写得到最终状态一致。这里的精确一次是基于 checkpoint 位点原子推进和幂等 CDC 写入的最终状态语义，不是目标端 2PC 或事务级精确一次。Milvus Sink CDC 模式不保证同一操作物理上只提交一次，也不提供目标端多操作事务原子性。
+配合 Milvus Sink CDC 模式时，AutoID 和非 AutoID 目标都对 INSERT row 携带源主键执行 insert，对 DELETE row 按主键删除。Sink 采用至少一次重放语义：请求结果不确定时的重试或 checkpoint 恢复可能插入重复主键。Source 侧 checkpoint 位点的原子推进不能使目标端 insert 变为幂等操作；此模式不保证最终状态精确一次，也不提供目标端多操作事务原子性。
 
 ## Metrics
 

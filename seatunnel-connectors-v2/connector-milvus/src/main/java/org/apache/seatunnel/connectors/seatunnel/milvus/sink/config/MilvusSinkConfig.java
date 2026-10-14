@@ -227,7 +227,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .enumType(MilvusSinkWriteMode.class)
                         .defaultValue(MilvusSinkWriteMode.APPEND)
                         .withDescription(
-                                        "Milvus sink write mode. APPEND uses the normal batch or bulk writer. CDC upserts INSERT and UPDATE_AFTER rows, deletes DELETE rows, and ignores UPDATE_BEFORE rows.");
+                                        "Milvus sink write mode. APPEND uses the normal batch or bulk writer. CDC inserts INSERT and UPDATE_AFTER rows with source primary keys, and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require allow_insert_auto_id=true. Repeated insert keys flush the previous batch before buffering the new row; retries may insert duplicates.");
 
         /**
          * How to interpret bare "x,y" coordinate strings flowing into a Geometry field.

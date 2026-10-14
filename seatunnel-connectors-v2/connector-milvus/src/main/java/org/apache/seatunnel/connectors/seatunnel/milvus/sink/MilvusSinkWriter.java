@@ -18,13 +18,9 @@
 package org.apache.seatunnel.connectors.seatunnel.milvus.sink;
 
 import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
-import io.milvus.v2.service.partition.request.CreatePartitionReq;
-import io.milvus.v2.service.partition.request.HasPartitionReq;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SinkCommitter;
 import org.apache.seatunnel.api.sink.SinkWriter;
@@ -32,7 +28,6 @@ import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.DEFAULT_PARTITION;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectionErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
 
@@ -45,11 +40,8 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.sink.writer.MilvusWriter
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -57,16 +49,12 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class MilvusSinkWriter
         implements SinkWriter<SeaTunnelRow, MilvusCommitInfo, MilvusSinkState>, SupportMultiTableSinkWriter<Void> {
-    //set this to static, then all thread will reuse this
-    private final Map<String, MilvusWriter> batchWriters = new ConcurrentHashMap<>();
+    // Guards writer creation, write, prepareCommit and close within this sink instance.
+    private final Object writerOperationLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final CatalogTable catalogTable;
     private final String collection;
-    private final ReadonlyConfig config;
     private final MilvusClientV2 milvusClient;
     private final MilvusWriterFactory writerFactory;
-    private final DescribeCollectionResp  describeCollectionResp;
-    private final Boolean hasPartitionKey;
 
     private final AtomicLong writeCount = new AtomicLong(0);
 
@@ -86,7 +74,12 @@ public class MilvusSinkWriter
                 catalogTable,
                 config,
                 milvusSinkStates,
-                new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config)));
+                createClient(context, config));
+    }
+
+    private static MilvusClientV2 createClient(Context context, ReadonlyConfig config) {
+        MilvusWriterFactory.validateCdcParallelism(config, context);
+        return new MilvusClientV2(MilvusConnectorUtils.getConnectConfig(config));
     }
 
     MilvusSinkWriter(
@@ -95,18 +88,14 @@ public class MilvusSinkWriter
             ReadonlyConfig config,
             List<MilvusSinkState> milvusSinkStates,
             MilvusClientV2 milvusClient) {
-        this.config = config;
-        this.catalogTable = catalogTable;
+        MilvusWriterFactory.validateCdcParallelism(config, context);
         this.collection = catalogTable.getTablePath().getTableName();
         log.info("create Milvus sink writer success");
         log.info("MilvusSinkWriter config: {}", redactSensitiveConfig(config));
         this.milvusClient = milvusClient;
-        describeCollectionResp =
+        DescribeCollectionResp describeCollectionResp =
                 milvusClient.describeCollection(
                         DescribeCollectionReq.builder().collectionName(collection).build());
-        hasPartitionKey =
-                describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()
-                        .anyMatch(CreateCollectionReq.FieldSchema::getIsPartitionKey);
         writerFactory =
                 new MilvusWriterFactory(
                         catalogTable, config, milvusClient, describeCollectionResp);
@@ -119,56 +108,12 @@ public class MilvusSinkWriter
      */
     @Override
     public void write(SeaTunnelRow element) {
-        writerFactory.validateRow(element);
-        String partition =
-                StringUtils.isEmpty(element.getPartitionName())
-                        ? DEFAULT_PARTITION
-                        : element.getPartitionName();
-        if (hasPartitionKey) {
-            partition = DEFAULT_PARTITION;
-        }
-        if (partition.contains("-")) {
-            partition = partition.replace("-", "_");
-        }
-        String partitionId = catalogTable.getTablePath() + "." + partition;
-
-        // 获取或创建 MilvusWriter
-        String finalPartition = partition;
-        MilvusWriter batchWriter = batchWriters.computeIfAbsent(partitionId, id -> {
-            synchronized (batchWriters) {
-                if (!finalPartition.equals(DEFAULT_PARTITION)) {
-                    Boolean hasPartition = milvusClient.hasPartition(HasPartitionReq.builder()
-                            .collectionName(collection)
-                            .partitionName(finalPartition).build());
-                    if(!hasPartition) {
-                        synchronized (milvusClient) {
-                            milvusClient.createPartition(CreatePartitionReq.builder()
-                                    .collectionName(collection)
-                                    .partitionName(finalPartition).build());
-                            try {
-                                TimeUnit.MILLISECONDS.sleep(1000);
-                            } catch (InterruptedException e) {
-                                throw new MilvusConnectorException(MilvusConnectionErrorCode.CREATE_PARTITION_ERROR, e);
-                            }
-                        }
-                    }
-                }
-                // flush all data before creating new writer
-                try {
-                    for (MilvusWriter writer : batchWriters.values()) {
-                        synchronized (writer) {
-                            writer.commit(true);
-                        }
-                    }
-                } catch (Exception e) {
-                    throw new MilvusConnectorException(MilvusConnectionErrorCode.COMMIT_ERROR, e);
-                }
-                return writerFactory.create(finalPartition);
+        synchronized (writerOperationLock) {
+            if (closed.get()) {
+                throw new IllegalStateException("Milvus sink writer is closed");
             }
-        });
-
-        // 写入数据
-        synchronized (batchWriter) {
+            writerFactory.validateRow(element);
+            MilvusWriter batchWriter = writerFactory.getOrCreateWriter(element);
             try {
                 batchWriter.write(element);
             } catch (Exception e) {
@@ -201,17 +146,18 @@ public class MilvusSinkWriter
      */
     @Override
     public Optional<MilvusCommitInfo> prepareCommit() throws IOException {
-        synchronized (batchWriters) {
-            for (MilvusWriter writer : batchWriters.values()) {
-                synchronized (writer) {
-                    if (!writer.needCommit()) {
-                        continue;
-                    }
-                    try {
-                        writer.commit(true);
-                    } catch (Exception e) {
-                        throw new IOException("Flush Milvus writer before checkpoint failed", e);
-                    }
+        synchronized (writerOperationLock) {
+            if (closed.get()) {
+                throw new IOException("Milvus sink writer is closed");
+            }
+            for (MilvusWriter writer : writerFactory.getWriters()) {
+                if (!writer.needCommit()) {
+                    continue;
+                }
+                try {
+                    writer.commit(true);
+                } catch (Exception e) {
+                    throw new IOException("Flush Milvus writer before checkpoint failed", e);
                 }
             }
         }
@@ -240,11 +186,11 @@ public class MilvusSinkWriter
         }
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         List<Exception> failures = new ArrayList<>();
-        synchronized (batchWriters) {
+        synchronized (writerOperationLock) {
             if (!closed.get()) {
                 closed.set(true);
                 log.info("Stopping Milvus Client");
-                for (MilvusWriter batchWriter : batchWriters.values()) {
+                for (MilvusWriter batchWriter : writerFactory.getWriters()) {
                     try {
                         batchWriter.close();
                         // Execute asynchronous wait job finish

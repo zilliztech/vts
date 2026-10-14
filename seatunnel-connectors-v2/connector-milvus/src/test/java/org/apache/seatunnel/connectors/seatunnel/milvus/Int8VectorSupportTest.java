@@ -153,7 +153,7 @@ public class Int8VectorSupportTest {
                 catalogTable,
                 describeCollectionResp,
                 new HashMap<>(),
-                new SeaTunnelRow(new Object[]{ByteBuffer.wrap(bytes)}));
+                new SeaTunnelRow(new Object[]{ByteBuffer.wrap(bytes)}), false);
 
         JsonArray array = data.getAsJsonArray("embedding");
         Assertions.assertEquals(4, array.size());

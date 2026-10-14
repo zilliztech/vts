@@ -33,8 +33,15 @@ import org.apache.seatunnel.connectors.seatunnel.milvus.source.config.MilvusSour
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants.ALLOW_INSERT_AUTO_ID;
+
 @Slf4j
 public class MilvusConnectorUtils {
+
+    public static boolean allowInsertAutoId(DescribeCollectionResp description) {
+        return description.getProperties() != null
+                && Boolean.parseBoolean(description.getProperties().get(ALLOW_INSERT_AUTO_ID));
+    }
 
     public static Boolean hasPartitionKey(DescribeCollectionResp describeCollectionResp) {
         return describeCollectionResp.getCollectionSchema().getFieldSchemaList().stream()

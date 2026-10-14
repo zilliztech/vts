@@ -103,7 +103,11 @@ public class MilvusBufferBatchWriter implements MilvusWriter {
     public void write(SeaTunnelRow element) {
         JsonObject data =
                 milvusSinkConverter.buildMilvusData(
-                        catalogTable, descriptionCollectionResp, milvusFieldMapper, element);
+                        catalogTable,
+                        descriptionCollectionResp,
+                        milvusFieldMapper,
+                        element,
+                        MilvusConnectorUtils.allowInsertAutoId(descriptionCollectionResp));
         milvusDataCache.add(data);
         writeCache.incrementAndGet();
         writeCount.incrementAndGet();
