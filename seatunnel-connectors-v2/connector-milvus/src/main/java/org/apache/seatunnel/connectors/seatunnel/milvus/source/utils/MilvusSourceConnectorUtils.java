@@ -212,34 +212,16 @@ public class MilvusSourceConnectorUtils {
      *
      * <ul>
      *   <li>Known type: passed through as-is.
-     *   <li>{@link IndexType#None} with real index parameters (metric type or extra params):
-     *       the source index type exists but is not recognized by this Milvus Java SDK (which
-     *       maps it to the None sentinel and drops the raw string). Keep the sentinel so the
-     *       sink fails loudly instead of silently downgrading the index to AUTOINDEX.
-     *   <li>{@link IndexType#None} or null with empty params: the source index was created
-     *       without an index_type (e.g. pymilvus create_index with empty params). Omit the
-     *       type so the sink lets the Milvus Java SDK apply its default (AUTOINDEX).
+     *   <li>{@link IndexType#None} or null: omit the type so the sink uses the SDK default
+     *       (AUTOINDEX), while metric type and extra parameters are propagated separately.
      * </ul>
      */
     static void putIndexType(Map<String, String> indexInfo, DescribeIndexResp.IndexDesc indexDesc) {
         IndexType indexType = indexDesc.getIndexType();
         if (indexType != null && indexType != IndexType.None) {
             indexInfo.put(MilvusConstants.INDEX_TYPE, indexType.getName());
-            return;
-        }
-        boolean hasIndexParams = indexDesc.getMetricType() != MetricType.INVALID
-                || (indexDesc.getExtraParams() != null && !indexDesc.getExtraParams().isEmpty());
-        if (indexType == IndexType.None && hasIndexParams) {
-            indexInfo.put(MilvusConstants.INDEX_TYPE, IndexType.None.getName());
-            log.warn(
-                    "Index '{}' on field '{}' has an index type unrecognized by the Milvus Java SDK, "
-                            + "metricType={}, extraParams={}; propagating 'None' so the sink rejects it explicitly",
-                    indexDesc.getIndexName(), indexDesc.getFieldName(), indexDesc.getMetricType(),
-                    indexDesc.getExtraParams());
         } else {
-            log.info(
-                    "Index '{}' on field '{}' has no index type in source (empty params); "
-                            + "omitting indexType, the sink will use the SDK default (AUTOINDEX)",
+            log.info("Index '{}' on field '{}' has no recognized index type; using the SDK default (AUTOINDEX)",
                     indexDesc.getIndexName(), indexDesc.getFieldName());
         }
     }

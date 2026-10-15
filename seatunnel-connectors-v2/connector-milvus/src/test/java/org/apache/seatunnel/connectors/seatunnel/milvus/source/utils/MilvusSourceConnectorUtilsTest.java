@@ -77,22 +77,19 @@ public class MilvusSourceConnectorUtilsTest {
     }
 
     @Test
-    void testPutIndexType_noneWithMetricTypeKeptForLoudFailure() {
-        // SDK mapped the type to None but a metric type survived: the source index type
-        // is unrecognized by this SDK. Keep the None sentinel so the sink fails loudly
-        // instead of silently downgrading the index to AUTOINDEX.
+    void testPutIndexType_noneWithMetricTypeOmitted() {
         Map<String, String> indexInfo = new HashMap<>();
         MilvusSourceConnectorUtils.putIndexType(indexInfo,
                 buildIndexDesc(IndexType.None, MetricType.COSINE, Collections.emptyMap()));
-        Assertions.assertEquals("None", indexInfo.get(MilvusConstants.INDEX_TYPE));
+        Assertions.assertFalse(indexInfo.containsKey(MilvusConstants.INDEX_TYPE));
     }
 
     @Test
-    void testPutIndexType_noneWithExtraParamsKeptForLoudFailure() {
+    void testPutIndexType_noneWithExtraParamsOmitted() {
         Map<String, String> indexInfo = new HashMap<>();
         MilvusSourceConnectorUtils.putIndexType(indexInfo,
                 buildIndexDesc(IndexType.None, MetricType.INVALID,
                         Collections.singletonMap("nlist", "1024")));
-        Assertions.assertEquals("None", indexInfo.get(MilvusConstants.INDEX_TYPE));
+        Assertions.assertFalse(indexInfo.containsKey(MilvusConstants.INDEX_TYPE));
     }
 }

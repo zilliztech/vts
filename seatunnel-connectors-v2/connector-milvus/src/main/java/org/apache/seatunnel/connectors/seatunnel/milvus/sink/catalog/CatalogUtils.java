@@ -201,13 +201,9 @@ public class CatalogUtils {
     }
 
     IndexParam.IndexType parseIndexType(String indexType) {
-        if (StringUtils.isBlank(indexType)) {
+        if (StringUtils.isBlank(indexType)
+                || IndexParam.IndexType.None.getName().equalsIgnoreCase(indexType)) {
             return null;
-        }
-        if (IndexParam.IndexType.None.getName().equalsIgnoreCase(indexType)) {
-            throw new MilvusConnectorException(
-                    MilvusConnectionErrorCode.CREATE_INDEX_ERROR,
-                    "Milvus index type from source is None. The source index type is missing or unsupported by the current Milvus Java SDK; refusing to create AUTOINDEX implicitly.");
         }
         for (IndexParam.IndexType value : IndexParam.IndexType.values()) {
             if (value.name().equals(indexType) || value.getName().equals(indexType)) {
