@@ -312,22 +312,21 @@ public class CatalogUtilsTest {
     }
 
     @Test
-    void testBuildIndexParam_noneIndexType_failsLoudly() {
+    void testBuildIndexParam_noneIndexType_usesSdkDefaultAndPreservesMetric() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "vec");
         indexInfo.put("indexName", "idx");
         indexInfo.put("indexType", "None");
-        indexInfo.put("metricType", "L2");
+        indexInfo.put("metricType", "COSINE");
 
         Set<String> targetFields = setOf("vec");
 
-        MilvusConnectorException exception = Assertions.assertThrows(
-                MilvusConnectorException.class,
-                () -> catalogUtils.buildIndexParam(
-                        indexInfo, targetFields, targetFields, false, gson, extraParamsType));
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
 
-        Assertions.assertTrue(exception.getMessage().contains(
-                "Milvus index type from source is None. The source index type is missing or unsupported by the current Milvus Java SDK; refusing to create AUTOINDEX implicitly."));
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+        Assertions.assertEquals(IndexParam.MetricType.COSINE, result.getMetricType());
     }
 
     @Test
