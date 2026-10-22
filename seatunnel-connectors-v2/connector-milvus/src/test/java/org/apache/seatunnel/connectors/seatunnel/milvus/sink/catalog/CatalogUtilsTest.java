@@ -421,6 +421,74 @@ public class CatalogUtilsTest {
     }
 
     @Test
+    void testBuildIndexParam_extraParamsIndexType_isNotForwardedTwice() {
+        // Milvus describeIndex exposes index_type/metric_type again inside the index
+        // params; forwarding them as extraParams makes the SDK send the key twice and
+        // the server rejects the whole create index request (1100 duplicated index param).
+        Map<String, Object> extraParams = new HashMap<>();
+        extraParams.put("index_type", "AUTOINDEX");
+        extraParams.put("metric_type", "COSINE");
+
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "vec_idx");
+        indexInfo.put("indexType", "AUTOINDEX");
+        indexInfo.put("metricType", "COSINE");
+        indexInfo.put("extraParams", gson.toJson(extraParams));
+
+        Set<String> targetFields = setOf("vec");
+
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
+
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, result.getIndexType());
+        Assertions.assertEquals(IndexParam.MetricType.COSINE, result.getMetricType());
+        Assertions.assertTrue(result.getExtraParams() == null || result.getExtraParams().isEmpty());
+    }
+
+    @Test
+    void testBuildIndexParam_indexTypeOnlyInExtraParams_isPromoted() {
+        Map<String, Object> extraParams = new HashMap<>();
+        extraParams.put("index_type", "HNSW");
+        extraParams.put("M", 16);
+
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "vec_idx");
+        indexInfo.put("extraParams", gson.toJson(extraParams));
+
+        Set<String> targetFields = setOf("vec");
+
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
+
+        // The type is kept, but expressed through the dedicated field only
+        Assertions.assertEquals(IndexParam.IndexType.HNSW, result.getIndexType());
+        Assertions.assertEquals(16L, ((Number) result.getExtraParams().get("M")).longValue());
+        Assertions.assertFalse(result.getExtraParams().containsKey("index_type"));
+    }
+
+    @Test
+    void testBuildIndexParam_metricTypeOnlyInExtraParams_isPromoted() {
+        Map<String, Object> extraParams = new HashMap<>();
+        extraParams.put("metric_type", "IP");
+
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "vec_idx");
+        indexInfo.put("indexType", "AUTOINDEX");
+        indexInfo.put("extraParams", gson.toJson(extraParams));
+
+        Set<String> targetFields = setOf("vec");
+
+        IndexParam result = catalogUtils.buildIndexParam(
+                indexInfo, targetFields, targetFields, false, gson, extraParamsType);
+
+        Assertions.assertEquals(IndexParam.MetricType.IP, result.getMetricType());
+        Assertions.assertTrue(result.getExtraParams() == null || result.getExtraParams().isEmpty());
+    }
+
+    @Test
     void testBuildIndexParam_emptyExtraParams_noExtraParamsSet() {
         Map<String, String> indexInfo = new HashMap<>();
         indexInfo.put("fieldName", "vec");
@@ -496,6 +564,42 @@ public class CatalogUtilsTest {
         Assertions.assertEquals("vec_idx", index.getIndexName());
         Assertions.assertEquals(IndexParam.IndexType.HNSW, index.getIndexType());
         Assertions.assertEquals(IndexParam.MetricType.L2, index.getMetricType());
+    }
+
+    @Test
+    void testCreateIndex_sourceIndexWithNestedIndexParams_sendsNoDuplicateKeys() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogUtils utils = new CatalogUtils(client, ReadonlyConfig.fromMap(new HashMap<>()));
+
+        Map<String, Object> sourceIndexParams = new HashMap<>();
+        sourceIndexParams.put("index_type", "AUTOINDEX");
+        sourceIndexParams.put("metric_type", "COSINE");
+        sourceIndexParams.put("nlist", 1024);
+
+        Map<String, String> indexInfo = new HashMap<>();
+        indexInfo.put("fieldName", "vec");
+        indexInfo.put("indexName", "vec_idx");
+        indexInfo.put("indexType", "AUTOINDEX");
+        indexInfo.put("metricType", "COSINE");
+        indexInfo.put("extraParams", gson.toJson(sourceIndexParams));
+
+        Map<String, String> options = new HashMap<>();
+        options.put(MilvusConstants.INDEX_LIST, gson.toJson(Collections.singletonList(indexInfo)));
+        CatalogTable table = buildCatalogTable(
+                Arrays.asList(buildColumn("vec", VectorType.VECTOR_FLOAT_TYPE, null)), options);
+
+        utils.createIndex(TablePath.of("default", "target"), table);
+
+        ArgumentCaptor<CreateIndexReq> captor = ArgumentCaptor.forClass(CreateIndexReq.class);
+        Mockito.verify(client).createIndex(captor.capture());
+        IndexParam index = captor.getValue().getIndexParams().get(0);
+        Assertions.assertEquals(IndexParam.IndexType.AUTOINDEX, index.getIndexType());
+        Assertions.assertEquals(IndexParam.MetricType.COSINE, index.getMetricType());
+        Map<String, Object> extraParams = index.getExtraParams();
+        Assertions.assertNotNull(extraParams);
+        Assertions.assertFalse(extraParams.containsKey("index_type"));
+        Assertions.assertFalse(extraParams.containsKey("metric_type"));
+        Assertions.assertEquals(1024L, ((Number) extraParams.get("nlist")).longValue());
     }
 
     @Test
