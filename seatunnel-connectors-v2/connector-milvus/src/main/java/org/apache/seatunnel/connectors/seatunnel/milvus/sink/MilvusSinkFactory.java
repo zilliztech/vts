@@ -58,7 +58,9 @@ public class MilvusSinkFactory implements TableSinkFactory {
                         MilvusSinkConfig.CREATE_INDEX,
                         MilvusSinkConfig.PARTITION_NUM,
                         MilvusSinkConfig.FIELD_SCHEMA,
-                        MilvusSinkConfig.WRITE_MODE)
+                        MilvusSinkConfig.WRITE_MODE,
+                        MilvusSinkConfig.ENABLE_UPSERT,
+                        MilvusSinkConfig.CDC_OVERLAP_UPSERT_CUTOFF_MS)
                 .build();
     }
 

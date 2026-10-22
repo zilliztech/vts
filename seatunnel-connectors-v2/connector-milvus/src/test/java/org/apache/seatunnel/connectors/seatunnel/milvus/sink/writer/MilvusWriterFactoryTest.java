@@ -201,6 +201,8 @@ class MilvusWriterFactoryTest {
     void cdcWriteModeRejectsAutoIdWithoutPermission(String property) {
         HashMap<String, Object> configMap = new HashMap<>();
         configMap.put("write_mode", MilvusSinkWriteMode.CDC);
+        configMap.put("cdc_overlap_upsert_cutoff_ms", 100L);
+        configMap.put("enable_upsert", true);
         DescribeCollectionResp describeCollectionResp =
                 DescribeCollectionResp.builder()
                         .autoID(true)

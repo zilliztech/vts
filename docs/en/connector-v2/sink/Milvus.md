@@ -50,11 +50,12 @@ This Milvus sink connector write data to Milvus or Zilliz Cloud, it has the foll
 | data_save_mode       | enum    | No       | APPEND_DATA                  | Data save mode. In CDC write mode only `APPEND_DATA` is supported. |
 | create_index         | boolean | No       | true                         | Create indexes when auto creating the collection.         |
 | enable_auto_id       | boolean | No       | false                        | Primary key column enable autoId.                         |
-| enable_upsert        | boolean | No       | false                        | Upsert data not insert.                                   |
+| enable_upsert        | boolean | No       | false                        | CDC mode only: use full-row upsert for INSERT/UPDATE_AFTER regardless of the overlap cutoff. AutoID targets implement upsert as delete then insert with the original keys; APPEND mode is unaffected.                                   |
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
 | cdc_batch_flush_interval_ms | long | No       | 1000                         | In CDC mode, flush pending rows when a newly received row observes that this interval has elapsed since the last successful flush. |
-| write_mode           | enum    | No       | APPEND                       | Write mode. `APPEND` writes normal insert rows by batch or bulk writer. `CDC` inserts INSERT and UPDATE_AFTER rows with source primary keys, and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require `allow_insert_auto_id = "true"`. |
+| cdc_overlap_upsert_cutoff_ms | long | No | - | Optional inclusive CDC upsert cutoff in Unix milliseconds, applied when `enable_upsert = false`. INSERT/UPDATE_AFTER rows at or before this source event time use upsert, including AutoID targets. |
+| write_mode           | enum    | No       | APPEND                       | Write mode. `APPEND` writes normal insert rows by batch or bulk writer. `CDC` inserts INSERT and UPDATE_AFTER rows with source primary keys by default (configurable through `enable_upsert` or the optional upsert window), and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require `allow_insert_auto_id = "true"`. |
 | geometry_convert_mode | String | No       | passthrough                  | How to handle String values for Milvus Geometry fields. `passthrough` sends the value unchanged; `parse` converts WKT/EWKT/GeoJSON/WKB hex and supported coordinate formats to WKT. |
 | geometry_string_coord_order | String | No | lat_lon                     | Coordinate order for bare numeric pair strings in `parse` mode. Supported values are `lat_lon` and `lon_lat`. WKT, GeoJSON and WKB inputs are unaffected. |
 | partition_key        | String  | No       |                              | Milvus partition key field                                |
@@ -113,9 +114,9 @@ CDC write mode has the following constraints:
 
 For PostgreSQL CDC sources containing PostGIS `GEOMETRY` or `GEOGRAPHY` columns, set `geometry_convert_mode = "parse"`. PostgreSQL CDC emits these values as WKB/EWKB hexadecimal strings, and the Milvus sink converts them to WKT. The target collection must already define the corresponding field as Milvus `GEOMETRY`.
 
-The CDC writer accepts keyed changelog rows and does not require `Milvus-CDC`-specific message metadata. For both AutoID and non-AutoID targets, INSERT and UPDATE_AFTER rows use **insert with the source primary key**, while DELETE and UPDATE_BEFORE rows delete the supplied key. The sink applies each event independently and does not require or validate BEFORE/AFTER pairs. A standalone UPDATE_BEFORE deletes and a standalone UPDATE_AFTER inserts; UPDATE_AFTER alone does not replace an existing row. Sources that need to replace existing rows must emit the corresponding DELETE or UPDATE_BEFORE first, including the old key when the primary key changes.
+By default, the CDC writer accepts keyed changelog rows without event-time metadata. For both AutoID and non-AutoID targets, INSERT and UPDATE_AFTER rows use **insert with the source primary key**, while DELETE and UPDATE_BEFORE rows delete the supplied key. The sink applies each event independently and does not require or validate BEFORE/AFTER pairs. A standalone UPDATE_BEFORE deletes. UPDATE_AFTER uses insert by default, or full-row upsert under the strategy below. When using insert, replacing existing rows requires a preceding DELETE or UPDATE_BEFORE. Primary-key changes require deleting the old key regardless of the write strategy.
 
-Consecutive rows with the same target operation and partition scope are flushed when they reach `batch_size`. Whenever a row is added to the pending batch, the writer also checks `cdc_batch_flush_interval_ms`; when the interval since the last successful flush has elapsed, it flushes the pending batch including the current row. Any target-operation or partition-scope change flushes the previous pending batch. An INSERT or UPDATE_AFTER whose primary key already exists in the pending insert batch synchronously flushes that batch before buffering the new row, so repeated inserts are preserved in separate requests instead of overwriting a pending row. Duplicate deletes within the same batch may be combined. When switching from DELETE to INSERT, the current INSERT is also flushed immediately so the new row does not remain pending after the old row has been deleted. When switching from INSERT to DELETE, the current DELETE follows the normal batch, interval, checkpoint, or writer-close flush rules.
+Consecutive rows with the same target operation and partition scope are flushed when they reach `batch_size`. Whenever a row is added to the pending batch, the writer also checks `cdc_batch_flush_interval_ms`; when the interval since the last successful flush has elapsed, it flushes the pending batch including the current row. Any target-operation (including INSERT/UPSERT) or partition-scope change flushes the previous pending batch. An INSERT or UPDATE_AFTER whose primary key already exists in the pending insert/upsert batch synchronously flushes that batch before buffering the new row, so repeated writes are preserved in separate requests instead of overwriting a pending row. Duplicate deletes within the same batch may be combined. When switching from DELETE to INSERT or UPSERT, the current write is also flushed immediately so the new row does not remain pending after the old row has been deleted. When switching from INSERT or UPSERT to DELETE, the current DELETE follows the normal batch, interval, checkpoint, or writer-close flush rules.
 
 Enable the property on the pre-created target before starting the job, for example with PyMilvus:
 
@@ -130,9 +131,46 @@ CDC uses one collection-level writer per sink instance. It batches consecutive r
 
 CDC requires `multi_table_sink_replica = 1` (the default) and effective sink parallelism 1; other values are rejected. Parallelism is checked against the runtime context, including on checkpoint restore. A collection-level writer does not provide ordering across separate sink instances or jobs.
 
-**Recovery limitation:** CDC writes use at-least-once replay semantics for both AutoID and non-AutoID targets. Insert does not enforce primary-key uniqueness; a failed request with an unknown outcome or checkpoint replay can insert duplicate primary keys. Flushing before a repeated insert preserves received events but does not deduplicate retries. Failed flushes propagate errors and retain pending rows. This mode does not guarantee idempotent replay or exactly-once final state.
+**Recovery limitation:** CDC writes use at-least-once replay semantics for both AutoID and non-AutoID targets. Insert does not enforce primary-key uniqueness; a failed request with an unknown outcome or checkpoint replay can insert duplicate primary keys. Flushing before a repeated insert preserves received events but does not deduplicate retries. Failed flushes propagate errors and retain pending rows. The upsert strategies below replace repeated keys within their scope; all remaining insert writes retain these replay limitations. This mode does not guarantee end-to-end exactly-once semantics.
 
-`cdc_batch_flush_interval_ms` is a write-triggered check, not a background timer. If no new row arrives after the last buffered row, that row remains pending until a checkpoint or writer close. Before a database cutover, wait for a final successful checkpoint or stop the synchronization job gracefully. Transaction rows are checkpointed by the source at the source transaction commit offset, but the target Milvus write is still applied as normal INSERT and DELETE operations; it is not a target-side atomic transaction.
+`cdc_batch_flush_interval_ms` is a write-triggered check, not a background timer. If no new row arrives after the last buffered row, that row remains pending until a checkpoint or writer close. Before a database cutover, wait for a final successful checkpoint or stop the synchronization job gracefully. Transaction rows are checkpointed by the source at the source transaction commit offset, but the target Milvus write is still applied as normal INSERT, UPSERT and DELETE operations; it is not a target-side atomic transaction.
+
+### CDC upsert strategy
+
+`enable_upsert` defaults to `false` and only applies to `write_mode = "CDC"`. For both AutoID and non-AutoID targets, set it to `true` to use full-row upsert for every INSERT/UPDATE_AFTER row, including steady-state writes. This takes precedence over `cdc_overlap_upsert_cutoff_ms` and does not require or validate event-time metadata. Any configured cutoff must still be non-negative. APPEND writers are unaffected.
+
+| CDC configuration | At or before cutoff | After cutoff |
+|-------------------------|---------------------|--------------|
+| `enable_upsert = false`, no cutoff | insert | insert |
+| `enable_upsert = false`, with cutoff | upsert | insert |
+| `enable_upsert = true` | upsert | upsert |
+
+For non-AutoID targets, upsert calls the native Milvus full-row upsert API. For AutoID targets, upsert instead deletes the supplied primary keys and then inserts the full rows with their original keys; `allow_insert_auto_id = "true"` is required. Native full-row AutoID upsert is not used because it generates new primary keys. Explicit partitions scope both calls to the same target partition; partition-key collections omit the explicit partition and delete the supplied keys across partitions.
+
+The writer converts the entire batch before deleting any rows. It temporarily disables SDK retries for individual calls and retries the complete delete-then-insert operation locally using the default SDK retry policy, then restores the SDK defaults on exit. Every retry starts from delete, including when insert may have succeeded but its response was lost. Both calls must succeed before the pending upsert batch is cleared and checkpoint preparation can complete. A non-retryable failure or exhausted retries propagates and retains the whole batch. These two calls are **not atomic**: rows may be temporarily absent between delete and insert, or until recovery succeeds. Keep writes for the same key ordered and avoid concurrent writers to the target.
+
+DELETE/UPDATE_BEFORE remain deletes in every configuration. BEFORE/AFTER operations are not merged or skipped; a delete followed by a write becomes delete followed by insert/upsert. Always using upsert can reduce replay duplicates but adds write overhead, particularly when the source already emits delete-plus-insert updates. It synchronizes the latest state per key, does not provide end-to-end exactly-once, and does not prevent older events from overwriting newer state.
+
+### CDC overlap upsert window
+
+With `enable_upsert = false`, after restoring a full backup, configure a fixed cutoff on the sink to replace overlapping CDC rows by primary key:
+
+```hocon
+write_mode = "CDC"
+schema_save_mode = "ERROR_WHEN_SCHEMA_NOT_EXIST"
+data_save_mode = "APPEND_DATA"
+enable_upsert = false
+# Example only: replace with the backup's overlap upper bound in Unix milliseconds.
+cdc_overlap_upsert_cutoff_ms = 1792454400000
+```
+
+- The cutoff is a non-negative Unix timestamp in **milliseconds**, not a Milvus hybrid timestamp or a message ID. With `enable_upsert = false`, omit it to retain insert-only behavior. It has no effect on write selection when `enable_upsert = true`, or in APPEND mode.
+- For `enable_upsert = false`, on both AutoID and non-AutoID targets, INSERT and UPDATE_AFTER use full-row upsert when the row's source event time is **less than or equal to** the cutoff, otherwise insert. DELETE and UPDATE_BEFORE keep their existing behavior and do not require an event time.
+- The writer reads the `EventTime` row metadata as a non-negative `Long`. Milvus-CDC already populates it from the WAL message timetick's physical milliseconds. It is not a payload field, source receive time, or sink wall clock. When the window applies, missing or invalid event time fails the write before changing the pending batch. Other sources/transforms must supply and preserve source event time in this metadata before using the option.
+- For `autoID = true`, `allow_insert_auto_id = "true"` is still required. Rows inside the window use the delete-then-insert upsert implementation above; rows outside use plain insert. Window-based selection requires valid event-time metadata for AutoID targets too.
+- The control plane must choose an upper bound covering all data included in the backup, persist it with the job configuration, and reuse it unchanged after recovery. Prefer a source-derived backup watermark converted to milliseconds; if using control-plane backup completion time, account for clock skew. VTS does not derive or persist a new cutoff automatically. Complete the full restore/import before applying CDC.
+- Evaluate every row independently, including older events received after newer events from another channel. Operation changes flush the previous batch; repeated write keys remain in separate ordered requests. A failed flush retains both its rows and selected write operation for retry.
+- This window synchronizes the latest state per primary key, rather than preserving multiple source rows sharing a key. It does not skip CDC records or alter startup/checkpoint positions. Preserve source order: upsert does not compare source timestamps on the server, and late older writes may overwrite newer state. Requests outside the window may still insert duplicates after retry/recovery. Target-side transactions and end-to-end exactly-once are not provided.
 
 ## Task Example
 

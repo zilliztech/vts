@@ -218,6 +218,18 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .withDescription(
                                         "CDC writer message-triggered batch flush interval in milliseconds");
 
+        public static final Option<Boolean> ENABLE_UPSERT = Options.key("enable_upsert")
+                        .booleanType()
+                        .defaultValue(false)
+                        .withDescription(
+                                        "Only applies to CDC mode. Use full-row upsert for INSERT/UPDATE_AFTER rows regardless of the overlap cutoff or event time. AutoID targets implement upsert as delete then insert to preserve source primary keys. DELETE/UPDATE_BEFORE rows are unchanged.");
+
+        public static final Option<Long> CDC_OVERLAP_UPSERT_CUTOFF_MS = Options.key("cdc_overlap_upsert_cutoff_ms")
+                        .longType()
+                        .noDefaultValue()
+                        .withDescription(
+                                        "Optional inclusive CDC upsert cutoff in Unix milliseconds, applied when enable_upsert=false. INSERT/UPDATE_AFTER rows with source EventTime at or before the cutoff use upsert; later rows use insert. AutoID targets implement upsert as delete then insert with the original keys. Requires non-negative source EventTime metadata when applied.");
+
         public static final Option<Map<String, String>> BULK_WRITER_CONFIG = Options.key("bulk_writer_config")
                         .mapType()
                         .defaultValue(new HashMap<>())
@@ -227,7 +239,7 @@ public class MilvusSinkConfig extends MilvusCommonConfig {
                         .enumType(MilvusSinkWriteMode.class)
                         .defaultValue(MilvusSinkWriteMode.APPEND)
                         .withDescription(
-                                        "Milvus sink write mode. APPEND uses the normal batch or bulk writer. CDC inserts INSERT and UPDATE_AFTER rows with source primary keys, and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require allow_insert_auto_id=true. Repeated insert keys flush the previous batch before buffering the new row; retries may insert duplicates.");
+                                        "Milvus sink write mode. APPEND uses the normal batch or bulk writer. CDC inserts INSERT and UPDATE_AFTER rows with source primary keys, upserts all writes when enable_upsert=true or only those within cdc_overlap_upsert_cutoff_ms otherwise, and deletes DELETE and UPDATE_BEFORE rows. AutoID targets require allow_insert_auto_id=true. Repeated insert keys flush the previous batch before buffering the new row; retries may insert duplicates.");
 
         /**
          * How to interpret bare "x,y" coordinate strings flowing into a Geometry field.
