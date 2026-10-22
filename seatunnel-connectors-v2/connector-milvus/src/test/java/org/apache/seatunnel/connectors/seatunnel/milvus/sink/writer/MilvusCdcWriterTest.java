@@ -25,6 +25,7 @@ import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
+import org.apache.seatunnel.api.table.type.MetadataUtil;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.milvus.exception.MilvusConnectorException;
@@ -36,7 +37,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
+import io.milvus.grpc.MilvusServiceGrpc;
+import io.milvus.shaded.io.grpc.Channel;
+import io.milvus.shaded.io.grpc.Status;
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.client.RetryConfig;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.exception.ErrorCode;
 import io.milvus.v2.exception.MilvusClientException;
@@ -44,9 +49,12 @@ import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 import io.milvus.v2.service.partition.request.CreatePartitionReq;
 import io.milvus.v2.service.partition.request.HasPartitionReq;
+import io.milvus.v2.service.vector.VectorService;
 import io.milvus.v2.service.vector.request.DeleteReq;
 import io.milvus.v2.service.vector.request.InsertReq;
 import io.milvus.v2.service.vector.request.UpsertReq;
+import io.milvus.v2.service.vector.response.DeleteResp;
+import io.milvus.v2.service.vector.response.InsertResp;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -59,12 +67,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.seatunnel.api.table.type.CommonOptions.EVENT_TIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -77,6 +87,99 @@ class MilvusCdcWriterTest {
 
     private static final String CURRENT_MESSAGE_ID = "MilvusCdcCurrentMessageId";
     private static final String MESSAGE_END = "MilvusCdcMessageEnd";
+
+    @Test
+    void autoIdUpsertRetriesWholeOperationWithRealSdk() throws Exception {
+        MilvusClientV2 client = new MilvusClientV2(null);
+        client.setBlockingStub(MilvusServiceGrpc.newBlockingStub(mock(Channel.class)));
+        VectorService vectors = mock(VectorService.class);
+        Field field = MilvusClientV2.class.getDeclaredField("vectorService");
+        field.setAccessible(true);
+        field.set(client, vectors);
+        List<Long> storedIds = new ArrayList<>(Collections.singletonList(42L));
+        List<String> operations = new ArrayList<>();
+        AtomicLong inserts = new AtomicLong();
+        when(vectors.delete(any(), any(DeleteReq.class)))
+                .thenAnswer(
+                        call -> {
+                            operations.add("delete");
+                            storedIds.removeAll(call.<DeleteReq>getArgument(1).getIds());
+                            return DeleteResp.builder().build();
+                        });
+        when(vectors.insert(any(), any(InsertReq.class)))
+                .thenAnswer(
+                        call -> {
+                            operations.add("insert");
+                            call.<InsertReq>getArgument(1)
+                                    .getData()
+                                    .forEach(row -> storedIds.add(row.get("id").getAsLong()));
+                            if (inserts.incrementAndGet() == 1) {
+                                throw Status.UNAVAILABLE
+                                        .withDescription("response lost after apply")
+                                        .asRuntimeException();
+                            }
+                            return InsertResp.builder().InsertCnt(1L).build();
+                        });
+        MilvusCdcWriter writer = strategyWriter(client, autoIdDescription(), true, null, 1000);
+        writer.write(rowWithoutMilvusMetadata(42L, "updated", RowKind.INSERT));
+        writer.commit(false);
+
+        assertEquals(Arrays.asList("delete", "insert", "delete", "insert"), operations);
+        assertEquals(Collections.singletonList(42L), storedIds);
+        assertFalse(writer.needCommit());
+    }
+
+    @Test
+    void autoIdUpsertConvertsWholeBatchBeforeDeleting() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        DescribeCollectionResp description = autoIdDescription();
+        description.getCollectionSchema().getFieldSchemaList().get(1).setDataType(DataType.Int64);
+        MilvusCdcWriter writer = strategyWriter(client, description, true, null, 1000);
+        writer.write(rowWithoutMilvusMetadata(42L, "123", RowKind.INSERT));
+        writer.write(rowWithoutMilvusMetadata(43L, "not-a-number", RowKind.INSERT));
+
+        assertThrows(NumberFormatException.class, () -> writer.commit(false));
+        assertThrows(NumberFormatException.class, () -> writer.commit(false));
+        verify(client, never()).delete(any(DeleteReq.class));
+        verify(client, never()).insert(any(InsertReq.class));
+        assertEquals(2L, writer.getWriteCache());
+        assertTrue(writer.needCommit());
+    }
+
+    @Test
+    void exhaustedAutoIdUpsertRetainsBatchAndRetriesFromDeleteOnNextCommit() throws Exception {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        when(client.insert(any(InsertReq.class)))
+                .thenThrow(
+                        new MilvusClientException(
+                                ErrorCode.RPC_ERROR, Status.UNAVAILABLE.asRuntimeException()));
+        MilvusCdcWriter writer =
+                new MilvusCdcWriter(
+                        catalogTable(),
+                        ReadonlyConfig.fromMap(Collections.singletonMap("enable_upsert", true)),
+                        client,
+                        autoIdDescription(),
+                        () -> 0L);
+        RetryConfig policy = retryConfig(writer);
+        policy.setMaxRetryTimes(2);
+        policy.setInitialBackOffMs(0);
+        policy.setMaxBackOffMs(0);
+        writer.write(rowWithoutMilvusMetadata(42L, "pending", RowKind.INSERT));
+
+        assertThrows(MilvusConnectorException.class, () -> writer.commit(false));
+        assertEquals(1L, writer.getWriteCache());
+        assertTrue(writer.needCommit());
+        verify(client, times(2)).delete(any(DeleteReq.class));
+        verify(client, times(2)).insert(any(InsertReq.class));
+        verify(client).retryConfig(policy);
+
+        org.mockito.Mockito.doReturn(null).when(client).insert(any(InsertReq.class));
+        writer.commit(false);
+        verify(client, times(3)).delete(any(DeleteReq.class));
+        verify(client, times(3)).insert(any(InsertReq.class));
+        verify(client, times(2)).retryConfig(policy);
+        assertFalse(writer.needCommit());
+    }
 
     @ParameterizedTest
     @EnumSource(
@@ -163,6 +266,540 @@ class MilvusCdcWriterTest {
         assertFalse(writer.needCommit());
         verify(client, times(2)).delete(any(DeleteReq.class));
         verify(client, never()).hasPartition(any(HasPartitionReq.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"INSERT", "UPDATE_AFTER"})
+    void upsertWindowIncludesBoundaryAndReevaluatesEveryRow(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 100L, 1000);
+        writer.write(timedRow(1L, "before", kind, 99L));
+        writer.write(timedRow(2L, "boundary", kind, 100L));
+        writer.write(timedRow(3L, "after", kind, 101L));
+        writer.write(timedRow(4L, "late-channel", kind, 98L));
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).upsert(upserts.capture());
+        order.verify(client).insert(inserts.capture());
+        order.verify(client).upsert(upserts.capture());
+        assertEquals(2, upserts.getAllValues().get(0).getData().size());
+        assertEquals(
+                "boundary",
+                upserts.getAllValues().get(0).getData().get(1).get("name").getAsString());
+        assertEquals(3L, inserts.getValue().getData().get(0).get("id").getAsLong());
+        assertEquals("late-channel", upserts.getValue().getData().get(0).get("name").getAsString());
+        assertEquals("test_collection", upserts.getValue().getCollectionName());
+        assertEquals("_default", upserts.getValue().getPartitionName());
+        order.verifyNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"INSERT", "UPDATE_AFTER"})
+    void autoIdWindowUsesDeleteInsertOnlyAtOrBeforeCutoff(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, autoIdDescription(), 100L, 1000);
+        writer.write(timedRow(1L, "before", kind, 99L));
+        writer.write(timedRow(2L, "boundary", kind, 100L));
+        writer.write(timedRow(3L, "outside", kind, 101L));
+        writer.write(timedRow(4L, "late-channel", kind, 98L));
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client, calls(1)).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client, calls(1)).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client, calls(1)).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        assertEquals(Arrays.asList(1L, 2L), deletes.getAllValues().get(0).getIds());
+        assertEquals(Collections.singletonList(4L), deletes.getValue().getIds());
+        assertEquals(2, inserts.getAllValues().get(0).getData().size());
+        assertEquals(3L, inserts.getAllValues().get(1).getData().get(0).get("id").getAsLong());
+        assertEquals(4L, inserts.getValue().getData().get(0).get("id").getAsLong());
+        order.verifyNoMoreInteractions();
+        assertFalse(writer.needCommit());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"DELETE", "UPDATE_BEFORE"})
+    void windowPreservesDeleteThenUpsertAndPrimaryKeyChanges(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 100L, 1000);
+        writer.write(rowWithoutMilvusMetadata(1L, null, kind));
+        writer.write(timedRow(2L, "new-key", RowKind.UPDATE_AFTER, 99L));
+        assertFalse(writer.needCommit());
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).upsert(upserts.capture());
+        assertEquals(Collections.singletonList(1L), deletes.getValue().getIds());
+        assertEquals(2L, upserts.getValue().getData().get(0).get("id").getAsLong());
+    }
+
+    @Test
+    void windowKeepsRepeatedPrimaryKeysInSeparateOrderedRequests() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 100L, 1000);
+        writer.write(timedRow(1L, "first", RowKind.INSERT, 98L));
+        writer.write(timedRow(1L, "second", RowKind.INSERT, 99L));
+        writer.write(timedRow(1L, "outside", RowKind.INSERT, 101L));
+        writer.commit(false);
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        order.verify(client, times(2)).upsert(upserts.capture());
+        order.verify(client).insert(any(InsertReq.class));
+        assertEquals(
+                "first", upserts.getAllValues().get(0).getData().get(0).get("name").getAsString());
+        assertEquals(
+                "second", upserts.getAllValues().get(1).getData().get(0).get("name").getAsString());
+    }
+
+    @Test
+    void failedWindowFlushRetainsOperationAndRowsBeforeBoundarySwitch() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        when(client.upsert(any(UpsertReq.class)))
+                .thenThrow(new IllegalStateException("unknown outcome"))
+                .thenReturn(null);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 100L, 1000);
+        writer.write(timedRow(1L, "inside", RowKind.INSERT, 99L));
+        SeaTunnelRow after = timedRow(2L, "outside", RowKind.INSERT, 101L);
+        assertThrows(MilvusConnectorException.class, () -> writer.write(after));
+        assertEquals(1L, writer.getWriteCache());
+        verify(client, never()).insert(any(InsertReq.class));
+        writer.write(after);
+        writer.commit(false);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        verify(client, times(2)).upsert(upserts.capture());
+        assertEquals(
+                upserts.getAllValues().get(0).getData(), upserts.getAllValues().get(1).getData());
+        verify(client).insert(any(InsertReq.class));
+        assertFalse(writer.needCommit());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void windowRejectsMissingOrNegativeEventTimeBeforeChangingPendingBatch(boolean autoId) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer =
+                windowWriter(
+                        client,
+                        autoId ? autoIdDescription() : describeCollectionResp(),
+                        100L,
+                        1000);
+        writer.write(timedRow(1L, "pending", RowKind.INSERT, 99L));
+        assertThrows(
+                MilvusConnectorException.class,
+                () -> writer.write(rowWithoutMilvusMetadata(2L, "missing", RowKind.INSERT)));
+        assertThrows(
+                MilvusConnectorException.class,
+                () -> writer.write(timedRow(2L, "invalid", RowKind.INSERT, -1L)));
+        SeaTunnelRow invalid = rowWithoutMilvusMetadata(2L, "invalid-type", RowKind.INSERT);
+        invalid.getOptions().put(EVENT_TIME.getName(), "99");
+        MilvusConnectorException error =
+                assertThrows(MilvusConnectorException.class, () -> writer.write(invalid));
+        assertTrue(error.getMessage().contains("EventTime"));
+        assertEquals(1L, writer.getWriteCache());
+        writer.commit(false);
+        if (autoId) {
+            ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+            verify(client).delete(deletes.capture());
+            assertEquals(Collections.singletonList(1L), deletes.getValue().getIds());
+            ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+            verify(client).insert(inserts.capture());
+            assertEquals(1, inserts.getValue().getData().size());
+            verify(client, never()).upsert(any(UpsertReq.class));
+        } else {
+            ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+            verify(client).upsert(upserts.capture());
+            assertEquals(1, upserts.getValue().getData().size());
+            verify(client, never()).insert(any(InsertReq.class));
+        }
+    }
+
+    @Test
+    void windowRejectsNegativeCutoff() {
+        assertThrows(
+                MilvusConnectorException.class,
+                () -> windowWriter(mock(MilvusClientV2.class), describeCollectionResp(), -1L, 1));
+    }
+
+    @Test
+    void windowEnsuresAndSeparatesExplicitPartitions() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 100L, 1000);
+        SeaTunnelRow first = timedRow(1L, "first", RowKind.INSERT, 99L);
+        first.setPartitionName("part-a");
+        SeaTunnelRow second = timedRow(2L, "second", RowKind.INSERT, 99L);
+        second.setPartitionName("part-b");
+        writer.write(first);
+        writer.write(second);
+        writer.commit(false);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        verify(client, times(2)).upsert(upserts.capture());
+        verify(client, times(2)).createPartition(any(CreatePartitionReq.class));
+        assertEquals("part_a", upserts.getAllValues().get(0).getPartitionName());
+        assertEquals("part_b", upserts.getAllValues().get(1).getPartitionName());
+    }
+
+    @Test
+    void recreatedWriterReusesConfiguredCutoff() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        SeaTunnelRow replay = timedRow(1L, "replay", RowKind.INSERT, 100L);
+        windowWriter(client, describeCollectionResp(), 100L, 1).write(replay);
+        windowWriter(client, describeCollectionResp(), 100L, 1).write(replay);
+        verify(client, times(2)).upsert(any(UpsertReq.class));
+        verify(client, never()).insert(any(InsertReq.class));
+    }
+
+    @Test
+    void windowUpsertsPartitionKeyRowsWithoutPhysicalPartitionName() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        DescribeCollectionResp description = describeCollectionResp();
+        description.getCollectionSchema().getFieldSchemaList().get(1).setIsPartitionKey(true);
+        MilvusCdcWriter writer = windowWriter(client, description, 100L, 1000);
+        SeaTunnelRow first = timedRow(1L, "tenant_a", RowKind.INSERT, 99L);
+        first.setPartitionName("physical_a");
+        SeaTunnelRow second = timedRow(2L, "tenant_b", RowKind.INSERT, 100L);
+        second.setPartitionName("physical_b");
+        writer.write(first);
+        writer.write(second);
+        writer.commit(false);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        verify(client).upsert(upserts.capture());
+        assertEquals("", upserts.getValue().getPartitionName());
+        assertEquals(2, upserts.getValue().getData().size());
+        verify(client, never()).hasPartition(any(HasPartitionReq.class));
+        verify(client, never()).createPartition(any(CreatePartitionReq.class));
+    }
+
+    @Test
+    void epochCutoffIsInclusiveAndCloseFlushesRemainingInsert() throws Exception {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = windowWriter(client, describeCollectionResp(), 0L, 1000);
+        writer.write(timedRow(1L, "epoch", RowKind.INSERT, 0L));
+        writer.write(timedRow(2L, "after", RowKind.INSERT, 1L));
+        writer.close();
+        org.mockito.InOrder order = inOrder(client);
+        order.verify(client).upsert(any(UpsertReq.class));
+        order.verify(client).insert(any(InsertReq.class));
+        assertFalse(writer.needCommit());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"INSERT", "UPDATE_AFTER"})
+    void enabledUpsertDoesNotRequireCutoffOrEventTime(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = strategyWriter(client, describeCollectionResp(), true, null, 1000);
+        writer.write(rowWithoutMilvusMetadata(42L, "always-upsert", kind));
+        writer.commit(false);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        verify(client).upsert(upserts.capture());
+        assertEquals(42L, upserts.getValue().getData().get(0).get("id").getAsLong());
+        assertEquals(
+                "always-upsert", upserts.getValue().getData().get(0).get("name").getAsString());
+        verify(client, never()).insert(any(InsertReq.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"INSERT", "UPDATE_AFTER"})
+    void enabledUpsertOverridesWindowWithoutValidatingEventTime(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = strategyWriter(client, describeCollectionResp(), true, 100L, 1000);
+        writer.write(timedRow(1L, "inside", kind, 99L));
+        writer.write(timedRow(2L, "outside", kind, 101L));
+        writer.write(rowWithoutMilvusMetadata(3L, "missing-time", kind));
+        writer.write(timedRow(4L, "invalid-time", kind, -1L));
+        writer.commit(false);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        verify(client).upsert(upserts.capture());
+        assertEquals(4, upserts.getValue().getData().size());
+        verify(client, never()).insert(any(InsertReq.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"INSERT", "UPDATE_AFTER"})
+    void disabledUpsertWithoutCutoffInsertsWithoutEventTime(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = strategyWriter(client, describeCollectionResp(), false, null, 1);
+        writer.write(rowWithoutMilvusMetadata(42L, "insert", kind));
+        verify(client).insert(any(InsertReq.class));
+        verify(client, never()).upsert(any(UpsertReq.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void enabledUpsertStillPreservesAutoIdPrimaryKeys(boolean withCutoff) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer =
+                strategyWriter(client, autoIdDescription(), true, withCutoff ? 100L : null, 1000);
+        writer.write(rowWithoutMilvusMetadata(42L, "insert", RowKind.INSERT));
+        writer.write(rowWithoutMilvusMetadata(43L, "after", RowKind.UPDATE_AFTER));
+        writer.write(timedRow(44L, "outside", RowKind.INSERT, 101L));
+        writer.write(timedRow(45L, "invalid-time", RowKind.UPDATE_AFTER, -1L));
+        writer.commit(false);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        org.mockito.InOrder order = inOrder(client);
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).insert(inserts.capture());
+        assertEquals(Arrays.asList(42L, 43L, 44L, 45L), deletes.getValue().getIds());
+        assertEquals("_default", deletes.getValue().getPartitionName());
+        assertEquals("_default", inserts.getValue().getPartitionName());
+        assertEquals(4, inserts.getValue().getData().size());
+        assertEquals(42L, inserts.getValue().getData().get(0).get("id").getAsLong());
+        assertEquals(43L, inserts.getValue().getData().get(1).get("id").getAsLong());
+        verify(client, never()).upsert(any(UpsertReq.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RowKind.class,
+            names = {"DELETE", "UPDATE_BEFORE"})
+    void enabledUpsertPreservesDeleteBeforeWriteAndPrimaryKeyChanges(RowKind kind) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        MilvusCdcWriter writer = strategyWriter(client, describeCollectionResp(), true, null, 1000);
+        writer.write(rowWithoutMilvusMetadata(1L, null, kind));
+        writer.write(rowWithoutMilvusMetadata(2L, "new-key", RowKind.UPDATE_AFTER));
+        assertFalse(writer.needCommit());
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<UpsertReq> upserts = ArgumentCaptor.forClass(UpsertReq.class);
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).upsert(upserts.capture());
+        assertEquals(Collections.singletonList(1L), deletes.getValue().getIds());
+        assertEquals(2L, upserts.getValue().getData().get(0).get("id").getAsLong());
+        order.verifyNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void autoIdUpsertDeleteFailureRetainsBatchWithoutInserting(boolean enableUpsert) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        when(client.delete(any(DeleteReq.class)))
+                .thenThrow(new IllegalStateException("delete unavailable"))
+                .thenReturn(null);
+        MilvusCdcWriter writer =
+                strategyWriter(client, autoIdDescription(), enableUpsert, 100L, 1000);
+        writer.write(timedRow(42L, "first", RowKind.INSERT, 99L));
+        writer.write(timedRow(43L, "second", RowKind.UPDATE_AFTER, 100L));
+
+        assertThrows(MilvusConnectorException.class, () -> writer.commit(false));
+        assertEquals(2L, writer.getWriteCache());
+        assertTrue(writer.needCommit());
+        verify(client, never()).insert(any(InsertReq.class));
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client, times(2)).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        assertEquals(Arrays.asList(42L, 43L), deletes.getAllValues().get(0).getIds());
+        assertEquals(deletes.getAllValues().get(0).getIds(), deletes.getValue().getIds());
+        assertEquals(2, inserts.getValue().getData().size());
+        assertFalse(writer.needCommit());
+        assertEquals(0L, writer.getWriteCache());
+        order.verifyNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void autoIdUpsertRetriesDeleteInsertAfterInsertFailure(
+            boolean enableUpsert, boolean appliedBeforeFailure) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        // Model visible copies to distinguish failure before apply from a lost response after
+        // apply.
+        List<Long> storedIds = new ArrayList<>(Arrays.asList(42L, 42L, 43L));
+        when(client.delete(any(DeleteReq.class)))
+                .thenAnswer(
+                        call -> {
+                            storedIds.removeAll(call.<DeleteReq>getArgument(0).getIds());
+                            return null;
+                        });
+        AtomicLong attempts = new AtomicLong();
+        when(client.insert(any(InsertReq.class)))
+                .thenAnswer(
+                        call -> {
+                            boolean first = attempts.incrementAndGet() == 1;
+                            if (!first || appliedBeforeFailure) {
+                                call.<InsertReq>getArgument(0)
+                                        .getData()
+                                        .forEach(row -> storedIds.add(row.get("id").getAsLong()));
+                            }
+                            if (first) {
+                                throw new IllegalStateException("insert response unavailable");
+                            }
+                            return null;
+                        });
+        MilvusCdcWriter writer =
+                strategyWriter(client, autoIdDescription(), enableUpsert, 100L, 1000);
+        writer.write(timedRow(42L, "first", RowKind.INSERT, 99L));
+        writer.write(timedRow(43L, "second", RowKind.UPDATE_AFTER, 100L));
+        assertThrows(MilvusConnectorException.class, () -> writer.commit(false));
+        assertEquals(
+                appliedBeforeFailure ? Arrays.asList(42L, 43L) : Collections.emptyList(),
+                storedIds);
+        assertEquals(2L, writer.getWriteCache());
+        assertTrue(writer.needCommit());
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).insert(inserts.capture());
+        order.verify(client, times(2)).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        assertEquals(deletes.getAllValues().get(0).getIds(), deletes.getValue().getIds());
+        assertEquals(inserts.getAllValues().get(0).getData(), inserts.getValue().getData());
+        assertEquals(Arrays.asList(42L, 43L), storedIds);
+        assertFalse(writer.needCommit());
+        assertEquals(0L, writer.getWriteCache());
+        writer.commit(false);
+        order.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void autoIdFailedUpsertIsRetriedBeforeAcceptingOutsideWindowRow() {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        when(client.insert(any(InsertReq.class)))
+                .thenThrow(new IllegalStateException("timeout"))
+                .thenReturn(null);
+        MilvusCdcWriter writer = windowWriter(client, autoIdDescription(), 100L, 1000);
+        writer.write(timedRow(42L, "inside", RowKind.INSERT, 100L));
+        SeaTunnelRow outside = timedRow(43L, "outside", RowKind.INSERT, 101L);
+        assertThrows(MilvusConnectorException.class, () -> writer.write(outside));
+        assertEquals(1L, writer.getWriteCache());
+        writer.write(outside);
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client, calls(1)).insert(inserts.capture());
+        order.verify(client, times(2)).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client, calls(1)).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client, calls(1)).insert(inserts.capture());
+        for (DeleteReq request : deletes.getAllValues()) {
+            assertEquals(Collections.singletonList(42L), request.getIds());
+        }
+        assertEquals(
+                inserts.getAllValues().get(0).getData(), inserts.getAllValues().get(1).getData());
+        assertEquals(43L, inserts.getValue().getData().get(0).get("id").getAsLong());
+        assertFalse(writer.needCommit());
+        order.verifyNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void autoIdUpsertPreservesPartitionScopeAndRepeatedKeyOrder(boolean partitionKey) {
+        MilvusClientV2 client = mock(MilvusClientV2.class);
+        DescribeCollectionResp description = autoIdDescription();
+        if (partitionKey) {
+            description.getCollectionSchema().getFieldSchemaList().get(1).setIsPartitionKey(true);
+        } else {
+            when(client.hasPartition(any(HasPartitionReq.class))).thenReturn(true);
+        }
+        MilvusCdcWriter writer = strategyWriter(client, description, true, null, 1000);
+        SeaTunnelRow first = rowWithoutMilvusMetadata(42L, "first", RowKind.INSERT);
+        SeaTunnelRow second = rowWithoutMilvusMetadata(42L, "second", RowKind.UPDATE_AFTER);
+        first.setPartitionName("part-a");
+        second.setPartitionName("part-a");
+        writer.write(first);
+        writer.write(second);
+        writer.commit(false);
+
+        org.mockito.InOrder order = inOrder(client);
+        if (!partitionKey) {
+            order.verify(client).hasPartition(any(HasPartitionReq.class));
+        }
+        ArgumentCaptor<DeleteReq> deletes = ArgumentCaptor.forClass(DeleteReq.class);
+        ArgumentCaptor<InsertReq> inserts = ArgumentCaptor.forClass(InsertReq.class);
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).insert(inserts.capture());
+        order.verify(client, times(2)).retryConfig(any(RetryConfig.class));
+        order.verify(client).delete(deletes.capture());
+        order.verify(client).insert(inserts.capture());
+        order.verify(client).retryConfig(any(RetryConfig.class));
+        for (DeleteReq request : deletes.getAllValues()) {
+            assertEquals(Collections.singletonList(42L), request.getIds());
+            assertEquals("test_collection", request.getCollectionName());
+            if (partitionKey) {
+                assertTrue(
+                        request.getPartitionName() == null || request.getPartitionName().isEmpty());
+            } else {
+                assertEquals("part_a", request.getPartitionName());
+            }
+        }
+        for (InsertReq request : inserts.getAllValues()) {
+            assertEquals(42L, request.getData().get(0).get("id").getAsLong());
+            assertEquals("test_collection", request.getCollectionName());
+            assertEquals(partitionKey ? "" : "part_a", request.getPartitionName());
+        }
+        assertEquals(
+                "first", inserts.getAllValues().get(0).getData().get(0).get("name").getAsString());
+        assertEquals("second", inserts.getValue().getData().get(0).get("name").getAsString());
+        order.verifyNoMoreInteractions();
+    }
+
+    private static MilvusCdcWriter windowWriter(
+            MilvusClientV2 client, DescribeCollectionResp description, long cutoff, int batchSize) {
+        return strategyWriter(client, description, false, cutoff, batchSize);
+    }
+
+    private static MilvusCdcWriter strategyWriter(
+            MilvusClientV2 client,
+            DescribeCollectionResp description,
+            boolean enableUpsert,
+            Long cutoff,
+            int batchSize) {
+        Map<String, Object> config = new HashMap<>();
+        config.put("enable_upsert", enableUpsert);
+        if (cutoff != null) {
+            config.put("cdc_overlap_upsert_cutoff_ms", cutoff);
+        }
+        config.put("batch_size", batchSize);
+        return new MilvusCdcWriter(
+                catalogTable(), ReadonlyConfig.fromMap(config), client, description, () -> 0L);
+    }
+
+    private static SeaTunnelRow timedRow(long id, String name, RowKind kind, long eventTime) {
+        SeaTunnelRow row = rowWithoutMilvusMetadata(id, name, kind);
+        MetadataUtil.setEventTime(row, eventTime);
+        return row;
     }
 
     private static MilvusClientException missingPartitionError() {
@@ -804,7 +1441,14 @@ class MilvusCdcWriterTest {
                 () -> 0L);
     }
 
-    private static DescribeCollectionResp autoIdDescription() {
+    // Keep failure tests bounded without adding retry-policy injection to production constructors.
+    static RetryConfig retryConfig(MilvusCdcWriter writer) throws Exception {
+        Field field = MilvusCdcWriter.class.getDeclaredField("clientRetryConfig");
+        field.setAccessible(true);
+        return (RetryConfig) field.get(writer);
+    }
+
+    static DescribeCollectionResp autoIdDescription() {
         DescribeCollectionResp base = describeCollectionResp();
         base.getCollectionSchema().getFieldSchemaList().get(0).setAutoID(true);
         return DescribeCollectionResp.builder()
@@ -867,7 +1511,7 @@ class MilvusCdcWriterTest {
         return row;
     }
 
-    private static CatalogTable catalogTable() {
+    static CatalogTable catalogTable() {
         List<Column> columns =
                 Arrays.asList(
                         PhysicalColumn.builder().name("id").dataType(BasicType.LONG_TYPE).build(),

@@ -27,13 +27,13 @@ When using the Milvus CDC sink, set `multi_table_sink_replica = 1` and effective
 - `channel_positions` must use physical pchannels, for example `by-dev-rootcoord-dml_0`. Do not use virtual channels with collection-id suffixes.
 - Each physical pchannel must appear only once in `channel_positions`.
 - Source collection schemas must remain unchanged after the job starts. Runtime schema changes such as adding, dropping, or renaming fields and changing field types are not supported yet; the source fails instead of applying schema evolution when subsequent DML no longer matches the startup schema.
-- The target collection schema must already exist when using the Milvus sink CDC mode. Use `autoID = false`, or enable the target collection property `allow_insert_auto_id = "true"` when `autoID = true`. Both paths insert with source primary keys and have the replay limitations described below. See [Milvus sink CDC mode](../sink/Milvus.md#cdc-write-mode).
+- The target collection schema must already exist when using the Milvus sink CDC mode. Use `autoID = false`, or enable the target collection property `allow_insert_auto_id = "true"` when `autoID = true`. By default, both paths insert with source primary keys and have the replay limitations described below. See [Milvus sink CDC mode](../sink/Milvus.md#cdc-write-mode).
 
 ## Supported Message Types
 
 | Milvus WAL message | SeaTunnel RowKind | Description |
 |--------------------|-------------------|-------------|
-| Insert             | INSERT            | Inserted with the source primary key for both AutoID and non-AutoID targets. |
+| Insert             | INSERT            | Written with the source primary key; both AutoID and non-AutoID targets can use the sink upsert strategy. |
 | Delete             | DELETE            | Deleted by primary key by the Milvus sink CDC writer. |
 
 Transaction control messages are consumed internally. When a Milvus transaction is split into multiple WAL messages, the source buffers DML rows until the transaction commit message is received, then emits the rows with the checkpoint offset advanced to the commit message. The sink may batch rows across original DML message boundaries according to its batch size, operation or partition-scope transitions, repeated insert keys, flush interval, and checkpoint lifecycle; Milvus sink CDC mode does not provide an atomic multi-operation transaction on the target side.
@@ -82,7 +82,11 @@ The source emits a whole WAL message before advancing the split offset. This pre
 
 For transactional messages, the source advances the checkpoint offset to the transaction commit message after the transaction rows are emitted. This preserves source-side recovery semantics.
 
-When used with the Milvus sink CDC mode, INSERT rows are inserted with source primary keys and DELETE rows are deleted by primary key, for both AutoID and non-AutoID targets. The sink uses at-least-once replay semantics: a request with an unknown outcome or checkpoint recovery may insert duplicate primary keys. Source-side checkpoint offset advancement does not make target inserts idempotent. This mode does not guarantee exactly-once final state or target-side atomicity for multi-operation transactions.
+By default, when used with the Milvus sink CDC mode, INSERT rows are inserted with source primary keys and DELETE rows are deleted by primary key, for both AutoID and non-AutoID targets. The sink uses at-least-once replay semantics: a request with an unknown outcome or checkpoint recovery may insert duplicate primary keys. Source-side checkpoint offset advancement does not make target inserts idempotent. This mode does not guarantee exactly-once final state or target-side atomicity for multi-operation transactions.
+
+For both AutoID and non-AutoID targets, `enable_upsert = true` on the sink uses full-row upsert for every INSERT/UPDATE_AFTER without requiring event time; DELETE/UPDATE_BEFORE remain deletes. With `enable_upsert = false` (the default), the sink supports an optional fixed `cdc_overlap_upsert_cutoff_ms` (inclusive Unix millisecond upper bound). Milvus-CDC supplies the source event time from each WAL message timetick through row metadata; qualifying writes use upsert, later writes remain insert.
+
+Non-AutoID targets use native upsert. AutoID targets require `allow_insert_auto_id = "true"` and implement upsert as delete followed by insert with the original primary keys. These two calls are not atomic: rows can be temporarily absent until insert or recovery succeeds. See [CDC overlap upsert window](../sink/Milvus.md#cdc-overlap-upsert-window) for ordering, recovery and control-plane requirements.
 
 ## Metrics
 

@@ -35,7 +35,7 @@ Write data from milvus to Milvus or Zilliz Cloud
 | schema_save_mode     | enum    | No       | CREATE_SCHEMA_WHEN_NOT_EXIST | Auto create table when table not exist.                   |
 | create_index         | boolean | No       | true                         | Create indexes when auto creating the collection.         |
 | enable_auto_id       | boolean | No       | false                        | Primary key column enable autoId.                         |
-| enable_upsert        | boolean | No       | false                        | Upsert data not insert.                                   |
+| enable_upsert        | boolean | No       | false                        | CDC mode only: use full-row upsert for INSERT/UPDATE_AFTER. AutoID targets require `allow_insert_auto_id = "true"` and use non-atomic delete then insert with the original keys; APPEND mode is unaffected. See [CDC upsert strategy](../en/connector-v2/sink/Milvus.md#cdc-upsert-strategy).                                   |
 | enable_dynamic_field | boolean | No       | true                         | Enable create table with dynamic field.                   |
 | batch_size           | int     | No       | 1000                         | Write batch size.                                         |
 | partition_num        | int     | No       | -                            | Number of partitions passed to Milvus create collection request. Currently used by Milvus partition key mode. |

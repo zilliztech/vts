@@ -43,6 +43,12 @@ class MilvusSinkFactoryTest {
     }
 
     @Test
+    void upsertDefaultsToDisabled() {
+        Assertions.assertFalse(
+                ReadonlyConfig.fromMap(new HashMap<>()).get(MilvusSinkConfig.ENABLE_UPSERT));
+    }
+
+    @Test
     void writeModeDefaultsToAppend() {
         ReadonlyConfig config = ReadonlyConfig.fromMap(new HashMap<>());
 
