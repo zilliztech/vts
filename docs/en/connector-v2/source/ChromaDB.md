@@ -72,11 +72,11 @@ Password for `BASIC` auth.
 
 ### batch_size [int]
 
-Batch size for fetching full records by ID list. Limited by ChromaDB's underlying SQLite `SQLITE_MAX_VARIABLE_NUMBER` (currently 32766); do not exceed this value.
+Maximum records per full-record request. When equal to `id_split_size`, the connector reads full records directly with `offset+limit`; otherwise it fetches records by ID list. Configure both sizes within the source server's request limits.
 
 ### id_split_size [int]
 
-Number of IDs to fetch per scan pass. Default 10000000 (10M), large enough for most collections. Reduce if memory is constrained.
+Number of IDs to fetch per scan pass. Default 10000000 (10M), large enough for most collections. Reduce if memory is constrained. When equal to `batch_size`, this becomes the full-record page size and the separate ID scan is skipped.
 
 ### connect_timeout [int]
 
@@ -92,12 +92,14 @@ Source plugin common parameters, please refer to [Source Common Options](../sour
 
 ## Data Read Strategy
 
-The connector uses a two-phase read approach:
+When `id_split_size == batch_size`, each page is one request with `offset`, `limit=batch_size`, and `include=["embeddings", "documents", "uris", "metadatas"]`. The returned records are emitted directly. No ID-only request or follow-up fetch by ID is made. An incomplete or empty page ends the collection scan; an exact final full page requires one additional empty request.
+
+When the two sizes differ, the connector keeps the two-phase read approach:
 
 1. **Phase 1 (ID Scan)**: Fetch all record IDs using offset-based pagination with `include=[]`, fetching `id_split_size` IDs per pass
 2. **Phase 2 (Batch Fetch)**: For each ID batch, fetch full record data (embeddings, documents, uris, metadatas) in chunks of `batch_size`
 
-This avoids the performance degradation of deep offset pagination.
+A larger ID page can reduce the number of offset scans. Direct pages remove the extra request when the two sizes are equal, but fetch full records at each offset, so deep-page cost still depends on the server. Fewer requests do not guarantee higher throughput. Both modes retain the existing collection split and checkpoint behavior.
 
 ## Output Column Schema
 
@@ -124,7 +126,7 @@ Empty collections (no records inserted, dimension unknown) will cause the job to
 :::
 
 :::caution Warning
-**Data consistency**: ChromaDB does not provide snapshot or cursor mechanisms. The connector scans IDs via `offset+limit` pagination, then fetches full data by ID list. When `id_split_size` is large enough (default 10M) to scan all IDs in one pass, the ID list acts as a point-in-time snapshot — subsequent data fetches by ID are unaffected by concurrent writes. Only when the collection exceeds `id_split_size` and requires multiple scan passes can writes or deletes between passes cause duplicates or missed records. For very large collections, pause writes during migration or increase `id_split_size` (mind the memory cost).
+**Data consistency**: Neither mode uses a shared snapshot. Direct mode pages full records with `offset+limit`; two-phase mode pages IDs before fetching their contents. Writes or deletes during pagination can shift offsets and cause missed or duplicate records. Fetching all IDs in one pass does not freeze later record values or prevent deletion. Keep source data stable throughout migration when complete coverage is required.
 :::
 
 ## Examples

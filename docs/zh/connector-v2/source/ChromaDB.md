@@ -72,11 +72,11 @@ ChromaDB 数据库名。
 
 ### batch_size [int]
 
-按 ID 列表批量拉取完整数据的每批大小。受 ChromaDB 底层 SQLite `SQLITE_MAX_VARIABLE_NUMBER` 限制（当前版本为 32766），不应超过此值。
+每次完整记录请求的最大条数。与 `id_split_size` 相等时，直接用 `offset+limit` 分页读取完整记录；不相等时，按 ID 列表批量读取。两个参数都应配置在源端允许的请求大小以内。
 
 ### id_split_size [int]
 
-每次 ID 扫描的数量。默认 10000000（1000 万），足以一次扫完大多数 collection。内存不足时可调小。
+每次 ID 扫描的数量。默认 10000000（1000 万），足以一次扫完大多数 collection。内存不足时可调小。与 `batch_size` 相等时，该值改为完整记录的页大小，跳过单独扫描 ID 的请求。
 
 ### connect_timeout [int]
 
@@ -92,12 +92,14 @@ Source 插件常用参数，具体请参考 [Source 常用选项](../source-comm
 
 ## 数据读取策略
 
-Connector 采用两阶段读取：
+当 `id_split_size == batch_size` 时，每页只发送一次请求，包含 `offset`、`limit=batch_size` 和 `include=["embeddings", "documents", "uris", "metadatas"]`，直接输出返回的完整记录。不再先查 ID 或按 ID 再查一次数据。返回不足一页或空页时结束；最后一页恰好满批时，需要再请求一次空页判断结束。
+
+两个参数不相等时，保留两阶段读取：
 
 1. **阶段 1（ID 扫描）**：通过 `offset+limit` 分页获取所有记录 ID（`include=[]`），每次获取 `id_split_size` 条
 2. **阶段 2（批量拉取）**：按 ID 列表批量获取完整记录（embeddings、documents、uris、metadatas），每批 `batch_size` 条
 
-这种方式避免了 `offset` 深翻页的性能退化。
+较大的 ID 页能减少 offset 扫描次数。两个参数相等时直接读可以减少额外请求，但每页都通过 offset 获取完整记录，深翻页成本仍取决于服务端，请求更少不保证吞吐一定更高。两种模式沿用已有的 collection split 和 checkpoint 行为。
 
 ## 输出列结构
 
@@ -124,7 +126,7 @@ ChromaDB Source 对每个 collection 产出**固定 5 列**：
 :::
 
 :::caution 注意
-**数据一致性**：ChromaDB 不提供快照或游标机制。Connector 通过 `offset+limit` 分页扫描 ID，再按 ID 列表拉取完整数据。当 `id_split_size` 足够大（默认 1000 万）能一次扫完所有 ID 时，ID 列表相当于一个时间点快照，后续按 ID 取数据不受并发写入影响。只有当 collection 记录数超过 `id_split_size` 需要多轮扫描时，两轮之间的写入或删除才可能导致数据重复或遗漏。对于超大 collection，建议迁移期间暂停写入，或调大 `id_split_size`（需注意内存开销）。
+**数据一致性**：两种模式都不使用共享快照。直接读取模式通过 `offset+limit` 翻页获取完整记录；两阶段模式先翻页获取 ID，再取完整记录。翻页期间写入或删除数据可能改变 offset 对应的位置，造成遗漏或重复。即使一次获取所有 ID，也不能固定后续记录的值或防止删除。若要求完整迁移，应在任务结束前保持源数据不变。
 :::
 
 ## 使用案例
