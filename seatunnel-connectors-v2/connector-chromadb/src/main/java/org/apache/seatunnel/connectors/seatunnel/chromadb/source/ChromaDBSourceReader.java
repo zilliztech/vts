@@ -33,13 +33,16 @@ import org.apache.seatunnel.connectors.seatunnel.chromadb.exception.ChromaDBConn
 import org.apache.seatunnel.connectors.seatunnel.chromadb.utils.ChromaDBConverter;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.Objects;
+import java.util.Set;
 
 @Slf4j
 public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDBSourceSplit> {
@@ -47,9 +50,11 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
     private final ReadonlyConfig config;
     private final Context context;
     private final Map<String, CatalogTable> collectionTables;
-    private final Deque<ChromaDBSourceSplit> pendingSplits = new ConcurrentLinkedDeque<>();
+    private final Deque<ChromaDBSourceSplit> pendingSplits = new ArrayDeque<>();
+    private final Object stateLock = new Object();
     private ChromaDBClient client;
-    private volatile boolean noMoreSplit;
+    private boolean noMoreSplit;
+    private boolean finished;
 
     public ChromaDBSourceReader(
             ReadonlyConfig config,
@@ -93,146 +98,148 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
 
     @Override
     public void pollNext(Collector<SeaTunnelRow> output) throws Exception {
-        synchronized (output.getCheckpointLock()) {
-            ChromaDBSourceSplit split = pendingSplits.poll();
-            if (split != null) {
-                String collectionId = split.getCollectionId();
-                CatalogTable table = collectionTables.get(collectionId);
-                if (table == null) {
-                    throw new ChromaDBConnectorException(
-                            ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                            "Split references collection '"
-                                    + collectionId
-                                    + "' which is not found in catalog. "
-                                    + "This may indicate a configuration change after checkpoint.");
-                } else {
-                    TableSchema tableSchema = table.getTableSchema();
-                    String tableId = split.getTablePath().toString();
-                    String collectionName = table.getTablePath().getTableName();
+        ChromaDBSourceSplit split;
+        synchronized (stateLock) {
+            split = pendingSplits.peekFirst();
+            if (split == null) {
+                signalFinished();
+                return;
+            }
+        }
+        CatalogTable table = collectionTables.get(split.getCollectionId());
+        if (table == null) {
+            throw new ChromaDBConnectorException(
+                    ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                    "Split references unknown collection '" + split.getCollectionId() + "'");
+        }
 
-                    log.info("Reading collection '{}' (id={})", collectionName, collectionId);
-                    readCollection(output, collectionId, tableSchema, tableId);
-                }
+        // Network calls run outside the checkpoint lock. A checkpoint taken during a request
+        // retains the old progress and safely repeats that request after recovery.
+        if (split.getPendingIds().isEmpty()) {
+            int limit =
+                    (int)
+                            Math.min(
+                                    config.get(ChromaDBSourceConfig.ID_SPLIT_SIZE),
+                                    split.getEndOffset() - split.getNextOffset());
+            ChromaDBClient.GetRecordsResult idResult =
+                    client.getRecords(
+                            split.getCollectionId(),
+                            new ChromaDBClient.GetRecordsRequest()
+                                    .setLimit(limit)
+                                    .setOffset(split.getNextOffset())
+                                    .setInclude(Collections.emptyList()));
+            List<String> ids = idResult == null ? null : idResult.getIds();
+            if (ids == null || ids.size() != limit || ids.stream().anyMatch(Objects::isNull)) {
+                throw new ChromaDBConnectorException(
+                        ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                        "Expected "
+                                + limit
+                                + " IDs for split "
+                                + split.splitId()
+                                + " at offset "
+                                + split.getNextOffset()
+                                + ", received "
+                                + (ids == null ? "null" : ids.size())
+                                + ". The source may have changed or capped the response. "
+                                + "Use a stable source and configure id_split_size within its request limit.");
+            }
+            split = split.withPendingIds(ids);
+            synchronized (stateLock) {
+                pendingSplits.removeFirst();
+                pendingSplits.addFirst(split);
             }
         }
 
-        if (noMoreSplit
+        int remaining = split.getPendingIds().size() - split.getPendingIdIndex();
+        int batchSize = Math.min(config.get(ChromaDBSourceConfig.BATCH_SIZE), remaining);
+        List<String> chunk =
+                split.getPendingIds()
+                        .subList(split.getPendingIdIndex(), split.getPendingIdIndex() + batchSize);
+        ChromaDBClient.GetRecordsResult result =
+                client.getRecords(
+                        split.getCollectionId(),
+                        new ChromaDBClient.GetRecordsRequest()
+                                .setIds(chunk)
+                                .setInclude(
+                                        Arrays.asList(
+                                                ChromaDBSourceConfig.INCLUDE_EMBEDDINGS,
+                                                ChromaDBSourceConfig.INCLUDE_DOCUMENTS,
+                                                ChromaDBSourceConfig.INCLUDE_URIS,
+                                                ChromaDBSourceConfig.INCLUDE_METADATAS)));
+        Set<String> requestedIds = new HashSet<>(chunk);
+        if (result == null
+                || result.getIds() == null
+                || result.getIds().size() != chunk.size()
+                || requestedIds.size() != chunk.size()
+                || !requestedIds.equals(new HashSet<>(result.getIds()))) {
+            throw new ChromaDBConnectorException(
+                    ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                    "ChromaDB did not return the requested IDs for split "
+                            + split.splitId()
+                            + " at offset "
+                            + split.getNextOffset()
+                            + ". Records may have changed or the request exceeds the server limit.");
+        }
+
+        synchronized (output.getCheckpointLock()) {
+            synchronized (stateLock) {
+                emitRows(output, table.getTableSchema(), split.getTablePath().toString(), result);
+                // Publish progress only after the whole batch has been emitted successfully.
+                ChromaDBSourceSplit next = split.advance(chunk.size());
+                pendingSplits.removeFirst();
+                if (next.getNextOffset() < next.getEndOffset()) {
+                    pendingSplits.addFirst(next);
+                }
+                signalFinished();
+            }
+        }
+    }
+
+    /** Called under stateLock, also used when an empty reader receives noMoreSplits. */
+    private void signalFinished() {
+        if (!finished
+                && noMoreSplit
                 && pendingSplits.isEmpty()
                 && Boundedness.BOUNDED.equals(context.getBoundedness())) {
+            finished = true;
             context.signalNoMoreElement();
         }
     }
 
     @Override
     public List<ChromaDBSourceSplit> snapshotState(long checkpointId) {
-        return new ArrayList<>(pendingSplits);
+        synchronized (stateLock) {
+            List<ChromaDBSourceSplit> snapshot = new ArrayList<>();
+            pendingSplits.forEach(split -> snapshot.add(split.copy()));
+            return snapshot;
+        }
     }
 
     @Override
     public void addSplits(List<ChromaDBSourceSplit> splits) {
-        log.info("Adding {} splits to reader", splits.size());
-        pendingSplits.addAll(splits);
+        synchronized (stateLock) {
+            if (finished) {
+                throw new IllegalStateException(
+                        "Cannot assign splits to a finished ChromaDB reader");
+            }
+            for (ChromaDBSourceSplit split : splits) {
+                if (split.getNextOffset() < split.getEndOffset()) {
+                    pendingSplits.addLast(split.copy());
+                }
+            }
+        }
     }
 
     @Override
     public void handleNoMoreSplits() {
-        log.info("No more splits to read");
-        noMoreSplit = true;
+        synchronized (stateLock) {
+            noMoreSplit = true;
+        }
     }
 
     @Override
-    public void notifyCheckpointComplete(long checkpointId) throws Exception {
-        // No action needed
-    }
-
-    // ── Reading logic (per collection) ──
-
-    private void readCollection(
-            Collector<SeaTunnelRow> output,
-            String collectionId,
-            TableSchema tableSchema,
-            String tableId) {
-        int idSplitSize = config.get(ChromaDBSourceConfig.ID_SPLIT_SIZE);
-        int batchSize = config.get(ChromaDBSourceConfig.BATCH_SIZE);
-        int offset = 0;
-        long totalRead = 0;
-
-        while (true) {
-            ChromaDBClient.GetRecordsResult idResult =
-                    client.getRecords(
-                            collectionId,
-                            new ChromaDBClient.GetRecordsRequest()
-                                    .setLimit(idSplitSize)
-                                    .setOffset(offset)
-                                    .setInclude(Collections.emptyList()));
-            if (idResult == null) {
-                throw new ChromaDBConnectorException(
-                        ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                        "Received null response from ChromaDB for collection '"
-                                + collectionId
-                                + "' at offset "
-                                + offset
-                                + ". This may indicate a proxy or load balancer issue.");
-            }
-            List<String> idSplit = idResult.getIds();
-
-            if (idSplit == null || idSplit.isEmpty()) {
-                break;
-            }
-
-            log.info(
-                    "Phase 1: fetched ID split [{}-{}], {} IDs",
-                    offset,
-                    offset + idSplit.size(),
-                    idSplit.size());
-
-            fetchDataInBatches(output, collectionId, tableSchema, tableId, idSplit, batchSize);
-
-            totalRead += idSplit.size();
-
-            if (idSplit.size() < idSplitSize) {
-                break;
-            }
-            offset += idSplitSize;
-        }
-
-        log.info("Read complete for collection: {} total records", totalRead);
-    }
-
-    private void fetchDataInBatches(
-            Collector<SeaTunnelRow> output,
-            String collectionId,
-            TableSchema tableSchema,
-            String tableId,
-            List<String> ids,
-            int batchSize) {
-        for (int i = 0; i < ids.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, ids.size());
-            List<String> chunk = ids.subList(i, end);
-
-            ChromaDBClient.GetRecordsResult result =
-                    client.getRecords(
-                            collectionId,
-                            new ChromaDBClient.GetRecordsRequest()
-                                    .setIds(chunk)
-                                    .setInclude(
-                                            Arrays.asList(
-                                                    ChromaDBSourceConfig.INCLUDE_EMBEDDINGS,
-                                                    ChromaDBSourceConfig.INCLUDE_DOCUMENTS,
-                                                    ChromaDBSourceConfig.INCLUDE_URIS,
-                                                    ChromaDBSourceConfig.INCLUDE_METADATAS)));
-            if (result == null) {
-                throw new ChromaDBConnectorException(
-                        ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                        "Received null response from ChromaDB when fetching data for collection '"
-                                + collectionId
-                                + "', batch offset "
-                                + i
-                                + ". This may indicate a proxy or load balancer issue.");
-            }
-
-            emitRows(output, tableSchema, tableId, result);
-        }
+    public void notifyCheckpointComplete(long checkpointId) {
+        // Progress is part of the split state.
     }
 
     private void emitRows(

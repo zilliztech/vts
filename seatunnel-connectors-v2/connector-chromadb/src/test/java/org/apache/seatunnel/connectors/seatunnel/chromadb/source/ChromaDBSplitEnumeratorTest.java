@@ -17,6 +17,8 @@
 
 package org.apache.seatunnel.connectors.seatunnel.chromadb.source;
 
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.serialization.DefaultSerializer;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
@@ -24,44 +26,65 @@ import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
-import org.junit.jupiter.api.Assertions;
+import org.apache.seatunnel.connectors.seatunnel.chromadb.client.ChromaDBClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-public class ChromaDBSplitEnumeratorTest {
-
-    @Mock private SourceSplitEnumerator.Context<ChromaDBSourceSplit> mockContext;
-
-    private LinkedHashMap<String, CatalogTable> collectionTables;
+class ChromaDBSplitEnumeratorTest {
+    private SourceSplitEnumerator.Context<ChromaDBSourceSplit> context;
+    private ChromaDBClient client;
+    private final Map<String, CatalogTable> tables = new LinkedHashMap<>();
+    private final Set<Integer> readers = new HashSet<>();
+    private final Map<Integer, List<ChromaDBSourceSplit>> assigned = new LinkedHashMap<>();
 
     @BeforeEach
     void setup() {
-        collectionTables = new LinkedHashMap<>();
-        collectionTables.put("col-id-a", buildTable("col_a"));
-        collectionTables.put("col-id-b", buildTable("col_b"));
-        collectionTables.put("col-id-c", buildTable("col_c"));
+        context = mock(SourceSplitEnumerator.Context.class);
+        client = mock(ChromaDBClient.class);
+        addTable("a");
+        when(context.registeredReaders()).thenAnswer(ignored -> new HashSet<>(readers));
+        doAnswer(
+                        invocation -> {
+                            int reader = invocation.getArgument(0);
+                            List<ChromaDBSourceSplit> splits = invocation.getArgument(1);
+                            assigned.computeIfAbsent(reader, ignored -> new ArrayList<>())
+                                    .addAll(splits);
+                            return null;
+                        })
+                .when(context)
+                .assignSplit(anyInt(), anyList());
     }
 
-    private CatalogTable buildTable(String name) {
+    private void addTable(String id) {
+        TablePath path = TablePath.of("db", id);
         TableSchema schema =
                 TableSchema.builder()
                         .columns(
@@ -71,119 +94,200 @@ public class ChromaDBSplitEnumeratorTest {
                                                 .dataType(BasicType.STRING_TYPE)
                                                 .build()))
                         .build();
-        return CatalogTable.of(
-                TableIdentifier.of("chromadb", TablePath.of("db", name)),
-                schema,
-                Collections.emptyMap(),
-                Collections.emptyList(),
-                "");
+        tables.put(
+                id,
+                CatalogTable.of(
+                        TableIdentifier.of("chromadb", path),
+                        schema,
+                        Collections.emptyMap(),
+                        Collections.emptyList(),
+                        ""));
+    }
+
+    private ChromaDBSplitEnumerator enumerator(int parallelism, ChromaDBSourceState state)
+            throws Exception {
+        when(context.currentParallelism()).thenReturn(parallelism);
+        ChromaDBSplitEnumerator result =
+                new ChromaDBSplitEnumerator(
+                        context,
+                        ReadonlyConfig.fromMap(
+                                Collections.singletonMap("url", "http://localhost:8000")),
+                        tables,
+                        state);
+        Field field = ChromaDBSplitEnumerator.class.getDeclaredField("client");
+        field.setAccessible(true);
+        field.set(result, client);
+        return result;
     }
 
     @Test
-    void testSplitsAssignedToRegisteredReaders() throws Exception {
-        Set<Integer> readers = new HashSet<>();
-        readers.add(0);
-        readers.add(1);
-        when(mockContext.registeredReaders()).thenReturn(readers);
-
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, collectionTables, null);
+    void rangesCoverCollectionExactlyAndAreAssignedInBatches() throws Exception {
+        readers.addAll(Arrays.asList(0, 1, 2));
+        when(client.countRecords("a")).thenReturn(10L);
+        ChromaDBSplitEnumerator enumerator = enumerator(3, null);
+        assertTimeoutPreemptively(Duration.ofSeconds(2), enumerator::run);
+        assertEquals(0, assigned.get(0).get(0).getStartOffset());
+        assertEquals(3, assigned.get(0).get(0).getEndOffset());
+        assertEquals(3, assigned.get(1).get(0).getStartOffset());
+        assertEquals(6, assigned.get(1).get(0).getEndOffset());
+        assertEquals(6, assigned.get(2).get(0).getStartOffset());
+        assertEquals(10, assigned.get(2).get(0).getEndOffset());
+        verify(context, times(3)).assignSplit(anyInt(), anyList());
+        verify(context, times(3)).signalNoMoreSplits(anyInt());
+        assertTrue(enumerator.snapshotState(1).getPendingSplits().isEmpty());
         enumerator.run();
+        verify(client, times(1)).countRecords("a");
+    }
 
-        // 3 splits assigned to 2 readers (round-robin)
-        ArgumentCaptor<List<ChromaDBSourceSplit>> captor = ArgumentCaptor.forClass(List.class);
-        verify(mockContext, times(3)).assignSplit(anyInt(), captor.capture());
+    @Test
+    void singleReaderUsesTheSameCountAndRangeProtocol() throws Exception {
+        readers.add(0);
+        when(client.countRecords("a")).thenReturn(17L);
+        ChromaDBSplitEnumerator enumerator = enumerator(1, null);
+        enumerator.run();
+        assertEquals(
+                new ChromaDBSourceSplit("a", tables.get("a").getTablePath(), 0, 17),
+                assigned.get(0).get(0));
+        verify(client).countRecords("a");
+    }
 
-        List<String> assignedIds = new ArrayList<>();
-        for (List<ChromaDBSourceSplit> splits : captor.getAllValues()) {
-            for (ChromaDBSourceSplit s : splits) {
-                assignedIds.add(s.getCollectionId());
-            }
+    @Test
+    void fewerRowsThanReadersSkipsEmptyRanges() throws Exception {
+        readers.addAll(Arrays.asList(0, 1, 2, 3));
+        when(client.countRecords("a")).thenReturn(2L);
+        ChromaDBSplitEnumerator enumerator = enumerator(4, null);
+        enumerator.run();
+        assertEquals(2, assigned.values().stream().mapToInt(List::size).sum());
+        assertEquals(0, assigned.get(0).get(0).getStartOffset());
+        assertEquals(1, assigned.get(1).get(0).getStartOffset());
+        verify(context, times(4)).signalNoMoreSplits(anyInt());
+    }
+
+    @Test
+    void emptyCollectionsAndMultipleCollectionsShareReaderPool() throws Exception {
+        addTable("b");
+        addTable("empty");
+        readers.addAll(Arrays.asList(0, 1));
+        when(client.countRecords("a")).thenReturn(4L);
+        when(client.countRecords("b")).thenReturn(6L);
+        ChromaDBSplitEnumerator enumerator = enumerator(2, null);
+        enumerator.run();
+        assertEquals(2, assigned.size());
+        for (List<ChromaDBSourceSplit> splits : assigned.values()) {
+            assertEquals(
+                    Arrays.asList("a", "b"),
+                    splits.stream()
+                            .map(ChromaDBSourceSplit::getCollectionId)
+                            .collect(Collectors.toList()));
         }
-        Assertions.assertEquals(3, assignedIds.size());
-        Assertions.assertTrue(assignedIds.contains("col-id-a"));
-        Assertions.assertTrue(assignedIds.contains("col-id-b"));
-        Assertions.assertTrue(assignedIds.contains("col-id-c"));
-
-        // All readers signaled no more splits
-        verify(mockContext, times(2)).signalNoMoreSplits(anyInt());
+        verify(context, times(2)).assignSplit(anyInt(), anyList());
+        assertEquals(tables.keySet(), enumerator.snapshotState(1).getEnumeratedCollectionIds());
     }
 
     @Test
-    void testSnapshotState() throws Exception {
-        Set<Integer> readers = new HashSet<>();
+    void lateReadersDoNotBlockOrReceivePrematureCompletion() throws Exception {
         readers.add(0);
-        when(mockContext.registeredReaders()).thenReturn(readers);
-
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, collectionTables, null);
-        enumerator.run();
-
-        ChromaDBSourceState state = enumerator.snapshotState(1L);
-        Assertions.assertNotNull(state);
-        // All splits assigned, pending should be empty
-        Assertions.assertTrue(state.getPendingSplits().isEmpty());
+        when(client.countRecords("a")).thenReturn(4L);
+        ChromaDBSplitEnumerator enumerator = enumerator(2, null);
+        assertTimeoutPreemptively(Duration.ofSeconds(2), enumerator::run);
+        verify(context, never()).assignSplit(anyInt(), anyList());
+        verify(context, never()).signalNoMoreSplits(anyInt());
+        assertEquals(2, enumerator.currentUnassignedSplitSize());
+        readers.add(1);
+        enumerator.registerReader(1);
+        assertEquals(2, assigned.size());
+        verify(context, times(2)).signalNoMoreSplits(anyInt());
     }
 
     @Test
-    void testRestoreFromState() throws Exception {
-        // Create state with 1 pending split
-        List<ChromaDBSourceSplit> pending = new ArrayList<>();
-        pending.add(new ChromaDBSourceSplit("col-id-a", TablePath.of("db", "col_a")));
-        ChromaDBSourceState state = new ChromaDBSourceState(pending, Collections.emptyMap());
+    void pendingCheckpointRestoresOriginalBoundsWithoutRecounting() throws Exception {
+        when(client.countRecords("a")).thenReturn(10L);
+        ChromaDBSplitEnumerator original = enumerator(3, null);
+        original.run();
+        DefaultSerializer<ChromaDBSourceState> serializer = new DefaultSerializer<>();
+        ChromaDBSourceState snapshot =
+                serializer.deserialize(serializer.serialize(original.snapshotState(1)));
+        readers.addAll(Arrays.asList(0, 1));
+        ChromaDBSplitEnumerator restored = enumerator(2, snapshot);
+        restored.run();
+        verify(client, times(1)).countRecords("a");
+        assertEquals(3, assigned.values().stream().mapToInt(List::size).sum());
+        assertEquals(10, assigned.get(0).get(1).getEndOffset());
+        assertEquals(3, snapshot.getPendingSplits().size());
+        assertEquals(0, restored.currentUnassignedSplitSize());
+    }
 
-        Set<Integer> readers = new HashSet<>();
+    @Test
+    void assignedSplitsAreRestoredOnlyFromReaderState() throws Exception {
         readers.add(0);
-        when(mockContext.registeredReaders()).thenReturn(readers);
-
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, collectionTables, state);
-        enumerator.run();
-
-        // Only the 1 pending split should be assigned (not all 3)
-        ArgumentCaptor<List<ChromaDBSourceSplit>> captor = ArgumentCaptor.forClass(List.class);
-        verify(mockContext, times(1)).assignSplit(anyInt(), captor.capture());
-        Assertions.assertEquals("col-id-a", captor.getValue().get(0).getCollectionId());
-    }
-
-    @Test
-    void testAddSplitsBack() throws Exception {
-        Set<Integer> readers = new HashSet<>();
+        when(client.countRecords("a")).thenReturn(5L);
+        ChromaDBSplitEnumerator original = enumerator(1, null);
+        original.run();
+        ChromaDBSourceState checkpoint = original.snapshotState(1);
+        ChromaDBSourceSplit readerCheckpoint =
+                assigned.get(0)
+                        .get(0)
+                        .withPendingIds(Arrays.asList("0", "1", "2", "3", "4"))
+                        .advance(2)
+                        .copy();
+        assigned.clear();
+        readers.clear();
+        ChromaDBSplitEnumerator restored = enumerator(1, checkpoint);
+        restored.addSplitsBack(Collections.singletonList(readerCheckpoint), 0);
+        restored.addSplitsBack(Collections.singletonList(readerCheckpoint), 0);
         readers.add(0);
-        when(mockContext.registeredReaders()).thenReturn(readers);
-
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, collectionTables, null);
-        enumerator.run();
-
-        // Add a split back
-        List<ChromaDBSourceSplit> returned = new ArrayList<>();
-        returned.add(new ChromaDBSourceSplit("col-id-b", TablePath.of("db", "col_b")));
-        enumerator.addSplitsBack(returned, 0);
-
-        // Should reassign
-        verify(mockContext, times(4)).assignSplit(anyInt(), anyList());
+        restored.registerReader(0);
+        restored.run();
+        assertEquals(Collections.singletonList(readerCheckpoint), assigned.get(0));
+        verify(client, times(1)).countRecords("a");
+        assertTrue(restored.snapshotState(2).getPendingSplits().isEmpty());
     }
 
     @Test
-    void testEmptyCollectionTables() throws Exception {
-        Set<Integer> readers = new HashSet<>();
+    void failedAssignmentRemainsPendingAndDoesNotSignalCompletion() throws Exception {
         readers.add(0);
-        when(mockContext.registeredReaders()).thenReturn(readers);
-
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, new LinkedHashMap<>(), null);
-        enumerator.run();
-
-        // No splits to assign
-        verify(mockContext, never()).assignSplit(anyInt(), anyList());
-        verify(mockContext).signalNoMoreSplits(0);
+        when(client.countRecords("a")).thenReturn(5L);
+        doThrow(new IllegalStateException("assignment failed"))
+                .when(context)
+                .assignSplit(anyInt(), anyList());
+        ChromaDBSplitEnumerator enumerator = enumerator(1, null);
+        assertThrows(IllegalStateException.class, enumerator::run);
+        assertEquals(1, enumerator.snapshotState(1).getPendingSplits().size());
+        verify(context, never()).signalNoMoreSplits(anyInt());
     }
 
     @Test
-    void testCurrentUnassignedSplitSize() {
-        ChromaDBSplitEnumerator enumerator =
-                new ChromaDBSplitEnumerator(mockContext, collectionTables, null);
-        Assertions.assertEquals(3, enumerator.currentUnassignedSplitSize());
+    void countAndRangeArithmeticDoNotOverflow() throws Exception {
+        readers.addAll(Arrays.asList(0, 1, 2));
+        when(client.countRecords("a")).thenReturn(Long.MAX_VALUE);
+        enumerator(3, null).run();
+        assertEquals(0, assigned.get(0).get(0).getStartOffset());
+        assertEquals(
+                assigned.get(0).get(0).getEndOffset(), assigned.get(1).get(0).getStartOffset());
+        assertEquals(
+                assigned.get(1).get(0).getEndOffset(), assigned.get(2).get(0).getStartOffset());
+        assertEquals(Long.MAX_VALUE, assigned.get(2).get(0).getEndOffset());
+    }
+
+    @Test
+    void checkpointDuringCountingDoesNotRecountAlreadyEnumeratedCollections() throws Exception {
+        addTable("b");
+        when(client.countRecords("a")).thenReturn(2L);
+        ChromaDBSplitEnumerator enumerator = enumerator(1, null);
+        AtomicReference<ChromaDBSourceState> checkpoint = new AtomicReference<>();
+        when(client.countRecords("b"))
+                .thenAnswer(
+                        ignored -> {
+                            checkpoint.set(enumerator.snapshotState(1));
+                            return 3L;
+                        });
+        enumerator.run();
+        assertEquals(Collections.singleton("a"), checkpoint.get().getEnumeratedCollectionIds());
+        doReturn(3L).when(client).countRecords("b");
+        readers.add(0);
+        enumerator(1, checkpoint.get()).run();
+        verify(client, times(1)).countRecords("a");
+        verify(client, times(2)).countRecords("b");
+        assertEquals(2, assigned.get(0).size());
     }
 }

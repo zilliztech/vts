@@ -115,14 +115,14 @@ public class ChromaDBSource
     @Override
     public SourceSplitEnumerator<ChromaDBSourceSplit, ChromaDBSourceState> createEnumerator(
             SourceSplitEnumerator.Context<ChromaDBSourceSplit> context) {
-        return new ChromaDBSplitEnumerator(context, collectionTables, null);
+        return new ChromaDBSplitEnumerator(context, config, collectionTables, null);
     }
 
     @Override
     public SourceSplitEnumerator<ChromaDBSourceSplit, ChromaDBSourceState> restoreEnumerator(
             SourceSplitEnumerator.Context<ChromaDBSourceSplit> context,
             ChromaDBSourceState state) {
-        return new ChromaDBSplitEnumerator(context, collectionTables, state);
+        return new ChromaDBSplitEnumerator(context, config, collectionTables, state);
     }
 
     static ChromaDBClient createClient(ReadonlyConfig config) {

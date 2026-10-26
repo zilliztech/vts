@@ -17,19 +17,109 @@
 
 package org.apache.seatunnel.connectors.seatunnel.chromadb.source;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import org.apache.seatunnel.api.source.SourceSplit;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 
-@Data
-@AllArgsConstructor
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/** A fixed offset range and its unconsumed ID page. Progress instances are immutable. */
+@Getter
+@EqualsAndHashCode
 public class ChromaDBSourceSplit implements SourceSplit {
+    private static final long serialVersionUID = 1L;
+
     private final String collectionId;
     private final TablePath tablePath;
+    private final long startOffset;
+    private final long endOffset;
+    private final long nextOffset;
+    private final List<String> pendingIds;
+    private final int pendingIdIndex;
+
+    public ChromaDBSourceSplit(
+            String collectionId, TablePath tablePath, long startOffset, long endOffset) {
+        this(
+                collectionId,
+                tablePath,
+                startOffset,
+                endOffset,
+                startOffset,
+                Collections.emptyList(),
+                0);
+    }
+
+    private ChromaDBSourceSplit(
+            String collectionId,
+            TablePath tablePath,
+            long startOffset,
+            long endOffset,
+            long nextOffset,
+            List<String> pendingIds,
+            int pendingIdIndex) {
+        if (startOffset < 0
+                || endOffset <= startOffset
+                || nextOffset < startOffset
+                || nextOffset > endOffset
+                || pendingIdIndex < 0
+                || pendingIdIndex > pendingIds.size()
+                || pendingIds.size() - pendingIdIndex > endOffset - nextOffset) {
+            throw new IllegalArgumentException("Invalid ChromaDB range or read progress");
+        }
+        this.collectionId = collectionId;
+        this.tablePath = tablePath;
+        this.startOffset = startOffset;
+        this.endOffset = endOffset;
+        this.nextOffset = nextOffset;
+        this.pendingIds = pendingIds;
+        this.pendingIdIndex = pendingIdIndex;
+    }
+
+    ChromaDBSourceSplit withPendingIds(List<String> ids) {
+        return new ChromaDBSourceSplit(
+                collectionId,
+                tablePath,
+                startOffset,
+                endOffset,
+                nextOffset,
+                Collections.unmodifiableList(new ArrayList<>(ids)),
+                0);
+    }
+
+    ChromaDBSourceSplit advance(int count) {
+        if (count <= 0 || count > pendingIds.size() - pendingIdIndex) {
+            throw new IllegalArgumentException("Invalid number of consumed IDs: " + count);
+        }
+        int nextIndex = pendingIdIndex + count;
+        boolean pageComplete = nextIndex == pendingIds.size();
+        return new ChromaDBSourceSplit(
+                collectionId,
+                tablePath,
+                startOffset,
+                endOffset,
+                nextOffset + count,
+                pageComplete ? Collections.emptyList() : pendingIds,
+                pageComplete ? 0 : nextIndex);
+    }
+
+    /** Checkpoints retain only IDs that have not been emitted. */
+    ChromaDBSourceSplit copy() {
+        return new ChromaDBSourceSplit(
+                collectionId,
+                tablePath,
+                startOffset,
+                endOffset,
+                nextOffset,
+                Collections.unmodifiableList(
+                        new ArrayList<>(pendingIds.subList(pendingIdIndex, pendingIds.size()))),
+                0);
+    }
 
     @Override
     public String splitId() {
-        return collectionId;
+        return collectionId + ":" + startOffset + ":" + endOffset;
     }
 }

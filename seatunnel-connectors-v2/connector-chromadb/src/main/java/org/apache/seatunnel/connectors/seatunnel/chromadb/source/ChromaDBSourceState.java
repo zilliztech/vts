@@ -22,11 +22,13 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 @Data
 @AllArgsConstructor
 public class ChromaDBSourceState implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final Set<String> enumeratedCollectionIds;
     private final List<ChromaDBSourceSplit> pendingSplits;
-    private final Map<Integer, List<ChromaDBSourceSplit>> assignedSplits;
 }

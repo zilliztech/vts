@@ -75,6 +75,39 @@ public class ChromaDBClientMockServerTest {
     // --- Successful requests ---
 
     @Test
+    void testCountUsesCollectionIdAndAuthentication() throws Exception {
+        server.enqueue(new MockResponse().setBody("4294967295"));
+        try (ChromaDBClient client = createClient("test-token")) {
+            Assertions.assertEquals(4294967295L, client.countRecords("col/id"));
+            RecordedRequest request = server.takeRequest();
+            Assertions.assertEquals("GET", request.getMethod());
+            Assertions.assertEquals(
+                    "/api/v2/tenants/default_tenant/databases/default_database/collections/col%2Fid/count",
+                    request.getPath());
+            Assertions.assertEquals("Bearer test-token", request.getHeader("Authorization"));
+        }
+    }
+
+    @Test
+    void testCountEmptyCollection() {
+        server.enqueue(new MockResponse().setBody("0"));
+        try (ChromaDBClient client = createClient("")) {
+            Assertions.assertEquals(0L, client.countRecords("col-id"));
+        }
+    }
+
+    @Test
+    void testCountRejectsInvalidResponse() {
+        for (String body : Arrays.asList("null", "-1")) {
+            server.enqueue(new MockResponse().setBody(body));
+            try (ChromaDBClient client = createClient("")) {
+                Assertions.assertThrows(
+                        ChromaDBConnectorException.class, () -> client.countRecords("col-id"));
+            }
+        }
+    }
+
+    @Test
     void testGetCollectionSuccess() throws Exception {
         server.enqueue(
                 new MockResponse()

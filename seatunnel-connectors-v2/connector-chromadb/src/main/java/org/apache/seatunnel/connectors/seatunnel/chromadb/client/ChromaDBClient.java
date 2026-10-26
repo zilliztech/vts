@@ -58,6 +58,8 @@ public class ChromaDBClient implements AutoCloseable {
             "/api/v2/tenants/%s/databases/%s/collections/%s";
     private static final String PATH_RECORDS_GET =
             "/api/v2/tenants/%s/databases/%s/collections/%s/get";
+    private static final String PATH_RECORDS_COUNT =
+            "/api/v2/tenants/%s/databases/%s/collections/%s/count";
 
     private final String baseUrl;
     private final String tenant;
@@ -144,6 +146,16 @@ public class ChromaDBClient implements AutoCloseable {
     }
 
     // ---- Record operations ----
+
+    public long countRecords(String collectionId) {
+        Long count = doGet(buildCollectionPath(PATH_RECORDS_COUNT, collectionId), Long.class);
+        if (count == null || count < 0) {
+            throw new ChromaDBConnectorException(
+                    ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                    "Invalid record count for collection '" + collectionId + "': " + count);
+        }
+        return count;
+    }
 
     public GetRecordsResult getRecords(String collectionId, GetRecordsRequest request) {
         return doPost(buildCollectionPath(PATH_RECORDS_GET, collectionId), request, GetRecordsResult.class);
@@ -299,7 +311,7 @@ public class ChromaDBClient implements AutoCloseable {
         private List<String> ids;
         private List<String> include;
         private Integer limit;
-        private Integer offset;
+        private Long offset;
 
         public GetRecordsRequest() {}
 
@@ -318,7 +330,7 @@ public class ChromaDBClient implements AutoCloseable {
             return this;
         }
 
-        public GetRecordsRequest setOffset(Integer offset) {
+        public GetRecordsRequest setOffset(long offset) {
             this.offset = offset;
             return this;
         }
