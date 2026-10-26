@@ -27,7 +27,6 @@ import org.apache.seatunnel.connectors.seatunnel.chromadb.config.ChromaDBSourceC
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 

@@ -81,13 +81,13 @@ public class ChromaDBSourceReaderTest {
         List<SeaTunnelRow> rows = new ArrayList<>();
 
         List<String> ids = result.getIds();
-        List<List<Float>> embeddings = result.getEmbeddings();
+        List<float[]> embeddings = result.getEmbeddings();
         List<String> documents = result.getDocuments();
         List<Map<String, Object>> metadatas = result.getMetadatas();
 
         for (int i = 0; i < ids.size(); i++) {
             String id = ids.get(i);
-            List<Float> embedding =
+            float[] embedding =
                     (embeddings != null && i < embeddings.size())
                             ? embeddings.get(i)
                             : null;
