@@ -257,6 +257,102 @@ class ChromaDBSplitEnumeratorTest {
     }
 
     @Test
+    void returnedRangeWaitsForItsReaderToRegisterAgain() throws Exception {
+        readers.addAll(Arrays.asList(0, 1));
+        when(client.countRecords("a")).thenReturn(4L);
+        ChromaDBSplitEnumerator enumerator = enumerator(2, null);
+        enumerator.run();
+        ChromaDBSourceSplit returned = assigned.get(1).get(0);
+        assigned.clear();
+
+        // Even a stale registered-reader view must not receive restored work before registration.
+        enumerator.addSplitsBack(Collections.singletonList(returned), 1);
+        enumerator.handleSplitRequest(0);
+        assertTrue(assigned.isEmpty());
+        enumerator.registerReader(1);
+        assertEquals(Collections.singletonMap(1, Collections.singletonList(returned)), assigned);
+        verify(context, times(1)).signalNoMoreSplits(0);
+        verify(context, times(2)).signalNoMoreSplits(1);
+    }
+
+    @Test
+    void returnedRangeKeepsItsReaderAcrossEnumeratorCheckpoint() throws Exception {
+        readers.addAll(Arrays.asList(0, 1));
+        when(client.countRecords("a")).thenReturn(8L);
+        ChromaDBSplitEnumerator original = enumerator(2, null);
+        original.run();
+        ChromaDBSourceSplit returned =
+                assigned.get(1)
+                        .get(0)
+                        .withPendingIds(Arrays.asList("4", "5", "6"))
+                        .advance(2)
+                        .copy();
+        readers.remove(1);
+        original.addSplitsBack(Collections.singletonList(returned), 1);
+        DefaultSerializer<ChromaDBSourceState> serializer = new DefaultSerializer<>();
+        ChromaDBSourceState checkpoint =
+                serializer.deserialize(serializer.serialize(original.snapshotState(1)));
+        assigned.clear();
+        ChromaDBSplitEnumerator restored = enumerator(2, checkpoint);
+        restored.run();
+        assertTrue(assigned.isEmpty());
+        assertEquals(1, restored.currentUnassignedSplitSize());
+        readers.add(1);
+        restored.registerReader(1);
+        assertEquals(Collections.singletonMap(1, Collections.singletonList(returned)), assigned);
+        assertTrue(restored.snapshotState(2).getPendingSplits().isEmpty());
+        assertEquals(1, checkpoint.getPendingSplits().size());
+        verify(client, times(1)).countRecords("a");
+    }
+
+    @Test
+    void returnedRangeFromRemovedReaderCanRestoreAtLowerParallelism() throws Exception {
+        readers.addAll(Arrays.asList(0, 1, 2));
+        when(client.countRecords("a")).thenReturn(12L);
+        ChromaDBSplitEnumerator original = enumerator(3, null);
+        original.run();
+        ChromaDBSourceSplit returned = assigned.get(2).get(0);
+        readers.remove(2);
+        original.addSplitsBack(Collections.singletonList(returned), 2);
+        ChromaDBSourceState checkpoint = original.snapshotState(1);
+        assigned.clear();
+        ChromaDBSplitEnumerator restored = enumerator(2, checkpoint);
+        restored.run();
+        assertEquals(Collections.singletonMap(0, Collections.singletonList(returned)), assigned);
+        assertEquals(0, restored.currentUnassignedSplitSize());
+        verify(client, times(1)).countRecords("a");
+    }
+
+    @Test
+    void readerWithoutReturnedRangesReceivesCompletionAfterRecovery() throws Exception {
+        readers.addAll(Arrays.asList(0, 1));
+        when(client.countRecords("a")).thenReturn(4L);
+        ChromaDBSplitEnumerator enumerator = enumerator(2, null);
+        enumerator.run();
+        assigned.clear();
+        readers.remove(1);
+        enumerator.addSplitsBack(Collections.emptyList(), 1);
+        readers.add(1);
+        enumerator.registerReader(1);
+        assertTrue(assigned.isEmpty());
+        verify(context, times(1)).signalNoMoreSplits(0);
+        verify(context, times(2)).signalNoMoreSplits(1);
+    }
+
+    @Test
+    void restoredReadersAreNotFinishedBeforeRun() throws Exception {
+        readers.add(0);
+        ChromaDBSourceState checkpoint =
+                new ChromaDBSourceState(Collections.singleton("a"), Collections.emptyList());
+        ChromaDBSplitEnumerator restored = enumerator(1, checkpoint);
+        restored.registerReader(0);
+        verify(context, never()).signalNoMoreSplits(anyInt());
+        restored.run();
+        verify(context).signalNoMoreSplits(0);
+        verify(client, never()).countRecords("a");
+    }
+
+    @Test
     void countAndRangeArithmeticDoNotOverflow() throws Exception {
         readers.addAll(Arrays.asList(0, 1, 2));
         when(client.countRecords("a")).thenReturn(Long.MAX_VALUE);

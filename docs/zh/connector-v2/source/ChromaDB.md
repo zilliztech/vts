@@ -90,6 +90,8 @@ HTTP 读取超时，单位秒。大 collection 可适当调大。
 
 Source 插件常用参数，具体请参考 [Source 常用选项](../source-common-options.md)。`parallelism` 控制 source reader 数量，默认使用 `env.parallelism`。所有配置的 collection 共享这些 reader，增加 collection 不会新建另一组 reader。
 
+Spark 使用协调式 source adapter：一个输入 partition 在共享 enumerator 下并发运行配置数量的 reader。
+
 ## 数据读取策略
 
 Enumerator 对每个 collection 调用一次 `count` 得到 `N`，按 source 并行度 `P` 创建至多 `P` 个非空范围。第 `i` 个范围为 `[floor(N*i/P), floor(N*(i+1)/P))`。这是 offset 范围，不是 ID 值范围。
@@ -106,6 +108,8 @@ Enumerator 对每个 collection 调用一次 `count` 得到 `N`，按 source 并
 ### Checkpoint 与恢复
 
 Checkpoint 在 enumerator 中保存未分配的范围，在 reader 中保存范围边界、下一个 offset 和未消费的 ID。恢复时保留原范围，优先消费剩余 ID，再扫描下一页。已生成范围的 collection 不会重新 count 或切分，即使恢复时修改了并行度。原范围数少于恢复后的 reader 数时，部分 reader 因此可能空闲。
+
+局部 reader 恢复时，退回的范围保留原 reader 归属，等待该 reader 重新注册，不会转交给可能已经结束的其他 reader。Enumerator checkpoint 会保存这些待分配范围的归属；全局恢复时若降低并行度，会重新映射已不存在的 reader 编号，范围边界和读取进度保持不变。
 
 如果 ID 页不足预期条数，或按 ID 未取回请求的记录，任务会报错，不会把范围静默标记为完成。这能发现部分源数据变化或请求大小配置问题，但无法发现并发修改造成的所有重复或遗漏。最后一次成功 checkpoint 之后输出的记录可能在恢复时重放，不保证 exactly-once。
 

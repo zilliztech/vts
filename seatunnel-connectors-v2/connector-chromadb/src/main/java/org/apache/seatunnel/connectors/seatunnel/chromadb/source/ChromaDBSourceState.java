@@ -21,7 +21,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Data
@@ -31,4 +33,10 @@ public class ChromaDBSourceState implements Serializable {
 
     private final Set<String> enumeratedCollectionIds;
     private final List<ChromaDBSourceSplit> pendingSplits;
+    private final Map<String, Integer> pendingSplitReaders;
+
+    public ChromaDBSourceState(
+            Set<String> enumeratedCollectionIds, List<ChromaDBSourceSplit> pendingSplits) {
+        this(enumeratedCollectionIds, pendingSplits, Collections.emptyMap());
+    }
 }

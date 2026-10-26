@@ -44,7 +44,11 @@ public class ChromaDBSplitEnumerator
     private final Map<String, CatalogTable> collectionTables;
     private final Set<String> enumeratedCollectionIds;
     private final Map<String, ChromaDBSourceSplit> pendingSplits = new LinkedHashMap<>();
+    private final Map<String, Integer> pendingSplitReaders = new LinkedHashMap<>();
+    private final Set<Integer> readersAwaitingRegistration = new HashSet<>();
+    private final Set<Integer> readersSignalledNoMoreSplits = new HashSet<>();
     private final Object stateLock = new Object();
+    private boolean enumerationComplete;
     private ChromaDBClient client;
 
     public ChromaDBSplitEnumerator(
@@ -60,6 +64,9 @@ public class ChromaDBSplitEnumerator
         if (state != null) {
             for (ChromaDBSourceSplit split : state.getPendingSplits()) {
                 pendingSplits.put(split.splitId(), split.copy());
+            }
+            if (state.getPendingSplitReaders() != null) {
+                pendingSplitReaders.putAll(state.getPendingSplitReaders());
             }
         }
     }
@@ -108,32 +115,58 @@ public class ChromaDBSplitEnumerator
                     splits.size());
         }
         synchronized (stateLock) {
+            // A full restore may reduce parallelism. Only then can a returned range's
+            // old reader index be remapped; local failover retains its original owner.
+            pendingSplitReaders.replaceAll((splitId, reader) -> reader % parallelism);
+            readersAwaitingRegistration.removeIf(reader -> reader >= parallelism);
+            enumerationComplete = true;
             assignPendingSplits();
         }
     }
 
     /** Called under stateLock; late registration triggers assignment rather than blocking run(). */
     private void assignPendingSplits() {
-        if (!enumeratedCollectionIds.containsAll(collectionTables.keySet())) {
+        // Restore callbacks precede run(). Do not finish an empty reader before all
+        // reader checkpoint splits have been returned to the enumerator.
+        if (!enumerationComplete) {
             return;
         }
         List<Integer> readers = new ArrayList<>(context.registeredReaders());
-        if (readers.isEmpty() || readers.size() < context.currentParallelism()) {
+        readers.removeAll(readersAwaitingRegistration);
+        boolean hasUnownedSplits =
+                pendingSplits.keySet().stream()
+                        .anyMatch(splitId -> !pendingSplitReaders.containsKey(splitId));
+        if (readers.isEmpty()
+                || (hasUnownedSplits && readers.size() < context.currentParallelism())) {
             return;
         }
         Collections.sort(readers);
         Map<Integer, List<ChromaDBSourceSplit>> assignments = new LinkedHashMap<>();
         int index = 0;
         for (ChromaDBSourceSplit split : pendingSplits.values()) {
-            int reader = readers.get(index++ % readers.size());
+            Integer reader = pendingSplitReaders.get(split.splitId());
+            if (reader == null) {
+                reader = readers.get(index++ % readers.size());
+            } else if (!readers.contains(reader)) {
+                continue;
+            }
             assignments.computeIfAbsent(reader, ignored -> new ArrayList<>()).add(split);
         }
         for (Map.Entry<Integer, List<ChromaDBSourceSplit>> assignment : assignments.entrySet()) {
             context.assignSplit(assignment.getKey(), assignment.getValue());
             // Assigned state belongs to the reader; the engine returns its checkpoint on recovery.
-            assignment.getValue().forEach(split -> pendingSplits.remove(split.splitId()));
+            assignment.getValue().forEach(
+                    split -> {
+                        pendingSplits.remove(split.splitId());
+                        pendingSplitReaders.remove(split.splitId());
+                    });
         }
-        readers.forEach(context::signalNoMoreSplits);
+        for (int reader : readers) {
+            if (!readersSignalledNoMoreSplits.contains(reader)) {
+                context.signalNoMoreSplits(reader);
+                readersSignalledNoMoreSplits.add(reader);
+            }
+        }
     }
 
     @Override
@@ -147,8 +180,13 @@ public class ChromaDBSplitEnumerator
     @Override
     public void addSplitsBack(List<ChromaDBSourceSplit> splits, int subtaskId) {
         synchronized (stateLock) {
-            splits.forEach(split -> pendingSplits.put(split.splitId(), split.copy()));
-            assignPendingSplits();
+            splits.forEach(
+                    split -> {
+                        pendingSplits.put(split.splitId(), split.copy());
+                        pendingSplitReaders.put(split.splitId(), subtaskId);
+                    });
+            readersAwaitingRegistration.add(subtaskId);
+            readersSignalledNoMoreSplits.remove(subtaskId);
         }
     }
 
@@ -169,6 +207,8 @@ public class ChromaDBSplitEnumerator
     @Override
     public void registerReader(int subtaskId) {
         synchronized (stateLock) {
+            readersAwaitingRegistration.remove(subtaskId);
+            readersSignalledNoMoreSplits.remove(subtaskId);
             assignPendingSplits();
         }
     }
@@ -178,7 +218,10 @@ public class ChromaDBSplitEnumerator
         synchronized (stateLock) {
             List<ChromaDBSourceSplit> splits = new ArrayList<>();
             pendingSplits.values().forEach(split -> splits.add(split.copy()));
-            return new ChromaDBSourceState(new HashSet<>(enumeratedCollectionIds), splits);
+            return new ChromaDBSourceState(
+                    new HashSet<>(enumeratedCollectionIds),
+                    splits,
+                    new LinkedHashMap<>(pendingSplitReaders));
         }
     }
 

@@ -90,6 +90,8 @@ HTTP read timeout in seconds. Increase for very large collections.
 
 Source plugin common parameters, please refer to [Source Common Options](../source-common-options.md) for details. `parallelism` selects the number of source readers and defaults to `env.parallelism`. All configured collections share these readers; adding a collection does not create another reader pool.
 
+Spark uses the coordinated source adapter: one input partition runs the configured readers concurrently under a shared enumerator.
+
 ## Data Read Strategy
 
 For each collection, the enumerator calls `count` once to obtain `N` and creates up to `P` nonempty ranges, where `P` is the source parallelism. Range `i` is `[floor(N*i/P), floor(N*(i+1)/P))`. These are offset ranges, not ID value ranges.
@@ -106,6 +108,8 @@ Full-record fetches use explicit IDs and do not use offset pagination. A larger 
 ### Checkpoint and recovery
 
 Checkpoints retain unassigned ranges in the enumerator and each reader's range boundaries, next offset and unconsumed IDs. Recovery keeps these boundaries and resumes pending IDs before scanning another page. Collections whose ranges have already been created are not counted or split again, even if parallelism changes. A restored job with fewer ranges than readers may therefore leave some readers idle.
+
+During local reader recovery, returned ranges keep their original reader assignment and wait for that reader to register again. They are not sent to peers that may have already finished. Enumerator checkpoints preserve these pending assignments; a full restore at lower parallelism remaps reader indices that no longer exist without changing range boundaries or progress.
 
 An incomplete ID page or missing requested records fails the job instead of silently completing the range. This detects some source changes or incorrectly sized requests, but it cannot detect all duplicates or omissions caused by concurrent mutations. Records emitted after the last completed checkpoint may be replayed; exactly-once delivery is not guaranteed.
 
