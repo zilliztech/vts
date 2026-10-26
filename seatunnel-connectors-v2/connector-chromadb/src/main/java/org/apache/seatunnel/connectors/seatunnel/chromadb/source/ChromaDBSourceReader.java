@@ -35,14 +35,27 @@ import org.apache.seatunnel.connectors.seatunnel.chromadb.utils.ChromaDBConverte
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+/**
+ * Source reader that executes Phase 2 only — fetching full records by a pre-assigned ID list.
+ *
+ * <p>Phase 1 (scanning IDs via offset/limit) is owned by {@link ChromaDBSplitEnumerator}, which
+ * hands out shards of the ID list as splits. This puts Phase 1's single-threaded sequential
+ * cost in one place and lets N readers parallelize the dominant Phase 2 work end-to-end with
+ * the sink.
+ *
+ * <p>When the pending split queue is empty, the reader calls {@code context.sendSplitRequest()}
+ * to signal the enumerator that it's ready for more — which is the backpressure mechanism that
+ * prevents the enumerator from over-producing splits into reader queues.
+ */
 @Slf4j
 public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDBSourceSplit> {
+
+    private static final long EMPTY_QUEUE_SLEEP_MS = 50L;
 
     private final ReadonlyConfig config;
     private final Context context;
@@ -50,6 +63,7 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
     private final Deque<ChromaDBSourceSplit> pendingSplits = new ConcurrentLinkedDeque<>();
     private ChromaDBClient client;
     private volatile boolean noMoreSplit;
+    private volatile boolean splitRequestOutstanding;
 
     public ChromaDBSourceReader(
             ReadonlyConfig config,
@@ -64,7 +78,7 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
     public void open() throws Exception {
         validateConfig();
         client = ChromaDBSource.createClient(config);
-        log.info("ChromaDB client connected, reader index: {}", context.getIndexOfSubtask());
+        log.info("ChromaDB reader {} opened", context.getIndexOfSubtask());
     }
 
     private void validateConfig() {
@@ -96,31 +110,88 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
         synchronized (output.getCheckpointLock()) {
             ChromaDBSourceSplit split = pendingSplits.poll();
             if (split != null) {
-                String collectionId = split.getCollectionId();
-                CatalogTable table = collectionTables.get(collectionId);
-                if (table == null) {
-                    throw new ChromaDBConnectorException(
-                            ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                            "Split references collection '"
-                                    + collectionId
-                                    + "' which is not found in catalog. "
-                                    + "This may indicate a configuration change after checkpoint.");
-                } else {
-                    TableSchema tableSchema = table.getTableSchema();
-                    String tableId = split.getTablePath().toString();
-                    String collectionName = table.getTablePath().getTableName();
-
-                    log.info("Reading collection '{}' (id={})", collectionName, collectionId);
-                    readCollection(output, collectionId, tableSchema, tableId);
-                }
+                splitRequestOutstanding = false;
+                processSplit(output, split);
+                return;
             }
         }
 
-        if (noMoreSplit
-                && pendingSplits.isEmpty()
-                && Boundedness.BOUNDED.equals(context.getBoundedness())) {
-            context.signalNoMoreElement();
+        if (noMoreSplit) {
+            if (Boundedness.BOUNDED.equals(context.getBoundedness())) {
+                context.signalNoMoreElement();
+            }
+            return;
         }
+
+        // Queue is empty and there may be more splits coming — ask for one.
+        if (!splitRequestOutstanding) {
+            context.sendSplitRequest();
+            splitRequestOutstanding = true;
+        }
+        Thread.sleep(EMPTY_QUEUE_SLEEP_MS);
+    }
+
+    private void processSplit(Collector<SeaTunnelRow> output, ChromaDBSourceSplit split) {
+        String collectionId = split.getCollectionId();
+        CatalogTable table = collectionTables.get(collectionId);
+        if (table == null) {
+            throw new ChromaDBConnectorException(
+                    ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                    "Split references collection '"
+                            + collectionId
+                            + "' which is not found in catalog. "
+                            + "This may indicate a configuration change after checkpoint.");
+        }
+        List<String> ids = split.getIds();
+        if (ids == null || ids.isEmpty()) {
+            log.debug("Split {} has no IDs; nothing to do", split.splitId());
+            return;
+        }
+
+        TableSchema tableSchema = table.getTableSchema();
+        String tableId = split.getTablePath().toString();
+        int batchSize = config.get(ChromaDBSourceConfig.BATCH_SIZE);
+
+        log.info(
+                "Processing split {} ({} ids) for collection '{}'",
+                split.splitId(),
+                ids.size(),
+                collectionId);
+
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, ids.size());
+            List<String> chunk = ids.subList(i, end);
+            fetchAndEmit(output, collectionId, tableSchema, tableId, chunk, i);
+        }
+    }
+
+    private void fetchAndEmit(
+            Collector<SeaTunnelRow> output,
+            String collectionId,
+            TableSchema tableSchema,
+            String tableId,
+            List<String> chunk,
+            int chunkOffset) {
+        ChromaDBClient.GetRecordsResult result =
+                client.getRecords(
+                        collectionId,
+                        new ChromaDBClient.GetRecordsRequest()
+                                .setIds(chunk)
+                                .setInclude(
+                                        Arrays.asList(
+                                                ChromaDBSourceConfig.INCLUDE_EMBEDDINGS,
+                                                ChromaDBSourceConfig.INCLUDE_DOCUMENTS,
+                                                ChromaDBSourceConfig.INCLUDE_URIS,
+                                                ChromaDBSourceConfig.INCLUDE_METADATAS)));
+        if (result == null) {
+            throw new ChromaDBConnectorException(
+                    ChromaDBConnectorErrorCode.READ_DATA_FAIL,
+                    "Received null response from ChromaDB when fetching data for collection '"
+                            + collectionId
+                            + "', chunk offset "
+                            + chunkOffset);
+        }
+        emitRows(output, tableSchema, tableId, result);
     }
 
     @Override
@@ -130,109 +201,20 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
 
     @Override
     public void addSplits(List<ChromaDBSourceSplit> splits) {
-        log.info("Adding {} splits to reader", splits.size());
+        log.info("Reader {} received {} splits", context.getIndexOfSubtask(), splits.size());
         pendingSplits.addAll(splits);
+        splitRequestOutstanding = false;
     }
 
     @Override
     public void handleNoMoreSplits() {
-        log.info("No more splits to read");
+        log.info("Reader {} received no-more-splits signal", context.getIndexOfSubtask());
         noMoreSplit = true;
     }
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         // No action needed
-    }
-
-    // ── Reading logic (per collection) ──
-
-    private void readCollection(
-            Collector<SeaTunnelRow> output,
-            String collectionId,
-            TableSchema tableSchema,
-            String tableId) {
-        int idSplitSize = config.get(ChromaDBSourceConfig.ID_SPLIT_SIZE);
-        int batchSize = config.get(ChromaDBSourceConfig.BATCH_SIZE);
-        int offset = 0;
-        long totalRead = 0;
-
-        while (true) {
-            ChromaDBClient.GetRecordsResult idResult =
-                    client.getRecords(
-                            collectionId,
-                            new ChromaDBClient.GetRecordsRequest()
-                                    .setLimit(idSplitSize)
-                                    .setOffset(offset)
-                                    .setInclude(Collections.emptyList()));
-            if (idResult == null) {
-                throw new ChromaDBConnectorException(
-                        ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                        "Received null response from ChromaDB for collection '"
-                                + collectionId
-                                + "' at offset "
-                                + offset
-                                + ". This may indicate a proxy or load balancer issue.");
-            }
-            List<String> idSplit = idResult.getIds();
-
-            if (idSplit == null || idSplit.isEmpty()) {
-                break;
-            }
-
-            log.info(
-                    "Phase 1: fetched ID split [{}-{}], {} IDs",
-                    offset,
-                    offset + idSplit.size(),
-                    idSplit.size());
-
-            fetchDataInBatches(output, collectionId, tableSchema, tableId, idSplit, batchSize);
-
-            totalRead += idSplit.size();
-
-            if (idSplit.size() < idSplitSize) {
-                break;
-            }
-            offset += idSplitSize;
-        }
-
-        log.info("Read complete for collection: {} total records", totalRead);
-    }
-
-    private void fetchDataInBatches(
-            Collector<SeaTunnelRow> output,
-            String collectionId,
-            TableSchema tableSchema,
-            String tableId,
-            List<String> ids,
-            int batchSize) {
-        for (int i = 0; i < ids.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, ids.size());
-            List<String> chunk = ids.subList(i, end);
-
-            ChromaDBClient.GetRecordsResult result =
-                    client.getRecords(
-                            collectionId,
-                            new ChromaDBClient.GetRecordsRequest()
-                                    .setIds(chunk)
-                                    .setInclude(
-                                            Arrays.asList(
-                                                    ChromaDBSourceConfig.INCLUDE_EMBEDDINGS,
-                                                    ChromaDBSourceConfig.INCLUDE_DOCUMENTS,
-                                                    ChromaDBSourceConfig.INCLUDE_URIS,
-                                                    ChromaDBSourceConfig.INCLUDE_METADATAS)));
-            if (result == null) {
-                throw new ChromaDBConnectorException(
-                        ChromaDBConnectorErrorCode.READ_DATA_FAIL,
-                        "Received null response from ChromaDB when fetching data for collection '"
-                                + collectionId
-                                + "', batch offset "
-                                + i
-                                + ". This may indicate a proxy or load balancer issue.");
-            }
-
-            emitRows(output, tableSchema, tableId, result);
-        }
     }
 
     private void emitRows(

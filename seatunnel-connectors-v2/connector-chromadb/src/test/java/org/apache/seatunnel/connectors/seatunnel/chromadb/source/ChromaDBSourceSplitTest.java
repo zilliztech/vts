@@ -21,39 +21,86 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 public class ChromaDBSourceSplitTest {
 
     @Test
-    void testSplitIdReturnsCollectionId() {
+    void testSplitIdEncodesCollectionAndSequence() {
         ChromaDBSourceSplit split =
-                new ChromaDBSourceSplit("uuid-123", TablePath.of("db", "my_col"));
-        Assertions.assertEquals("uuid-123", split.splitId());
+                new ChromaDBSourceSplit(
+                        "uuid-123",
+                        TablePath.of("db", "my_col"),
+                        0L,
+                        Arrays.asList("a", "b"));
+        Assertions.assertEquals("uuid-123#0", split.splitId());
         Assertions.assertEquals("uuid-123", split.getCollectionId());
+        Assertions.assertEquals(0L, split.getSplitSeq());
     }
 
     @Test
-    void testTablePath() {
+    void testSplitIdsAreUniquePerSequence() {
+        ChromaDBSourceSplit a =
+                new ChromaDBSourceSplit(
+                        "col", TablePath.of("db", "col"), 0L, Collections.singletonList("x"));
+        ChromaDBSourceSplit b =
+                new ChromaDBSourceSplit(
+                        "col", TablePath.of("db", "col"), 1L, Collections.singletonList("y"));
+        Assertions.assertNotEquals(a.splitId(), b.splitId());
+        Assertions.assertEquals("col#0", a.splitId());
+        Assertions.assertEquals("col#1", b.splitId());
+    }
+
+    @Test
+    void testTablePathPreserved() {
         TablePath path = TablePath.of("default_database", "test_collection");
-        ChromaDBSourceSplit split = new ChromaDBSourceSplit("col-id", path);
+        ChromaDBSourceSplit split =
+                new ChromaDBSourceSplit(
+                        "col-id", path, 5L, Collections.emptyList());
         Assertions.assertEquals(path, split.getTablePath());
         Assertions.assertEquals("test_collection", split.getTablePath().getTableName());
     }
 
     @Test
-    void testEquality() {
+    void testIdsAreDefensivelyCopied() {
+        java.util.ArrayList<String> mutable = new java.util.ArrayList<>();
+        mutable.add("a");
+        mutable.add("b");
+        ChromaDBSourceSplit split =
+                new ChromaDBSourceSplit("col", TablePath.of("db", "col"), 0L, mutable);
+        mutable.add("c");
+        Assertions.assertEquals(2, split.getIds().size());
+        Assertions.assertEquals("a", split.getIds().get(0));
+        Assertions.assertEquals("b", split.getIds().get(1));
+    }
+
+    @Test
+    void testNullIdsBecomeEmptyList() {
+        ChromaDBSourceSplit split =
+                new ChromaDBSourceSplit("col", TablePath.of("db", "col"), 0L, null);
+        Assertions.assertNotNull(split.getIds());
+        Assertions.assertTrue(split.getIds().isEmpty());
+    }
+
+    @Test
+    void testEqualityWithSameFields() {
         TablePath path = TablePath.of("db", "col");
-        ChromaDBSourceSplit a = new ChromaDBSourceSplit("id-1", path);
-        ChromaDBSourceSplit b = new ChromaDBSourceSplit("id-1", path);
+        List<String> ids = Arrays.asList("a", "b");
+        ChromaDBSourceSplit a = new ChromaDBSourceSplit("col", path, 0L, ids);
+        ChromaDBSourceSplit b = new ChromaDBSourceSplit("col", path, 0L, ids);
         Assertions.assertEquals(a, b);
         Assertions.assertEquals(a.hashCode(), b.hashCode());
     }
 
     @Test
-    void testInequality() {
+    void testInequalityOnDifferentSequence() {
+        TablePath path = TablePath.of("db", "col");
         ChromaDBSourceSplit a =
-                new ChromaDBSourceSplit("id-1", TablePath.of("db", "col_a"));
+                new ChromaDBSourceSplit("col", path, 0L, Collections.singletonList("a"));
         ChromaDBSourceSplit b =
-                new ChromaDBSourceSplit("id-2", TablePath.of("db", "col_b"));
+                new ChromaDBSourceSplit("col", path, 1L, Collections.singletonList("a"));
         Assertions.assertNotEquals(a, b);
     }
 }

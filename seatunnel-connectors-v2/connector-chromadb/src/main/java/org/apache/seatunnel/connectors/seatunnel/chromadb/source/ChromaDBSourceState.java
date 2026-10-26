@@ -23,10 +23,24 @@ import lombok.Data;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+/**
+ * Enumerator state for checkpoint/restore.
+ *
+ * <p>Granularity is per-collection: if a job fails mid-collection, the whole collection is
+ * re-read on restart. This assumes the sink is idempotent (upsert-by-ID), which is the case for
+ * Milvus and most vector stores. Finer-grained recovery can be added later if needed.
+ */
 @Data
 @AllArgsConstructor
 public class ChromaDBSourceState implements Serializable {
+    /** Collections that have been fully processed — skipped on restart. */
+    private final Set<String> completedCollectionIds;
+
+    /** Splits generated but not yet successfully assigned (rare; kept for completeness). */
     private final List<ChromaDBSourceSplit> pendingSplits;
+
+    /** Splits currently assigned to readers; re-queued on reader failure. */
     private final Map<Integer, List<ChromaDBSourceSplit>> assignedSplits;
 }
