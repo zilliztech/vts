@@ -327,7 +327,7 @@ public class ChromaDBClient implements AutoCloseable {
     @Getter
     public static class GetRecordsResult implements Serializable {
         private List<String> ids;
-        private List<List<Float>> embeddings;
+        private List<float[]> embeddings;
         private List<String> documents;
         private List<String> uris;
         private List<Map<String, Object>> metadatas;

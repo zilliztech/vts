@@ -30,12 +30,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 public class ChromaDBConverterTest {
@@ -94,7 +92,7 @@ public class ChromaDBConverterTest {
     @Test
     public void testConvertFullRecord() {
         TableSchema schema = buildFullSchema();
-        List<Float> embedding = Arrays.asList(1.0f, 2.0f, 3.0f);
+        float[] embedding = new float[] {1.0f, 2.0f, 3.0f};
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("category", "test");
         metadata.put("score", 42);
@@ -132,7 +130,7 @@ public class ChromaDBConverterTest {
 
         SeaTunnelRow row =
                 ChromaDBConverter.convert(
-                        schema, "id3", Collections.emptyList(), "doc", null, null);
+                        schema, "id3", new float[0], "doc", null, null);
 
         Assertions.assertNull(row.getField(1));
     }
@@ -140,7 +138,7 @@ public class ChromaDBConverterTest {
     @Test
     public void testConvertWithNullDocument() {
         TableSchema schema = buildFullSchema();
-        List<Float> embedding = Arrays.asList(1.0f, 2.0f, 3.0f);
+        float[] embedding = new float[] {1.0f, 2.0f, 3.0f};
 
         SeaTunnelRow row =
                 ChromaDBConverter.convert(schema, "id4", embedding, null, null, null);
@@ -157,7 +155,7 @@ public class ChromaDBConverterTest {
 
         SeaTunnelRow row =
                 ChromaDBConverter.convert(
-                        schema, "id5", Arrays.asList(1.0f), "doc", null, null);
+                        schema, "id5", new float[] {1.0f}, "doc", null, null);
 
         Assertions.assertEquals("{}", row.getField(4));
     }
@@ -181,7 +179,7 @@ public class ChromaDBConverterTest {
     @Test
     public void testConvertWithUri() {
         TableSchema schema = buildFullSchema();
-        List<Float> embedding = Arrays.asList(1.0f, 2.0f, 3.0f);
+        float[] embedding = new float[] {1.0f, 2.0f, 3.0f};
 
         SeaTunnelRow row =
                 ChromaDBConverter.convert(
@@ -207,7 +205,7 @@ public class ChromaDBConverterTest {
     @Test
     public void testVectorByteBufferSize() {
         TableSchema schema = buildFullSchema();
-        List<Float> embedding = Arrays.asList(1.0f, 2.0f, 3.0f);
+        float[] embedding = new float[] {1.0f, 2.0f, 3.0f};
 
         SeaTunnelRow row =
                 ChromaDBConverter.convert(schema, "id7", embedding, "doc", null, null);
@@ -215,6 +213,15 @@ public class ChromaDBConverterTest {
         ByteBuffer buffer = (ByteBuffer) row.getField(1);
         // 3 floats × 4 bytes = 12 bytes
         Assertions.assertEquals(12, buffer.capacity());
+        Assertions.assertEquals(0, buffer.position());
+        Assertions.assertEquals(12, buffer.limit());
+        Assertions.assertArrayEquals(
+                new byte[] {0x3f, (byte) 0x80, 0, 0, 0x40, 0, 0, 0, 0x40, 0x40, 0, 0},
+                buffer.array());
+        for (float expected : embedding) {
+            Assertions.assertEquals(expected, buffer.getFloat());
+        }
+        Assertions.assertFalse(buffer.hasRemaining());
     }
 
     // --- Edge case: metadata with nested structures ---
@@ -332,9 +339,9 @@ public class ChromaDBConverterTest {
                                                 .build()))
                         .build();
 
-        List<Float> embedding = new ArrayList<>(dim);
+        float[] embedding = new float[dim];
         for (int i = 0; i < dim; i++) {
-            embedding.add((float) i / dim);
+            embedding[i] = (float) i / dim;
         }
 
         SeaTunnelRow row =
@@ -342,6 +349,12 @@ public class ChromaDBConverterTest {
 
         ByteBuffer buffer = (ByteBuffer) row.getField(1);
         Assertions.assertEquals(dim * 4, buffer.capacity());
+        Assertions.assertEquals(0, buffer.position());
+        Assertions.assertEquals(dim * 4, buffer.remaining());
+        for (float expected : embedding) {
+            Assertions.assertEquals(expected, buffer.getFloat());
+        }
+        Assertions.assertFalse(buffer.hasRemaining());
     }
 
     // --- Edge case: all fields null except id ---

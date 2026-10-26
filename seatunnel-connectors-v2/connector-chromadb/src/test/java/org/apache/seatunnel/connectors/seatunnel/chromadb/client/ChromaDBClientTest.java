@@ -119,7 +119,8 @@ public class ChromaDBClientTest {
 
         Assertions.assertEquals(Arrays.asList("a", "b"), result.getIds());
         Assertions.assertEquals(2, result.getEmbeddings().size());
-        Assertions.assertEquals(Arrays.asList(1.0f, 2.0f), result.getEmbeddings().get(0));
+        Assertions.assertArrayEquals(new float[] {1.0f, 2.0f}, result.getEmbeddings().get(0));
+        Assertions.assertArrayEquals(new float[] {3.0f, 4.0f}, result.getEmbeddings().get(1));
         Assertions.assertEquals("doc1", result.getDocuments().get(0));
         Assertions.assertEquals("v", result.getMetadatas().get(0).get("k"));
     }
