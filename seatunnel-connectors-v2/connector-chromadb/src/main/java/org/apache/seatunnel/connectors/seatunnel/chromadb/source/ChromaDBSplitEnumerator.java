@@ -18,143 +18,215 @@
 package org.apache.seatunnel.connectors.seatunnel.chromadb.source;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.TablePath;
+import org.apache.seatunnel.connectors.seatunnel.chromadb.client.ChromaDBClient;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
+/**
+ * Counts each collection once and assigns fixed ranges without waiting for readers to consume them.
+ */
 @Slf4j
 public class ChromaDBSplitEnumerator
         implements SourceSplitEnumerator<ChromaDBSourceSplit, ChromaDBSourceState> {
 
     private final Context<ChromaDBSourceSplit> context;
+    private final ReadonlyConfig config;
     private final Map<String, CatalogTable> collectionTables;
-    private final ConcurrentLinkedQueue<ChromaDBSourceSplit> pendingSplits;
-    private final Map<Integer, List<ChromaDBSourceSplit>> assignedSplits;
+    private final Set<String> enumeratedCollectionIds;
+    private final Map<String, ChromaDBSourceSplit> pendingSplits = new LinkedHashMap<>();
+    private final Map<String, Integer> pendingSplitReaders = new LinkedHashMap<>();
+    private final Set<Integer> readersAwaitingRegistration = new HashSet<>();
+    private final Set<Integer> readersSignalledNoMoreSplits = new HashSet<>();
     private final Object stateLock = new Object();
+    private boolean enumerationComplete;
+    private ChromaDBClient client;
 
     public ChromaDBSplitEnumerator(
             Context<ChromaDBSourceSplit> context,
+            ReadonlyConfig config,
             Map<String, CatalogTable> collectionTables,
             ChromaDBSourceState state) {
         this.context = context;
+        this.config = config;
         this.collectionTables = collectionTables;
-
-        if (state == null) {
-            // Fresh start: create one split per collection
-            this.pendingSplits = new ConcurrentLinkedQueue<>();
-            for (Map.Entry<String, CatalogTable> entry : collectionTables.entrySet()) {
-                pendingSplits.add(
-                        new ChromaDBSourceSplit(entry.getKey(), entry.getValue().getTablePath()));
+        this.enumeratedCollectionIds =
+                state == null ? new HashSet<>() : new HashSet<>(state.getEnumeratedCollectionIds());
+        if (state != null) {
+            for (ChromaDBSourceSplit split : state.getPendingSplits()) {
+                pendingSplits.put(split.splitId(), split.copy());
             }
-            this.assignedSplits = new HashMap<>();
-        } else {
-            this.pendingSplits = new ConcurrentLinkedQueue<>(state.getPendingSplits());
-            this.assignedSplits = new HashMap<>(state.getAssignedSplits());
+            if (state.getPendingSplitReaders() != null) {
+                pendingSplitReaders.putAll(state.getPendingSplitReaders());
+            }
         }
     }
 
     @Override
     public void open() {
-        // No resources to open
+        client = ChromaDBSource.createClient(config);
     }
 
     @Override
     public void run() throws Exception {
-        Set<Integer> readers = context.registeredReaders();
-        log.info(
-                "ChromaDB split enumerator started, {} splits for {} readers",
-                pendingSplits.size(),
-                readers.size());
-
-        synchronized (stateLock) {
-            assignSplits(readers);
+        int parallelism = context.currentParallelism();
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("Source parallelism must be positive");
         }
-
-        log.info("All splits assigned. Signaling no more splits.");
-        readers.forEach(context::signalNoMoreSplits);
+        for (Map.Entry<String, CatalogTable> entry : collectionTables.entrySet()) {
+            String collectionId = entry.getKey();
+            synchronized (stateLock) {
+                if (enumeratedCollectionIds.contains(collectionId)) {
+                    continue;
+                }
+            }
+            long count = client.countRecords(collectionId);
+            List<ChromaDBSourceSplit> splits = new ArrayList<>();
+            for (int i = 0; i < parallelism; i++) {
+                // Equivalent to floor(count * i / parallelism), without overflowing count * i.
+                long start = (count / parallelism) * i + ((count % parallelism) * i) / parallelism;
+                long end =
+                        (count / parallelism) * (i + 1L)
+                                + ((count % parallelism) * (i + 1L)) / parallelism;
+                if (start < end) {
+                    splits.add(
+                            new ChromaDBSourceSplit(
+                                    collectionId, entry.getValue().getTablePath(), start, end));
+                }
+            }
+            synchronized (stateLock) {
+                if (enumeratedCollectionIds.add(collectionId)) {
+                    splits.forEach(split -> pendingSplits.put(split.splitId(), split));
+                }
+            }
+            log.info(
+                    "Counted collection '{}': {} records, {} ranges",
+                    collectionId,
+                    count,
+                    splits.size());
+        }
+        synchronized (stateLock) {
+            // A full restore may reduce parallelism. Only then can a returned range's
+            // old reader index be remapped; local failover retains its original owner.
+            pendingSplitReaders.replaceAll((splitId, reader) -> reader % parallelism);
+            readersAwaitingRegistration.removeIf(reader -> reader >= parallelism);
+            enumerationComplete = true;
+            assignPendingSplits();
+        }
     }
 
-    private void assignSplits(Collection<Integer> readers) {
-        if (readers.isEmpty()) {
+    /** Called under stateLock; late registration triggers assignment rather than blocking run(). */
+    private void assignPendingSplits() {
+        // Restore callbacks precede run(). Do not finish an empty reader before all
+        // reader checkpoint splits have been returned to the enumerator.
+        if (!enumerationComplete) {
             return;
         }
-        // Round-robin assignment
-        List<Integer> readerList = new ArrayList<>(readers);
-        int idx = 0;
-        while (!pendingSplits.isEmpty()) {
-            ChromaDBSourceSplit split = pendingSplits.poll();
-            if (split == null) {
-                break;
+        List<Integer> readers = new ArrayList<>(context.registeredReaders());
+        readers.removeAll(readersAwaitingRegistration);
+        boolean hasUnownedSplits =
+                pendingSplits.keySet().stream()
+                        .anyMatch(splitId -> !pendingSplitReaders.containsKey(splitId));
+        if (readers.isEmpty()
+                || (hasUnownedSplits && readers.size() < context.currentParallelism())) {
+            return;
+        }
+        Collections.sort(readers);
+        Map<Integer, List<ChromaDBSourceSplit>> assignments = new LinkedHashMap<>();
+        int index = 0;
+        for (ChromaDBSourceSplit split : pendingSplits.values()) {
+            Integer reader = pendingSplitReaders.get(split.splitId());
+            if (reader == null) {
+                reader = readers.get(index++ % readers.size());
+            } else if (!readers.contains(reader)) {
+                continue;
             }
-            int reader = readerList.get(idx % readerList.size());
-            log.info("Assigning split '{}' to reader {}", split.getCollectionId(), reader);
-            context.assignSplit(reader, Collections.singletonList(split));
-            assignedSplits
-                    .computeIfAbsent(reader, r -> new ArrayList<>())
-                    .add(split);
-            idx++;
+            assignments.computeIfAbsent(reader, ignored -> new ArrayList<>()).add(split);
+        }
+        for (Map.Entry<Integer, List<ChromaDBSourceSplit>> assignment : assignments.entrySet()) {
+            context.assignSplit(assignment.getKey(), assignment.getValue());
+            // Assigned state belongs to the reader; the engine returns its checkpoint on recovery.
+            assignment.getValue().forEach(
+                    split -> {
+                        pendingSplits.remove(split.splitId());
+                        pendingSplitReaders.remove(split.splitId());
+                    });
+        }
+        for (int reader : readers) {
+            if (!readersSignalledNoMoreSplits.contains(reader)) {
+                context.signalNoMoreSplits(reader);
+                readersSignalledNoMoreSplits.add(reader);
+            }
         }
     }
 
     @Override
     public void close() throws IOException {
-        // No resources to close
+        if (client != null) {
+            client.close();
+            client = null;
+        }
     }
 
     @Override
     public void addSplitsBack(List<ChromaDBSourceSplit> splits, int subtaskId) {
         synchronized (stateLock) {
-            pendingSplits.addAll(splits);
-            if (context.registeredReaders().contains(subtaskId)) {
-                assignSplits(Collections.singletonList(subtaskId));
-            }
+            splits.forEach(
+                    split -> {
+                        pendingSplits.put(split.splitId(), split.copy());
+                        pendingSplitReaders.put(split.splitId(), subtaskId);
+                    });
+            readersAwaitingRegistration.add(subtaskId);
+            readersSignalledNoMoreSplits.remove(subtaskId);
         }
     }
 
     @Override
     public int currentUnassignedSplitSize() {
-        return pendingSplits.size();
+        synchronized (stateLock) {
+            return pendingSplits.size();
+        }
     }
 
     @Override
     public void handleSplitRequest(int subtaskId) {
-        // Not used
+        synchronized (stateLock) {
+            assignPendingSplits();
+        }
     }
 
     @Override
     public void registerReader(int subtaskId) {
-        log.info("Reader {} registered", subtaskId);
         synchronized (stateLock) {
-            if (!pendingSplits.isEmpty()) {
-                assignSplits(Collections.singletonList(subtaskId));
-            }
+            readersAwaitingRegistration.remove(subtaskId);
+            readersSignalledNoMoreSplits.remove(subtaskId);
+            assignPendingSplits();
         }
     }
 
     @Override
-    public ChromaDBSourceState snapshotState(long checkpointId) throws Exception {
+    public ChromaDBSourceState snapshotState(long checkpointId) {
         synchronized (stateLock) {
-            Map<Integer, List<ChromaDBSourceSplit>> deepCopy = new HashMap<>();
-            for (Map.Entry<Integer, List<ChromaDBSourceSplit>> entry :
-                    assignedSplits.entrySet()) {
-                deepCopy.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-            }
-            return new ChromaDBSourceState(new ArrayList<>(pendingSplits), deepCopy);
+            List<ChromaDBSourceSplit> splits = new ArrayList<>();
+            pendingSplits.values().forEach(split -> splits.add(split.copy()));
+            return new ChromaDBSourceState(
+                    new HashSet<>(enumeratedCollectionIds),
+                    splits,
+                    new LinkedHashMap<>(pendingSplitReaders));
         }
     }
 
     @Override
-    public void notifyCheckpointComplete(long checkpointId) throws Exception {
-        // No action needed
+    public void notifyCheckpointComplete(long checkpointId) {
+        // Reader checkpoints own the progress of assigned ranges.
     }
 }

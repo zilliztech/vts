@@ -14,7 +14,7 @@ import ChangeLog from '../changelog/connector-chromadb.md';
 - [ ] [流处理](../../concept/connector-v2-features.md)
 - [ ] [精准一次](../../concept/connector-v2-features.md)
 - [ ] [column projection](../../concept/connector-v2-features.md)
-- [x] [并行度](../../concept/connector-v2-features.md)（多 collection 间并行）
+- [x] [并行度](../../concept/connector-v2-features.md)（单 collection 内及多个 collection 间并行）
 - [ ] [支持用户自定义的分片](../../concept/connector-v2-features.md)
 
 ## 配置参数选项
@@ -72,11 +72,11 @@ ChromaDB 数据库名。
 
 ### batch_size [int]
 
-按 ID 列表批量拉取完整数据的每批大小。受 ChromaDB 底层 SQLite `SQLITE_MAX_VARIABLE_NUMBER` 限制（当前版本为 32766），不应超过此值。
+按 ID 列表拉取完整记录时，每次请求的最大 ID 数量。必须为正数，且不超过服务端的请求限制。它与 `id_split_size` 独立配置；Connector 不识别或自动调整服务端配额。
 
 ### id_split_size [int]
 
-每次 ID 扫描的数量。默认 10000000（1000 万），足以一次扫完大多数 collection。内存不足时可调小。
+Reader 在自己的范围内，每次扫描 ID 的最大数量，必须为正数。默认 10000000（1000 万），应根据服务端查询限制及 reader/checkpoint 可用内存调小。该参数控制页大小，不决定 split 或 reader 数量。
 
 ### connect_timeout [int]
 
@@ -88,16 +88,32 @@ HTTP 读取超时，单位秒。大 collection 可适当调大。
 
 ### 通用选项
 
-Source 插件常用参数，具体请参考 [Source 常用选项](../source-common-options.md)
+Source 插件常用参数，具体请参考 [Source 常用选项](../source-common-options.md)。`parallelism` 控制 source reader 数量，默认使用 `env.parallelism`。所有配置的 collection 共享这些 reader，增加 collection 不会新建另一组 reader。
+
+Spark 使用协调式 source adapter：一个输入 partition 在共享 enumerator 下并发运行配置数量的 reader。
 
 ## 数据读取策略
 
-Connector 采用两阶段读取：
+Enumerator 对每个 collection 调用一次 `count` 得到 `N`，按 source 并行度 `P` 创建至多 `P` 个非空范围。第 `i` 个范围为 `[floor(N*i/P), floor(N*(i+1)/P))`。这是 offset 范围，不是 ID 值范围。
 
-1. **阶段 1（ID 扫描）**：通过 `offset+limit` 分页获取所有记录 ID（`include=[]`），每次获取 `id_split_size` 条
-2. **阶段 2（批量拉取）**：按 ID 列表批量获取完整记录（embeddings、documents、uris、metadatas），每批 `batch_size` 条
+每个 reader 在分配到的范围内执行相同的两阶段循环：
 
-这种方式避免了 `offset` 深翻页的性能退化。
+1. **ID 扫描**：请求 `include=[]`、`offset=next_offset`、`limit=min(id_split_size, end_offset-next_offset)`。
+2. **完整记录读取**：按返回的 ID 分批读取 embeddings、documents、uris、metadatas，每批至多 `batch_size` 条。每批成功输出后推进进度，当前 ID 页消费完后再扫描下一页。
+
+翻页始终在 reader 的范围内完成，不会为每一页创建、分配新的 split。`parallelism=1` 使用同一套循环，范围自然为 `[0, N)`。服务端允许时，设置 `id_split_size >= N` 即可先用一次请求获取全部 ID，再分批读取完整记录。
+
+完整记录通过明确的 ID 读取，不使用 offset 翻页。较大的 ID 页可以减少相对于按 `batch_size` 翻页读取完整记录时的 offset 查询次数。但 ID 扫描本身仍有 offset 成本，实际收益取决于服务端、页大小和并行度。
+
+### Checkpoint 与恢复
+
+Checkpoint 在 enumerator 中保存未分配的范围，在 reader 中保存范围边界、下一个 offset 和未消费的 ID。恢复时保留原范围，优先消费剩余 ID，再扫描下一页。已生成范围的 collection 不会重新 count 或切分，即使恢复时修改了并行度。原范围数少于恢复后的 reader 数时，部分 reader 因此可能空闲。
+
+局部 reader 恢复时，退回的范围保留原 reader 归属，等待该 reader 重新注册，不会转交给可能已经结束的其他 reader。Enumerator checkpoint 会保存这些待分配范围的归属；全局恢复时若降低并行度，会重新映射已不存在的 reader 编号，范围边界和读取进度保持不变。
+
+如果 ID 页不足预期条数，或按 ID 未取回请求的记录，任务会报错，不会把范围静默标记为完成。这能发现部分源数据变化或请求大小配置问题，但无法发现并发修改造成的所有重复或遗漏。最后一次成功 checkpoint 之后输出的记录可能在恢复时重放，不保证 exactly-once。
+
+新的范围 checkpoint 格式与原先仅保存 collection 的格式不兼容。从旧版本升级时需要重新启动迁移，不能恢复旧 checkpoint/savepoint。
 
 ## 输出列结构
 
@@ -116,15 +132,15 @@ ChromaDB Source 对每个 collection 产出**固定 5 列**：
 :::
 
 :::tip 提示
-**只读操作**：Connector 对 ChromaDB 仅执行查询操作（GET collection 信息 + POST get 读取记录），不会修改或删除源端数据。
+**只读操作**：Connector 读取 collection 元信息、记录数及记录，不修改或删除源数据。
 
-**内存使用**：`id_split_size` 默认 1000 万，会将对应数量的 ID 字符串一次性加载到 VTS 进程内存中。如果 collection 非常大且 VTS 内存有限，建议调小此参数。
+**内存使用**：每个活跃 reader 最多保留 `id_split_size` 个 ID，并受所在范围的剩余记录数限制。Checkpoint 也会保存尚未消费的 ID。调大并行度或页大小时，需要计算同一 VTS 进程内所有 reader 的总内存需求。
 
-**对 ChromaDB 的查询压力**：ChromaDB 为单节点 SQLite 架构，单个 collection 内的读取是顺序执行的。当 `parallelism > 1` 且指定了多个 collection 时，多个 collection 会并行读取，对 ChromaDB 产生并发查询压力。建议迁移大量数据时保持 `parallelism = 1`，或确保 ChromaDB 有足够资源应对并发请求。
+**查询压力**：调大并行度会增加单个 collection 内及多个 collection 间的并发读取。应根据源服务和 sink 的承载能力设置，并遵守源服务的请求速率限制。
 :::
 
 :::caution 注意
-**数据一致性**：ChromaDB 不提供快照或游标机制。Connector 通过 `offset+limit` 分页扫描 ID，再按 ID 列表拉取完整数据。当 `id_split_size` 足够大（默认 1000 万）能一次扫完所有 ID 时，ID 列表相当于一个时间点快照，后续按 ID 取数据不受并发写入影响。只有当 collection 记录数超过 `id_split_size` 需要多轮扫描时，两轮之间的写入或删除才可能导致数据重复或遗漏。对于超大 collection，建议迁移期间暂停写入，或调大 `id_split_size`（需注意内存开销）。
+**数据一致性**：Connector 通过 `count` 和 offset 分页读取，不使用共享快照。在切分、读取或恢复期间写入或删除数据，可能改变 offset 对应的位置，造成遗漏或重复；`count` 不能固定数据集。即使一次请求获取所有 ID，也不能固定后续记录的值或防止记录被删除。若要求完整迁移，应在任务结束前保持源数据不变，恢复期间也一样。如果源服务支持隔离的 fork 或快照，可以先自行准备，再配置 Connector 读取；Connector 不会自动创建。
 :::
 
 ## 使用案例
@@ -184,6 +200,26 @@ source {
     batch_size = 2000
     id_split_size = 5000000
     read_timeout = 1200
+  }
+}
+```
+
+### 案例五：请求上限较小时并行读取
+
+如果服务端配置允许每次请求最多 300 条记录，可显式设置两个页大小。VTS 不识别部署类型，也不内置该限制值：
+
+```hocon
+env {
+  parallelism = 4
+  job.mode = "BATCH"
+}
+
+source {
+  ChromaDB {
+    url = "https://my-chroma-server"
+    collections = ["large_collection"]
+    id_split_size = 300
+    batch_size = 300
   }
 }
 ```

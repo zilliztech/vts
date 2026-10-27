@@ -24,6 +24,7 @@ import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
 import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.source.SourceSplitEnumerator;
+import org.apache.seatunnel.api.source.SupportCoordinate;
 import org.apache.seatunnel.api.source.SupportParallelism;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
@@ -52,6 +53,7 @@ import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 @Slf4j
 public class ChromaDBSource
         implements SeaTunnelSource<SeaTunnelRow, ChromaDBSourceSplit, ChromaDBSourceState>,
+                SupportCoordinate,
                 SupportParallelism {
 
     private final ReadonlyConfig config;
@@ -115,14 +117,14 @@ public class ChromaDBSource
     @Override
     public SourceSplitEnumerator<ChromaDBSourceSplit, ChromaDBSourceState> createEnumerator(
             SourceSplitEnumerator.Context<ChromaDBSourceSplit> context) {
-        return new ChromaDBSplitEnumerator(context, collectionTables, null);
+        return new ChromaDBSplitEnumerator(context, config, collectionTables, null);
     }
 
     @Override
     public SourceSplitEnumerator<ChromaDBSourceSplit, ChromaDBSourceState> restoreEnumerator(
             SourceSplitEnumerator.Context<ChromaDBSourceSplit> context,
             ChromaDBSourceState state) {
-        return new ChromaDBSplitEnumerator(context, collectionTables, state);
+        return new ChromaDBSplitEnumerator(context, config, collectionTables, state);
     }
 
     static ChromaDBClient createClient(ReadonlyConfig config) {

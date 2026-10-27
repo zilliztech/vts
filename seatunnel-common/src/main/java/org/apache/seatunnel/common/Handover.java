@@ -28,7 +28,7 @@ public final class Handover<T> implements Closeable {
     private final Object lock = new Object();
     private final LinkedBlockingQueue<T> blockingQueue =
             new LinkedBlockingQueue<>(DEFAULT_QUEUE_SIZE);
-    private Throwable error;
+    private volatile Throwable error;
 
     public boolean isEmpty() throws Exception {
         if (error != null) {

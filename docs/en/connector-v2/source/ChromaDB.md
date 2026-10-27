@@ -14,7 +14,7 @@ This connector reads data from ChromaDB collections via the REST API (v2).
 - [ ] [stream](../../concept/connector-v2-features.md)
 - [ ] [exactly-once](../../concept/connector-v2-features.md)
 - [ ] [column projection](../../concept/connector-v2-features.md)
-- [x] [parallelism](../../concept/connector-v2-features.md) (across multiple collections)
+- [x] [parallelism](../../concept/connector-v2-features.md) (within and across collections)
 - [ ] [support user-defined split](../../concept/connector-v2-features.md)
 
 ## Options
@@ -72,11 +72,11 @@ Password for `BASIC` auth.
 
 ### batch_size [int]
 
-Batch size for fetching full records by ID list. Limited by ChromaDB's underlying SQLite `SQLITE_MAX_VARIABLE_NUMBER` (currently 32766); do not exceed this value.
+Maximum number of IDs per request for full records. Must be positive and within the server's request limits. Configure this independently from `id_split_size`; the connector does not detect or automatically adjust server quotas.
 
 ### id_split_size [int]
 
-Number of IDs to fetch per scan pass. Default 10000000 (10M), large enough for most collections. Reduce if memory is constrained.
+Maximum number of IDs per scan request inside a reader range. Must be positive. The default is 10000000 (10M). Reduce it to respect the server's query limit and the available reader/checkpoint memory. This controls page size, not the number of splits or readers.
 
 ### connect_timeout [int]
 
@@ -88,16 +88,32 @@ HTTP read timeout in seconds. Increase for very large collections.
 
 ### Common Options
 
-Source plugin common parameters, please refer to [Source Common Options](../source-common-options.md) for details.
+Source plugin common parameters, please refer to [Source Common Options](../source-common-options.md) for details. `parallelism` selects the number of source readers and defaults to `env.parallelism`. All configured collections share these readers; adding a collection does not create another reader pool.
+
+Spark uses the coordinated source adapter: one input partition runs the configured readers concurrently under a shared enumerator.
 
 ## Data Read Strategy
 
-The connector uses a two-phase read approach:
+For each collection, the enumerator calls `count` once to obtain `N` and creates up to `P` nonempty ranges, where `P` is the source parallelism. Range `i` is `[floor(N*i/P), floor(N*(i+1)/P))`. These are offset ranges, not ID value ranges.
 
-1. **Phase 1 (ID Scan)**: Fetch all record IDs using offset-based pagination with `include=[]`, fetching `id_split_size` IDs per pass
-2. **Phase 2 (Batch Fetch)**: For each ID batch, fetch full record data (embeddings, documents, uris, metadatas) in chunks of `batch_size`
+Each reader processes its assigned ranges using the same two-phase loop:
 
-This avoids the performance degradation of deep offset pagination.
+1. **ID scan**: Request `include=[]`, `offset=next_offset`, and `limit=min(id_split_size, end_offset-next_offset)`.
+2. **Full-record fetch**: Fetch embeddings, documents, uris and metadatas for the returned IDs in chunks of at most `batch_size`. Advance progress after each successfully emitted batch, then scan the next ID page.
+
+Pages stay inside the reader's range; they do not create or distribute new splits. `parallelism=1` uses this same loop with one range `[0, N)`. If the server permits it, setting `id_split_size >= N` fetches all IDs in one request before full-record batches are read.
+
+Full-record fetches use explicit IDs and do not use offset pagination. A larger ID page reduces the number of offset scans compared with paging full records at `batch_size`. The ID scan itself still incurs offset costs; performance depends on the server, page sizes and concurrency.
+
+### Checkpoint and recovery
+
+Checkpoints retain unassigned ranges in the enumerator and each reader's range boundaries, next offset and unconsumed IDs. Recovery keeps these boundaries and resumes pending IDs before scanning another page. Collections whose ranges have already been created are not counted or split again, even if parallelism changes. A restored job with fewer ranges than readers may therefore leave some readers idle.
+
+During local reader recovery, returned ranges keep their original reader assignment and wait for that reader to register again. They are not sent to peers that may have already finished. Enumerator checkpoints preserve these pending assignments; a full restore at lower parallelism remaps reader indices that no longer exist without changing range boundaries or progress.
+
+An incomplete ID page or missing requested records fails the job instead of silently completing the range. This detects some source changes or incorrectly sized requests, but it cannot detect all duplicates or omissions caused by concurrent mutations. Records emitted after the last completed checkpoint may be replayed; exactly-once delivery is not guaranteed.
+
+The range-based checkpoint format is incompatible with the previous collection-only format. Start a fresh migration when upgrading from that version instead of restoring its checkpoint/savepoint.
 
 ## Output Column Schema
 
@@ -116,15 +132,15 @@ Empty collections (no records inserted, dimension unknown) will cause the job to
 :::
 
 :::tip Tips
-**Read-only**: The connector only performs query operations on ChromaDB (GET collection info + POST get records). It never modifies or deletes source data.
+**Read-only**: The connector reads collection metadata, record counts and records. It never modifies or deletes source data.
 
-**Memory usage**: `id_split_size` defaults to 10M, loading that many ID strings into VTS process memory at once. For very large collections with limited VTS memory, reduce this parameter.
+**Memory usage**: Each active reader retains up to `id_split_size` IDs, bounded by its remaining range. Unconsumed IDs are also included in checkpoints. Account for the combined memory of readers running in the same VTS process when increasing parallelism or page size.
 
-**Query pressure on ChromaDB**: ChromaDB is a single-node SQLite-based system. Reading within a single collection is sequential. When `parallelism > 1` with multiple collections, concurrent reads will put pressure on ChromaDB. Keep `parallelism = 1` when migrating large volumes, or ensure ChromaDB has sufficient resources for concurrent requests.
+**Query pressure**: Increasing parallelism allows concurrent reads within one collection as well as across collections. Select a value that the source service and sink can sustain, and respect the source's request-rate limits.
 :::
 
 :::caution Warning
-**Data consistency**: ChromaDB does not provide snapshot or cursor mechanisms. The connector scans IDs via `offset+limit` pagination, then fetches full data by ID list. When `id_split_size` is large enough (default 10M) to scan all IDs in one pass, the ID list acts as a point-in-time snapshot — subsequent data fetches by ID are unaffected by concurrent writes. Only when the collection exceeds `id_split_size` and requires multiple scan passes can writes or deletes between passes cause duplicates or missed records. For very large collections, pause writes during migration or increase `id_split_size` (mind the memory cost).
+**Data consistency**: This connector uses `count` and offset pagination without a shared snapshot. Writes or deletes during enumeration, reading or recovery may shift offsets and cause missing or duplicate records; `count` does not fix the dataset. Even a single request for all IDs does not freeze subsequent record values or prevent those records from being deleted. For complete migration, keep the source unchanged until the job finishes, including recovery. If the source service provides an isolated fork or snapshot, you can prepare one and configure the connector to read it; the connector does not create one automatically.
 :::
 
 ## Examples
@@ -184,6 +200,26 @@ source {
     batch_size = 2000
     id_split_size = 5000000
     read_timeout = 1200
+  }
+}
+```
+
+### Example 5: Parallel Reads with Small Request Limits
+
+For a service whose configured limits allow at most 300 records per request, set both page sizes explicitly. VTS does not identify the deployment type or impose this value:
+
+```hocon
+env {
+  parallelism = 4
+  job.mode = "BATCH"
+}
+
+source {
+  ChromaDB {
+    url = "https://my-chroma-server"
+    collections = ["large_collection"]
+    id_split_size = 300
+    batch_size = 300
   }
 }
 ```

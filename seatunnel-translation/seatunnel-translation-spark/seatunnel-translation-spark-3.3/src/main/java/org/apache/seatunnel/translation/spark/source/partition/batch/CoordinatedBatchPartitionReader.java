@@ -104,10 +104,19 @@ public class CoordinatedBatchPartitionReader extends ParallelBatchPartitionReade
                                                          */
                                                         Thread.sleep(0L);
                                                     }
-                                                } catch (Exception e) {
+                                                } catch (Throwable e) {
+                                                    // Publish the failure before a peer can signal
+                                                    // end of input.
+                                                    handover.reportError(e);
                                                     this.running = false;
-                                                    flag.set(false);
-                                                    throw new RuntimeException(e);
+                                                    readerRunningMap
+                                                            .values()
+                                                            .forEach(
+                                                                    readerRunning ->
+                                                                            readerRunning.set(
+                                                                                    false));
+                                                    CoordinatedBatchPartitionReader.this.running =
+                                                            false;
                                                 }
                                             }
                                         });

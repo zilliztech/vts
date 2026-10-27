@@ -123,9 +123,9 @@ public class ChromaDBSourceConfig {
                     .intType()
                     .defaultValue(10000000)
                     .withDescription(
-                            "Number of IDs to fetch per split when scanning the collection. "
-                                    + "Default 10000000 (10M), large enough to scan all IDs in one pass "
-                                    + "for most collections. Reduce if memory is constrained.");
+                            "Maximum IDs per scan request within a reader's offset range. "
+                                    + "Default 10000000 (10M). Configure within the server's request "
+                                    + "limit and available memory; this does not control parallelism.");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")

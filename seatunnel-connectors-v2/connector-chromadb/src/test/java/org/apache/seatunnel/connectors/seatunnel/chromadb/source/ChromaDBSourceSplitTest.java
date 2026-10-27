@@ -17,43 +17,66 @@
 
 package org.apache.seatunnel.connectors.seatunnel.chromadb.source;
 
+import org.apache.seatunnel.api.serialization.DefaultSerializer;
 import org.apache.seatunnel.api.table.catalog.TablePath;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class ChromaDBSourceSplitTest {
+import java.util.Arrays;
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ChromaDBSourceSplitTest {
+    private final TablePath path = TablePath.of("db", "col");
 
     @Test
-    void testSplitIdReturnsCollectionId() {
+    void rangeIdentityDoesNotChangeWithProgress() {
+        ChromaDBSourceSplit split = new ChromaDBSourceSplit("col-id", path, 100, 105);
+        ChromaDBSourceSplit progressed =
+                split.withPendingIds(Arrays.asList("a", "b", "c", "d", "e")).advance(2);
+        assertEquals("col-id:100:105", progressed.splitId());
+        assertEquals(split.splitId(), progressed.splitId());
+        assertNotEquals(
+                split.splitId(), new ChromaDBSourceSplit("col-id", path, 105, 110).splitId());
+        assertEquals(102, progressed.getNextOffset());
+        assertEquals(100, split.getNextOffset());
+        assertEquals(path, progressed.getTablePath());
+    }
+
+    @Test
+    void checkpointRetainsOnlyUnreadIdsAndRoundTrips() throws Exception {
         ChromaDBSourceSplit split =
-                new ChromaDBSourceSplit("uuid-123", TablePath.of("db", "my_col"));
-        Assertions.assertEquals("uuid-123", split.splitId());
-        Assertions.assertEquals("uuid-123", split.getCollectionId());
+                new ChromaDBSourceSplit("col-id", path, 100, 105)
+                        .withPendingIds(Arrays.asList("a", "b", "c", "d", "e"))
+                        .advance(2);
+        ChromaDBSourceSplit snapshot = split.copy();
+        assertEquals(Arrays.asList("c", "d", "e"), snapshot.getPendingIds());
+        assertEquals(0, snapshot.getPendingIdIndex());
+        DefaultSerializer<ChromaDBSourceSplit> serializer = new DefaultSerializer<>();
+        assertEquals(snapshot, serializer.deserialize(serializer.serialize(snapshot)));
+        ChromaDBSourceSplit completed = split.advance(3);
+        assertTrue(completed.getPendingIds().isEmpty());
+        assertEquals(105, completed.getNextOffset());
+        assertEquals(102, snapshot.getNextOffset());
+        assertEquals(Arrays.asList("c", "d", "e"), snapshot.getPendingIds());
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.getPendingIds().clear());
     }
 
     @Test
-    void testTablePath() {
-        TablePath path = TablePath.of("default_database", "test_collection");
-        ChromaDBSourceSplit split = new ChromaDBSourceSplit("col-id", path);
-        Assertions.assertEquals(path, split.getTablePath());
-        Assertions.assertEquals("test_collection", split.getTablePath().getTableName());
-    }
-
-    @Test
-    void testEquality() {
-        TablePath path = TablePath.of("db", "col");
-        ChromaDBSourceSplit a = new ChromaDBSourceSplit("id-1", path);
-        ChromaDBSourceSplit b = new ChromaDBSourceSplit("id-1", path);
-        Assertions.assertEquals(a, b);
-        Assertions.assertEquals(a.hashCode(), b.hashCode());
-    }
-
-    @Test
-    void testInequality() {
-        ChromaDBSourceSplit a =
-                new ChromaDBSourceSplit("id-1", TablePath.of("db", "col_a"));
-        ChromaDBSourceSplit b =
-                new ChromaDBSourceSplit("id-2", TablePath.of("db", "col_b"));
-        Assertions.assertNotEquals(a, b);
+    void invalidRangesAndProgressAreRejected() {
+        assertThrows(
+                IllegalArgumentException.class, () -> new ChromaDBSourceSplit("id", path, -1, 3));
+        assertThrows(
+                IllegalArgumentException.class, () -> new ChromaDBSourceSplit("id", path, 3, 3));
+        ChromaDBSourceSplit split = new ChromaDBSourceSplit("id", path, 1, 2);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> split.withPendingIds(Arrays.asList("a", "b")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> split.withPendingIds(Collections.singletonList("a")).advance(2));
     }
 }
