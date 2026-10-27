@@ -19,6 +19,8 @@ package org.apache.seatunnel.common;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class HandoverTest {
 
@@ -27,5 +29,24 @@ public class HandoverTest {
         Handover<Object> handover = new Handover<>();
         handover.reportError(new RuntimeException("test"));
         Assertions.assertThrows(RuntimeException.class, handover::isEmpty);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testFirstFailureTakesPrecedenceOverBufferedDataAndClose(boolean bufferData)
+            throws Exception {
+        Handover<Object> handover = new Handover<>();
+        if (bufferData) {
+            handover.produce(new Object());
+        }
+        RuntimeException failure = new RuntimeException("reader failed");
+        handover.reportError(failure);
+        handover.reportError(new RuntimeException("another reader failed"));
+        handover.close();
+
+        Assertions.assertSame(
+                failure, Assertions.assertThrows(RuntimeException.class, handover::isEmpty));
+        Assertions.assertSame(
+                failure, Assertions.assertThrows(RuntimeException.class, handover::pollNext));
     }
 }
