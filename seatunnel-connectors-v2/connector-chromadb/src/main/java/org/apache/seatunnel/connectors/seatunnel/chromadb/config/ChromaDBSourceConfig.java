@@ -20,7 +20,8 @@ package org.apache.seatunnel.connectors.seatunnel.chromadb.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class ChromaDBSourceConfig {
@@ -42,6 +43,11 @@ public class ChromaDBSourceConfig {
     public static final String INCLUDE_DOCUMENTS = "documents";
     public static final String INCLUDE_METADATAS = "metadatas";
     public static final String INCLUDE_URIS = "uris";
+
+    public static final List<String> FULL_RECORD_INCLUDES =
+            Collections.unmodifiableList(
+                    Arrays.asList(
+                            INCLUDE_EMBEDDINGS, INCLUDE_DOCUMENTS, INCLUDE_URIS, INCLUDE_METADATAS));
 
     // ── Connection options ──
 
@@ -125,11 +131,14 @@ public class ChromaDBSourceConfig {
                     .withDescription(
                             "Number of IDs to fetch per split when scanning the collection. "
                                     + "Default 10000000 (10M), large enough to scan all IDs in one pass "
-                                    + "for most collections. Reduce if memory is constrained.");
+                                    + "for most collections. Reduce if memory is constrained. "
+                                    + "When equal to batch_size, fetch full records directly per page.");
 
     public static final Option<Integer> BATCH_SIZE =
             Options.key("batch_size")
                     .intType()
                     .defaultValue(1000)
-                    .withDescription("Batch size for fetching full records by ID list");
+                    .withDescription(
+                            "Batch size for fetching full records. When equal to id_split_size, "
+                                    + "read full records with offset pagination without an ID scan.");
 }

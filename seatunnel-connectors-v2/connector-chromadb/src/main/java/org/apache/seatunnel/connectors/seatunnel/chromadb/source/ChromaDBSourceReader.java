@@ -34,7 +34,6 @@ import org.apache.seatunnel.connectors.seatunnel.chromadb.utils.ChromaDBConverte
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
@@ -154,18 +153,23 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
             String tableId) {
         int idSplitSize = config.get(ChromaDBSourceConfig.ID_SPLIT_SIZE);
         int batchSize = config.get(ChromaDBSourceConfig.BATCH_SIZE);
+        boolean directBatchRead = idSplitSize == batchSize;
+        List<String> include =
+                directBatchRead
+                        ? ChromaDBSourceConfig.FULL_RECORD_INCLUDES
+                        : Collections.emptyList();
         int offset = 0;
         long totalRead = 0;
 
         while (true) {
-            ChromaDBClient.GetRecordsResult idResult =
+            ChromaDBClient.GetRecordsResult page =
                     client.getRecords(
                             collectionId,
                             new ChromaDBClient.GetRecordsRequest()
                                     .setLimit(idSplitSize)
                                     .setOffset(offset)
-                                    .setInclude(Collections.emptyList()));
-            if (idResult == null) {
+                                    .setInclude(include));
+            if (page == null) {
                 throw new ChromaDBConnectorException(
                         ChromaDBConnectorErrorCode.READ_DATA_FAIL,
                         "Received null response from ChromaDB for collection '"
@@ -174,19 +178,22 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
                                 + offset
                                 + ". This may indicate a proxy or load balancer issue.");
             }
-            List<String> idSplit = idResult.getIds();
+            List<String> idSplit = page.getIds();
 
             if (idSplit == null || idSplit.isEmpty()) {
                 break;
             }
 
-            log.info(
-                    "Phase 1: fetched ID split [{}-{}], {} IDs",
-                    offset,
-                    offset + idSplit.size(),
-                    idSplit.size());
-
-            fetchDataInBatches(output, collectionId, tableSchema, tableId, idSplit, batchSize);
+            if (directBatchRead) {
+                emitRows(output, tableSchema, tableId, page);
+            } else {
+                log.info(
+                        "Phase 1: fetched ID split [{}-{}], {} IDs",
+                        offset,
+                        offset + idSplit.size(),
+                        idSplit.size());
+                fetchDataInBatches(output, collectionId, tableSchema, tableId, idSplit, batchSize);
+            }
 
             totalRead += idSplit.size();
 
@@ -215,12 +222,7 @@ public class ChromaDBSourceReader implements SourceReader<SeaTunnelRow, ChromaDB
                             collectionId,
                             new ChromaDBClient.GetRecordsRequest()
                                     .setIds(chunk)
-                                    .setInclude(
-                                            Arrays.asList(
-                                                    ChromaDBSourceConfig.INCLUDE_EMBEDDINGS,
-                                                    ChromaDBSourceConfig.INCLUDE_DOCUMENTS,
-                                                    ChromaDBSourceConfig.INCLUDE_URIS,
-                                                    ChromaDBSourceConfig.INCLUDE_METADATAS)));
+                                    .setInclude(ChromaDBSourceConfig.FULL_RECORD_INCLUDES));
             if (result == null) {
                 throw new ChromaDBConnectorException(
                         ChromaDBConnectorErrorCode.READ_DATA_FAIL,
