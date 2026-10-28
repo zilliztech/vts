@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.seatunnel.chromadb.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
 import com.google.gson.annotations.SerializedName;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -50,7 +51,9 @@ public class ChromaDBClient implements AutoCloseable {
 
     private static final MediaType JSON_MEDIA_TYPE =
             MediaType.get("application/json; charset=utf-8");
-    private static final Gson GSON = new GsonBuilder().create();
+    // Preserve integer metadata for fixed INT64 fields and avoid precision loss above 2^53.
+    private static final Gson GSON =
+            new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
 
     private static final String PATH_COLLECTIONS =
             "/api/v2/tenants/%s/databases/%s/collections";

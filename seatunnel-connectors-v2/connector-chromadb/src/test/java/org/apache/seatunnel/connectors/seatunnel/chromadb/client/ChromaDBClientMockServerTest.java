@@ -17,15 +17,25 @@
 
 package org.apache.seatunnel.connectors.seatunnel.chromadb.client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.BasicType;
+import org.apache.seatunnel.api.table.type.CommonOptions;
+import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.connectors.seatunnel.chromadb.exception.ChromaDBConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.chromadb.utils.ChromaDBConverter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -142,6 +152,48 @@ public class ChromaDBClientMockServerTest {
             String body = req.getBody().readUtf8();
             Assertions.assertTrue(body.contains("\"ids\":[\"id1\",\"id2\"]"));
             Assertions.assertTrue(body.contains("\"include\":[]"));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {-300L, 0L, 300L, 9007199254740993L, Long.MIN_VALUE, Long.MAX_VALUE})
+    void testIntegerMetadataSurvivesHttpAndRowConversion(long value) {
+        // The sampled row has no late_int; a later row introduces it.
+        server.enqueue(
+                new MockResponse()
+                        .setBody(
+                                "{\"ids\":[\"sample\",\"later\"],\"metadatas\":[{},"
+                                        + "{\"late_int\":"
+                                        + value
+                                        + ",\"ratio\":37.5,\"flag\":true,\"text\":\"hello\"}]}"));
+        try (ChromaDBClient client = createClient("")) {
+            ChromaDBClient.GetRecordsResult result =
+                    client.getRecords(
+                            "col-id", new ChromaDBClient.GetRecordsRequest().setLimit(2));
+            Assertions.assertTrue(result.getMetadatas().get(0).isEmpty());
+            Map<String, Object> metadata = result.getMetadatas().get(1);
+            Assertions.assertEquals(Long.valueOf(value), metadata.get("late_int"));
+            Assertions.assertEquals(37.5, metadata.get("ratio"));
+            Assertions.assertEquals(Boolean.TRUE, metadata.get("flag"));
+            Assertions.assertEquals("hello", metadata.get("text"));
+
+            TableSchema schema =
+                    TableSchema.builder()
+                            .column(
+                                    PhysicalColumn.builder()
+                                            .name(CommonOptions.METADATA.getName())
+                                            .dataType(BasicType.STRING_TYPE)
+                                            .build())
+                            .build();
+            SeaTunnelRow row =
+                    ChromaDBConverter.convert(schema, "later", null, null, null, metadata);
+            JsonObject json = JsonParser.parseString((String) row.getField(0)).getAsJsonObject();
+            // INT64 fixed-field conversion parses the serialized numeric value as a long.
+            Assertions.assertEquals(value, Long.parseLong(json.get("late_int").toString()));
+            Assertions.assertEquals(37.5, json.get("ratio").getAsDouble());
+            Assertions.assertThrows(
+                    NumberFormatException.class,
+                    () -> Long.parseLong(json.get("ratio").toString()));
         }
     }
 
