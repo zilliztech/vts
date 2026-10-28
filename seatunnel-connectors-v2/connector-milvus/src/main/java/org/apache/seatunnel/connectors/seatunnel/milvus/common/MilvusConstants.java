@@ -59,4 +59,7 @@ public class MilvusConstants {
     public static final String INDEX_TYPE = "indexType";
     public static final String METRIC_TYPE = "metricType";
     public static final String EXTRA_PARAMS = "extraParams";
+    // Raw index param keys as stored by Milvus inside the index params list
+    public static final String INDEX_TYPE_PARAM = "index_type";
+    public static final String METRIC_TYPE_PARAM = "metric_type";
 }

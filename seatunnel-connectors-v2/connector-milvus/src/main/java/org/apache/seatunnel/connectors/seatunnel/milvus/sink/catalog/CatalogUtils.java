@@ -169,11 +169,26 @@ public class CatalogUtils {
             }
         }
 
-        IndexParam.MetricType metricType = indexInfo.containsKey(MilvusConstants.METRIC_TYPE)
-                ? IndexParam.MetricType.valueOf(indexInfo.get(MilvusConstants.METRIC_TYPE))
-                : null;
-
+        IndexParam.MetricType metricType = parseMetricType(indexInfo.get(MilvusConstants.METRIC_TYPE));
         IndexParam.IndexType indexType = parseIndexType(indexInfo.get(MilvusConstants.INDEX_TYPE));
+
+        // The Milvus SDK always writes index_type (and metric_type when set) as dedicated
+        // CreateIndexRequest params, so those keys must not survive inside extraParams:
+        // sending them twice makes the server reject the request with
+        // "duplicated index param (key=index_type)" (SERVER_ERROR 1100). Promote a value
+        // that only exists in the source index params before dropping the duplicate so
+        // the index type/metric is not silently lost.
+        Map<String, Object> extraParams = parseExtraParams(indexInfo, gson, extraParamsType);
+        if (extraParams != null) {
+            String sourceIndexType = removeParam(extraParams, MilvusConstants.INDEX_TYPE_PARAM);
+            if (indexType == null && sourceIndexType != null) {
+                indexType = parseIndexType(sourceIndexType);
+            }
+            String sourceMetricType = removeParam(extraParams, MilvusConstants.METRIC_TYPE_PARAM);
+            if (metricType == null && sourceMetricType != null) {
+                metricType = parseMetricType(sourceMetricType);
+            }
+        }
 
         IndexParam.IndexParamBuilder builder = IndexParam.builder()
                 .fieldName(fieldName)
@@ -183,21 +198,36 @@ public class CatalogUtils {
             builder.indexType(indexType);
         }
 
-        // Parse and apply extraParams if present
-        if (indexInfo.containsKey(MilvusConstants.EXTRA_PARAMS)
-                && StringUtils.isNotEmpty(indexInfo.get(MilvusConstants.EXTRA_PARAMS))) {
-            Map<String, Object> extraParams =
-                    gson.fromJson(indexInfo.get(MilvusConstants.EXTRA_PARAMS), extraParamsType);
-            if (extraParams != null && !extraParams.isEmpty()) {
-                builder.extraParams(extraParams);
-                log.debug(
-                        "Applied extraParams for index '{}': {}",
-                        indexInfo.get(MilvusConstants.INDEX_NAME),
-                        extraParams);
-            }
+        if (extraParams != null && !extraParams.isEmpty()) {
+            builder.extraParams(extraParams);
+            log.debug(
+                    "Applied extraParams for index '{}': {}",
+                    indexInfo.get(MilvusConstants.INDEX_NAME),
+                    extraParams);
         }
 
         return builder.build();
+    }
+
+    private static Map<String, Object> parseExtraParams(
+            Map<String, String> indexInfo, Gson gson, Type extraParamsType) {
+        String rawExtraParams = indexInfo.get(MilvusConstants.EXTRA_PARAMS);
+        if (StringUtils.isEmpty(rawExtraParams)) {
+            return null;
+        }
+        return gson.fromJson(rawExtraParams, extraParamsType);
+    }
+
+    private static String removeParam(Map<String, Object> params, String key) {
+        Object value = params.remove(key);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    IndexParam.MetricType parseMetricType(String metricType) {
+        if (StringUtils.isBlank(metricType)) {
+            return null;
+        }
+        return IndexParam.MetricType.valueOf(metricType);
     }
 
     IndexParam.IndexType parseIndexType(String indexType) {
