@@ -914,6 +914,184 @@ public class MilvusSinkConverterTest {
         Assertions.assertEquals(4.2f, floatList.get(3));
     }
 
+    @Test
+    void booleanConversionSupportsNativeAndCaseInsensitiveStringsInBothTypePaths() {
+        FieldSchema field = FieldSchema.builder().name("enabled").dataType(DataType.Bool).build();
+        for (Object value :
+                Arrays.asList(true, false, "true", "false", "TRUE", "FALSE", "TrUe", "FaLsE")) {
+            boolean expected = "true".equalsIgnoreCase(value.toString());
+            Assertions.assertEquals(expected, converter.convertByMilvusType(field, value));
+            Assertions.assertEquals(
+                    expected,
+                    converter.convertBySeaTunnelType(BasicType.BOOLEAN_TYPE, false, value));
+        }
+        for (Object value :
+                Arrays.asList(
+                        "",
+                        "invalid",
+                        "yes",
+                        "no",
+                        "on",
+                        "off",
+                        "1",
+                        "0",
+                        " true ",
+                        "null",
+                        1,
+                        0,
+                        -1,
+                        1.0,
+                        Collections.emptyMap(),
+                        new Object() {
+                            public String toString() {
+                                return "true";
+                            }
+                        })) {
+            MilvusConnectorException error =
+                    Assertions.assertThrows(
+                            MilvusConnectorException.class,
+                            () -> converter.convertByMilvusType(field, value));
+            Assertions.assertTrue(error.getMessage().contains("enabled"));
+            Assertions.assertThrows(
+                    MilvusConnectorException.class,
+                    () -> converter.convertBySeaTunnelType(BasicType.BOOLEAN_TYPE, false, value));
+        }
+        Assertions.assertNull(
+                converter.convertBySeaTunnelType(BasicType.BOOLEAN_TYPE, false, null));
+    }
+
+    @Test
+    void nestedRowBooleanUsesTheSameConversionContract() {
+        SeaTunnelRowType rowType =
+                new SeaTunnelRowType(
+                        new String[] {"enabled"},
+                        new SeaTunnelDataType<?>[] {BasicType.BOOLEAN_TYPE});
+        for (Object value : Arrays.asList(null, true, false, "TRUE", "False")) {
+            JsonObject row =
+                    (JsonObject)
+                            converter.convertBySeaTunnelType(
+                                    rowType, false, new SeaTunnelRow(new Object[] {value}));
+            if (value == null) {
+                Assertions.assertTrue(row.get("enabled").isJsonNull());
+            } else {
+                Assertions.assertEquals(
+                        "true".equalsIgnoreCase(value.toString()),
+                        row.get("enabled").getAsBoolean());
+            }
+        }
+        Assertions.assertThrows(
+                MilvusConnectorException.class,
+                () ->
+                        converter.convertBySeaTunnelType(
+                                rowType, false, new SeaTunnelRow(new Object[] {"invalid"})));
+    }
+
+    @Test
+    void booleanPhysicalFieldsRespectMappingsAndPreserveNullForTargetValidation() {
+        CatalogTable table =
+                buildCatalogTable(
+                        new SeaTunnelRowType(
+                                new String[] {"source_enabled"},
+                                new SeaTunnelDataType<?>[] {BasicType.BOOLEAN_TYPE}));
+        for (boolean nullable : Arrays.asList(true, false)) {
+            for (Boolean defaultValue : Arrays.asList(null, true, false)) {
+                FieldSchema field =
+                        FieldSchema.builder()
+                                .name("enabled")
+                                .dataType(DataType.Bool)
+                                .isNullable(nullable)
+                                .defaultValue(defaultValue)
+                                .build();
+                for (Object value : Arrays.asList(null, true, false, "TRUE", "False")) {
+                    JsonObject row =
+                            converter.buildMilvusData(
+                                    table,
+                                    buildDescribeCollectionResp(field),
+                                    Collections.singletonMap("source_enabled", "enabled"),
+                                    new SeaTunnelRow(new Object[] {value}),
+                                    false);
+                    Assertions.assertFalse(row.has("source_enabled"));
+                    if (value == null) {
+                        Assertions.assertTrue(row.get("enabled").isJsonNull());
+                    } else {
+                        Assertions.assertEquals(
+                                "true".equalsIgnoreCase(value.toString()),
+                                row.get("enabled").getAsBoolean());
+                    }
+                }
+                Assertions.assertThrows(
+                        MilvusConnectorException.class,
+                        () ->
+                                converter.buildMilvusData(
+                                        table,
+                                        buildDescribeCollectionResp(field),
+                                        Collections.singletonMap("source_enabled", "enabled"),
+                                        new SeaTunnelRow(new Object[] {"invalid"}),
+                                        false));
+            }
+        }
+    }
+
+    @Test
+    void metadataBooleanPromotionValidatesOnlyMappedFixedFields() {
+        CatalogTable table =
+                buildCatalogTable(
+                        new SeaTunnelRowType(
+                                new String[] {"metadata"},
+                                new SeaTunnelDataType<?>[] {BasicType.STRING_TYPE}),
+                        Collections.singletonMap("metadata", metadataOptions()));
+        FieldSchema field =
+                FieldSchema.builder()
+                        .name("enabled")
+                        .dataType(DataType.Bool)
+                        .isNullable(true)
+                        .build();
+        Map<String, String> mapping = Collections.singletonMap("source_enabled", "enabled");
+        for (String value : Arrays.asList("true", "false", "\"TRUE\"", "\"FaLsE\"", "null")) {
+            JsonObject row =
+                    converter.buildMilvusData(
+                            table,
+                            buildDescribeCollectionResp(field),
+                            mapping,
+                            new SeaTunnelRow(new Object[] {"{\"source_enabled\":" + value + "}"}),
+                            false);
+            if ("null".equals(value)) {
+                Assertions.assertTrue(row.get("enabled").isJsonNull());
+            } else {
+                Assertions.assertTrue(row.getAsJsonPrimitive("enabled").isBoolean());
+                Assertions.assertEquals(
+                        value.toLowerCase().contains("true"), row.get("enabled").getAsBoolean());
+            }
+        }
+        for (String value : Arrays.asList("\"invalid\"", "\"\"", "1", "0", "{}")) {
+            Assertions.assertThrows(
+                    MilvusConnectorException.class,
+                    () ->
+                            converter.buildMilvusData(
+                                    table,
+                                    buildDescribeCollectionResp(field),
+                                    mapping,
+                                    new SeaTunnelRow(
+                                            new Object[] {"{\"source_enabled\":" + value + "}"}),
+                                    false));
+        }
+        String dynamic =
+                "{\"text\":\"invalid\",\"string_bool\":\"TRUE\",\"number\":1,\"bool\":true,\"empty\":null}";
+        JsonObject row =
+                converter.buildMilvusData(
+                        table,
+                        buildDescribeCollectionResp(field),
+                        mapping,
+                        new SeaTunnelRow(new Object[] {dynamic}),
+                        false);
+        Assertions.assertFalse(row.has("enabled"));
+        Assertions.assertEquals("invalid", row.get("text").getAsString());
+        Assertions.assertTrue(row.getAsJsonPrimitive("string_bool").isString());
+        Assertions.assertTrue(row.getAsJsonPrimitive("number").isNumber());
+        Assertions.assertTrue(row.getAsJsonPrimitive("bool").isBoolean());
+        Assertions.assertTrue(row.get("empty").isJsonNull());
+    }
+
     private static CatalogTable buildCatalogTable(SeaTunnelRowType rowType) {
         return buildCatalogTable(rowType, Collections.emptyMap());
     }
