@@ -170,7 +170,7 @@ public class MilvusSinkConverter {
             case FLOAT:
                 return Float.parseFloat(value.toString());
             case BOOLEAN:
-                return Boolean.parseBoolean(value.toString());
+                return convertBoolean(value, "BOOLEAN");
             case DOUBLE:
                 return Double.parseDouble(value.toString());
             case TIME:
@@ -460,6 +460,27 @@ public class MilvusSinkConverter {
         return element;
     }
 
+    private static Boolean convertBoolean(Object value, String fieldName) {
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof String) {
+            if ("true".equalsIgnoreCase((String) value)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase((String) value)) {
+                return false;
+            }
+        }
+        throw new MilvusConnectorException(
+                MilvusConnectionErrorCode.WRITE_DATA_FAIL,
+                "Cannot convert field '"
+                        + fieldName
+                        + "' to BOOL: expected Boolean or "
+                        + "a true/false string (case-insensitive), received "
+                        + value.getClass().getSimpleName());
+    }
+
     public Object convertByMilvusType(FieldSchema fieldSchema, Object value) {
         if (value == null) {
             return null;
@@ -478,7 +499,7 @@ public class MilvusSinkConverter {
             case Double:
                 return Double.parseDouble(value.toString());
             case Bool:
-                return Boolean.parseBoolean(value.toString());
+                return convertBoolean(value, fieldSchema.getName());
             case Text:
             case VarChar:
             case String:
