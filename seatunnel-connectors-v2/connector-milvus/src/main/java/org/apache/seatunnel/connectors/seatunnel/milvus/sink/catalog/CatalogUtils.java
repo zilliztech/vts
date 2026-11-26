@@ -17,6 +17,7 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
@@ -227,8 +228,8 @@ public class CatalogUtils {
     }
 
     /**
-     * Create collection schema from field_schema config only.
-     * Schema is built entirely from configuration.
+     * Create ordinary fields from field_schema config.
+     * Struct fields are handled separately through struct_fields.
      */
     private void createTableFromFieldSchema(TablePath tablePath, CatalogTable catalogTable) {
         log.info("Creating collection from field_schema config, {} fields defined", fieldSchemaMap.size());
@@ -285,7 +286,7 @@ public class CatalogUtils {
             boolean isArrayStruct = column.getOptions() != null
                     && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS);
 
-            if (!isArrayStruct) {
+            if (!isArrayStruct && !ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(column.getDataType())) {
                 // Regular field - add to fieldSchemaList
                 CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
                         column,
@@ -658,10 +659,19 @@ public class CatalogUtils {
     private List<CreateCollectionReq.StructFieldSchema> getStructFieldsFromColumnsAndConfig(
             CatalogTable catalogTable, Gson gson) {
         List<CreateCollectionReq.StructFieldSchema> structFieldsList = new ArrayList<>();
+        List<String> allowedStructFields = config.get(MilvusSinkConfig.structFieldsList);
 
         // 1. Extract struct fields from columns (source metadata)
         TableSchema tableSchema = catalogTable.getTableSchema();
         for (Column column : tableSchema.getColumns()) {
+            if (ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(column.getDataType())) {
+                // With an explicit ordinary schema, include vector arrays only when selected as structs.
+                if (fieldSchemaMap.isEmpty()
+                        || (allowedStructFields != null && allowedStructFields.contains(column.getName()))) {
+                    structFieldsList.add(MilvusSchemaConverter.convertVectorArrayToStructField(column));
+                }
+                continue;
+            }
             if (column.getOptions() != null && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS)) {
                 String structFieldsJson = (String) column.getOptions().get(MilvusConstants.STRUCT_FIELDS);
                 if (StringUtils.isNotEmpty(structFieldsJson)
@@ -696,7 +706,6 @@ public class CatalogUtils {
         }
 
         // 2. Filter struct fields based on struct_fields config (if specified)
-        List<String> allowedStructFields = config.get(MilvusSinkConfig.structFieldsList);
         if (allowedStructFields != null && !allowedStructFields.isEmpty()) {
             // Filter to only include specified struct field names
             List<CreateCollectionReq.StructFieldSchema> filteredList = new ArrayList<>();

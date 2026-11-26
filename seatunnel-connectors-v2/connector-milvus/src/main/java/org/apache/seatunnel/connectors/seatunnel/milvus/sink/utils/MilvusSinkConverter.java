@@ -313,7 +313,8 @@ public class MilvusSinkConverter {
             if(fieldSchema == null){
                 continue;
             }
-            Object object = convertByMilvusType(fieldSchema, value);
+            Object object = convertFieldValue(
+                    seaTunnelRowType.getFieldType(i), describeCollectionResp, fieldSchema, value);
             if(fieldSchema.getDataType() == io.milvus.v2.common.DataType.SparseFloatVector && object == null){
                 continue;
             }
@@ -362,6 +363,50 @@ public class MilvusSinkConverter {
             array.add(buffer.get());
         }
         return array;
+    }
+
+    private Object convertFieldValue(
+            SeaTunnelDataType<?> sourceType,
+            DescribeCollectionResp description,
+            FieldSchema targetField,
+            Object value) {
+        if (targetField.getDataType() == io.milvus.v2.common.DataType.Array
+                && targetField.getElementType() == io.milvus.v2.common.DataType.Struct
+                && ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(sourceType)) {
+            return convertVectorArray(description, targetField.getName(), value);
+        }
+        return convertByMilvusType(targetField, value);
+    }
+
+    private Object convertVectorArray(
+            DescribeCollectionResp description, String fieldName, Object value) {
+        if (value == null) {
+            return null;
+        }
+        String childName = "vector";
+        List<CreateCollectionReq.StructFieldSchema> structs = description.getCollectionSchema().getStructFields();
+        if (structs != null) {
+            for (CreateCollectionReq.StructFieldSchema struct : structs) {
+                if (fieldName.equals(struct.getName()) && struct.getFields().size() == 1) {
+                    childName = struct.getFields().get(0).getName();
+                    break;
+                }
+            }
+        }
+        JsonArray result = new JsonArray();
+        for (Float[] vector : (Float[][]) value) {
+            JsonArray embedding = null;
+            if (vector != null) {
+                embedding = new JsonArray();
+                for (Float number : vector) {
+                    embedding.add(number);
+                }
+            }
+            JsonObject struct = new JsonObject();
+            struct.add(childName, embedding);
+            result.add(struct);
+        }
+        return result;
     }
 
     /**
