@@ -5,6 +5,7 @@ import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -94,7 +95,7 @@ class ConverterUtilsTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void rejectsMultiDenseInsteadOfFlatteningOrReturningEmptyVector(boolean modern) {
+    void rejectsMultiDenseWhenSchemaDeclaresSingleVector(boolean modern) {
         Points.VectorOutput vector = modern
                 ? Points.VectorOutput.newBuilder().setMultiDense(Points.MultiDenseVector.newBuilder()
                         .addVectors(Points.DenseVector.newBuilder().addData(1.0f))).build()
@@ -125,6 +126,150 @@ class ConverterUtilsTest {
                 .setSparse(Points.SparseVector.newBuilder().addIndices(1)).build();
         assertThrows(QdrantConnectorException.class,
                 () -> convertNamed("sparse_vector", VectorType.VECTOR_SPARSE_FLOAT_TYPE, vector));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+    void preservesMultiDenseBoundaries(boolean modern, boolean named) {
+        String field = named ? "colbert" : "vector";
+        io.qdrant.client.grpc.Collections.VectorParams params =
+                io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+                        .setSize(2)
+                        .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine)
+                        .setMultivectorConfig(
+                                io.qdrant.client.grpc.Collections.MultiVectorConfig.newBuilder()
+                                        .setComparator(
+                                                io.qdrant.client.grpc.Collections
+                                                        .MultiVectorComparator.MaxSim))
+                        .build();
+        org.apache.seatunnel.api.table.catalog.Column column =
+                ConnectorUtils.vectorColumn(field, params, !named);
+        assertEquals(ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE), column.getDataType());
+        assertEquals(2, column.getScale());
+        assertNull(column.getSourceType());
+        assertEquals(!named, Boolean.TRUE.equals(column.getOptions().get(ConnectorUtils.UNNAMED_VECTOR)));
+        TableSchema schema =
+                TableSchema.builder()
+                        .columns(
+                                Arrays.asList(
+                                        PhysicalColumn.builder()
+                                                .name("id")
+                                                .dataType(BasicType.LONG_TYPE)
+                                                .build(),
+                                        column))
+                        .primaryKey(PrimaryKey.of("id", Collections.singletonList("id")))
+                        .build();
+        for (int count : new int[] {1, 3, 4096, 4097}) {
+            Points.VectorOutput.Builder vector = Points.VectorOutput.newBuilder();
+            if (modern) {
+                Points.MultiDenseVector.Builder multi = Points.MultiDenseVector.newBuilder();
+                for (int i = 0; i < count; i++) {
+                    multi.addVectors(Points.DenseVector.newBuilder().addData(i).addData(-i));
+                }
+                vector.setMultiDense(multi);
+            } else {
+                for (int i = 0; i < count; i++) {
+                    vector.addData(i).addData(-i);
+                }
+                vector.setVectorsCount(count);
+            }
+            Points.VectorsOutput.Builder vectors = Points.VectorsOutput.newBuilder();
+            if (named) {
+                vectors.setVectors(
+                        Points.NamedVectorsOutput.newBuilder().putVectors(field, vector.build()));
+            } else {
+                vectors.setVector(vector);
+            }
+            SeaTunnelRow row =
+                    ConverterUtils.convertToSeaTunnelRowWithMeta(
+                            schema,
+                            Points.RetrievedPoint.newBuilder()
+                                    .setId(PointId.newBuilder().setNum(7))
+                                    .setVectors(vectors)
+                                    .build());
+            Float[][] embeddings = (Float[][]) row.getField(1);
+            assertEquals(count, embeddings.length);
+            for (int i = 0; i < count; i++) {
+                assertArrayEquals(new Float[] {(float) i, (float) -i},
+                        embeddings[i]);
+            }
+        }
+    }
+
+    @Test
+    void rejectsMalformedMultiDenseWithPointAndFieldContext() {
+        io.qdrant.client.grpc.Collections.VectorParams params =
+                io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+                        .setSize(2)
+                        .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine)
+                        .setMultivectorConfig(
+                                io.qdrant.client.grpc.Collections.MultiVectorConfig.newBuilder()
+                                        .setComparator(
+                                                io.qdrant.client.grpc.Collections
+                                                        .MultiVectorComparator.MaxSim))
+                        .build();
+        TableSchema schema =
+                TableSchema.builder()
+                        .columns(
+                                Arrays.asList(
+                                        PhysicalColumn.builder()
+                                                .name("id")
+                                                .dataType(BasicType.LONG_TYPE)
+                                                .build(),
+                                        ConnectorUtils.vectorColumn("colbert", params, false)))
+                        .primaryKey(PrimaryKey.of("id", Collections.singletonList("id")))
+                        .build();
+        List<Points.VectorOutput> invalid = Arrays.asList(
+                Points.VectorOutput.newBuilder().setVectorsCount(2).addData(1).addData(2).addData(3).build(),
+                Points.VectorOutput.newBuilder().setVectorsCount(0).addData(1).build(),
+                Points.VectorOutput.newBuilder().setVectorsCount(-1).build(),
+                Points.VectorOutput.newBuilder().setVectorsCount(1).addData(1)
+                        .setIndices(Points.SparseIndices.newBuilder().addData(1)).build(),
+                Points.VectorOutput.newBuilder()
+                        .setDense(Points.DenseVector.newBuilder().addData(1).addData(2)).build());
+        for (Points.VectorOutput vector : invalid) {
+            QdrantConnectorException error =
+                    assertThrows(
+                            QdrantConnectorException.class,
+                            () ->
+                                    ConverterUtils.convertToSeaTunnelRowWithMeta(
+                                            schema,
+                                            Points.RetrievedPoint.newBuilder()
+                                                    .setId(PointId.newBuilder().setNum(42))
+                                                    .setVectors(
+                                                            Points.VectorsOutput.newBuilder()
+                                                                    .setVectors(
+                                                                            Points
+                                                                                    .NamedVectorsOutput
+                                                                                    .newBuilder()
+                                                                                    .putVectors(
+                                                                                            "colbert",
+                                                                                            vector)))
+                                                    .build()));
+            org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("colbert"));
+            org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("42"));
+        }
+    }
+
+    @Test
+    void decodesMultiDenseWithoutValidatingDimensionsOrValues() {
+        Points.VectorOutput vector = Points.VectorOutput.newBuilder().setMultiDense(
+                Points.MultiDenseVector.newBuilder()
+                        .addVectors(Points.DenseVector.newBuilder().addData(1))
+                        .addVectors(Points.DenseVector.newBuilder().addData(Float.NaN).addData(2))).build();
+        Float[][] values = (Float[][]) convertNamed("colbert", ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE), vector).getField(1);
+        assertArrayEquals(new Float[] {1.0f}, values[0]);
+        assertArrayEquals(new Float[] {Float.NaN, 2.0f}, values[1]);
+        Points.VectorOutput legacy = Points.VectorOutput.newBuilder().setVectorsCount(2)
+                .addData(Float.NaN).addData(2).build();
+        Float[][] legacyValues = (Float[][]) convertNamed("colbert", ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE), legacy).getField(1);
+        assertArrayEquals(new Float[] {Float.NaN}, legacyValues[0]);
+        assertArrayEquals(new Float[] {2.0f}, legacyValues[1]);
+        for (Points.VectorOutput empty : Arrays.asList(
+                Points.VectorOutput.newBuilder().setMultiDense(Points.MultiDenseVector.getDefaultInstance()).build(),
+                Points.VectorOutput.newBuilder().setVectorsCount(0).build())) {
+            assertEquals(0, ((Float[][]) convertNamed("colbert", ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE), empty).getField(1)).length);
+        }
     }
 
     private SeaTunnelRow convertNamed(String field, SeaTunnelDataType<?> type, Points.VectorOutput vector) {

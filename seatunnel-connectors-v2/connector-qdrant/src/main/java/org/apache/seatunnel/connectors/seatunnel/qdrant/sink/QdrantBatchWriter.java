@@ -26,8 +26,10 @@ import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
@@ -35,6 +37,7 @@ import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 import org.apache.seatunnel.common.utils.BufferUtils;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.config.QdrantParameters;
+import org.apache.seatunnel.connectors.seatunnel.qdrant.utils.ConnectorUtils;
 import org.apache.seatunnel.connectors.seatunnel.qdrant.exception.QdrantConnectorException;
 
 import java.nio.ByteBuffer;
@@ -111,7 +114,10 @@ public class QdrantBatchWriter {
 
             Points.Vector vector = buildVector(fieldType, value);
             if (vector != null) {
-                namedVectors.putVectors(fieldName, vector);
+                Column column = catalogTable.getTableSchema().getColumn(fieldName);
+                boolean unnamed = column.getOptions() != null
+                        && Boolean.TRUE.equals(column.getOptions().get(ConnectorUtils.UNNAMED_VECTOR));
+                namedVectors.putVectors(unnamed ? "" : fieldName, vector);
             }
         }
 
@@ -119,7 +125,11 @@ public class QdrantBatchWriter {
             point.setId(id(UUID.randomUUID()));
         }
 
-        point.setVectors(Points.Vectors.newBuilder().setVectors(namedVectors).build());
+        if (namedVectors.getVectorsCount() == 1 && namedVectors.containsVectors("")) {
+            point.setVectors(Points.Vectors.newBuilder().setVector(namedVectors.getVectorsOrThrow("")));
+        } else {
+            point.setVectors(Points.Vectors.newBuilder().setVectors(namedVectors).build());
+        }
         return point.build();
     }
 
@@ -142,6 +152,8 @@ public class QdrantBatchWriter {
         switch (sqlType) {
             case INT:
                 return id(Integer.parseInt(value.toString()));
+            case BIGINT:
+                return id(Long.parseLong(value.toString()));
             case STRING:
                 return id(UUID.fromString(value.toString()));
             default:
@@ -172,6 +184,10 @@ public class QdrantBatchWriter {
     }
 
     public static Points.Vector buildVector(SeaTunnelDataType<?> fieldType, Object value) {
+        if (ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(fieldType)) {
+            return value == null ? null : VectorFactory.multiVector(
+                    Arrays.stream((Float[][]) value).map(Arrays::asList).collect(Collectors.toList()));
+        }
         SqlType sqlType = fieldType.getSqlType();
         switch (sqlType) {
             case FLOAT_VECTOR:
