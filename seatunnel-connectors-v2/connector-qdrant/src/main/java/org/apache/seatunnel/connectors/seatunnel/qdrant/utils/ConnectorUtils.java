@@ -35,6 +35,7 @@ import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import static org.apache.seatunnel.api.table.type.BasicType.LONG_TYPE;
 import static org.apache.seatunnel.api.table.type.BasicType.STRING_TYPE;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT_TYPE;
 import static org.apache.seatunnel.api.table.type.VectorType.VECTOR_SPARSE_FLOAT_TYPE;
@@ -50,7 +51,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class ConnectorUtils {
-
     public static CatalogTable buildCatalogTable(ReadonlyConfig config) {
         QdrantClient client = new QdrantClient(QdrantGrpcClient.
                 newBuilder(config.get(QdrantConfig.HOST), config.get(QdrantConfig.PORT), config.get(QdrantConfig.USE_TLS))
@@ -94,26 +94,12 @@ public class ConnectorUtils {
                 columns.add(idColumn);
             }
             Collections.VectorsConfig vectorsConfig = collectionInfo.getConfig().getParams().getVectorsConfig();
-            if(vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
-                // single vector
-                long dimension = vectorsConfig.getParams().getSize();
-                PhysicalColumn vectorColumn = PhysicalColumn.builder()
-                        .name("vector")
-                        .dataType(VECTOR_FLOAT_TYPE)
-                        .scale(Math.toIntExact(dimension))
-                        .build();
-                columns.add(vectorColumn);
-            } else if (!vectorsConfig.getParamsMap().getMapMap().isEmpty()) {
-                // multiple vectors
+            if (vectorsConfig.hasParams()) {
+                // Unnamed vector configuration (single or multi-dense).
+                columns.add(vectorColumn("vector", vectorsConfig.getParams()));
+            } else if (vectorsConfig.hasParamsMap()) {
                 for (Map.Entry<String, Collections.VectorParams> entry : vectorsConfig.getParamsMap().getMapMap().entrySet()) {
-                    Collections.VectorParams params = entry.getValue();
-                    long dimension = params.getSize();
-                    PhysicalColumn vectorColumn = PhysicalColumn.builder()
-                            .name(entry.getKey())
-                            .dataType(VECTOR_FLOAT_TYPE)
-                            .scale(Math.toIntExact(dimension))
-                            .build();
-                    columns.add(vectorColumn);
+                    columns.add(vectorColumn(entry.getKey(), entry.getValue()));
                 }
             }
             Collections.SparseVectorConfig sparseVectorConfig = collectionInfo.getConfig().getParams().getSparseVectorsConfig();
@@ -148,5 +134,14 @@ public class ConnectorUtils {
         }catch (ExecutionException | InterruptedException e) {
             throw new QdrantConnectorException(QdrantConnectionErrorCode.FAILED_CONNECT_QDRANT, e.getMessage());
         }
+    }
+
+    static Column vectorColumn(String name, Collections.VectorParams params) {
+        boolean multi = params.hasMultivectorConfig();
+        return PhysicalColumn.builder()
+                .name(name)
+                .dataType(multi ? ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE) : VECTOR_FLOAT_TYPE)
+                .scale(Math.toIntExact(params.getSize()))
+                .build();
     }
 }

@@ -27,6 +27,7 @@ import io.qdrant.client.grpc.Points;
 import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import static org.apache.seatunnel.api.table.catalog.PrimaryKey.isPrimaryKeyField;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
@@ -85,9 +86,13 @@ public class ConverterUtils {
             if(vector == null){
                 continue;
             }
+            if (ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(seaTunnelDataType)) {
+                fields[fieldIndex] = convertMultiDense(vector, fieldName, point.getId());
+                continue;
+            }
             if (vector.hasMultiDense() || vector.hasVectorsCount()) {
                 throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
-                        "Multi-dense vector is not supported for field '" + fieldName
+                        "Multi-dense vector does not match the declared schema for field '" + fieldName
                                 + "', point " + point.getId());
             }
             switch (seaTunnelDataType.getSqlType()) {
@@ -134,6 +139,30 @@ public class ConverterUtils {
         SeaTunnelRow seaTunnelRow = new SeaTunnelRow(fields);
         seaTunnelRow.setRowKind(RowKind.INSERT);
         return seaTunnelRow;
+    }
+
+    private static Float[][] convertMultiDense(
+            Points.VectorOutput vector, String fieldName, PointId id) {
+        if (vector.hasMultiDense()) {
+            return vector.getMultiDense().getVectorsList().stream()
+                    .map(dense -> dense.getDataList().toArray(new Float[0]))
+                    .toArray(Float[][]::new);
+        }
+        int count = vector.getVectorsCount();
+        int size = vector.getDataCount();
+        // The legacy encoding is flat: a valid count is required to recover subvector boundaries.
+        if (!vector.hasVectorsCount() || vector.hasIndices() || vector.hasSparse()
+                || count < 0 || (count == 0 ? size != 0 : size % count != 0)) {
+            throw new QdrantConnectorException(QdrantConnectionErrorCode.INVALID_VECTOR,
+                    "Cannot decode multi-vector field '" + fieldName + "', point " + id);
+        }
+        Float[][] result = new Float[count][];
+        int dimension = count == 0 ? 0 : size / count;
+        for (int i = 0; i < count; i++) {
+            result[i] = vector.getDataList().subList(i * dimension, (i + 1) * dimension)
+                    .toArray(new Float[0]);
+        }
+        return result;
     }
 
     private static JsonElement convertValueToJsonElement(JsonWithInt.Value value) {
