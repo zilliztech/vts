@@ -17,6 +17,7 @@ import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
@@ -237,6 +238,13 @@ public class CatalogUtils {
 
         // Build all fields from config
         for (MilvusFieldSchema milvusFieldSchema : fieldSchemaMap.values()) {
+            String sourceName = milvusFieldSchema.getSourceFieldName() != null
+                    ? milvusFieldSchema.getSourceFieldName() : milvusFieldSchema.getEffectiveFieldName();
+            if (isStructArrayConfig(milvusFieldSchema) && catalogTable.getTableSchema().contains(sourceName)
+                    && ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(
+                            catalogTable.getTableSchema().getColumn(sourceName).getDataType())) {
+                continue; // Vector arrays are created as collection-level struct fields below.
+            }
             CreateCollectionReq.FieldSchema fieldSchema = createFieldSchemaFromConfig(milvusFieldSchema);
             fieldSchemaList.add(fieldSchema);
             log.info("Added field from config: {}", fieldSchema.getName());
@@ -285,7 +293,7 @@ public class CatalogUtils {
             boolean isArrayStruct = column.getOptions() != null
                     && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS);
 
-            if (!isArrayStruct) {
+            if (!isArrayStruct && !ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(column.getDataType())) {
                 // Regular field - add to fieldSchemaList
                 CreateCollectionReq.FieldSchema fieldSchema = MilvusSchemaConverter.convertToFieldType(
                         column,
@@ -651,6 +659,12 @@ public class CatalogUtils {
         return functionList;
     }
 
+    private boolean isStructArrayConfig(MilvusFieldSchema field) {
+        return field.getDataType() == null
+                || (field.getDataType() == DataType.Array.getCode()
+                        && field.getElementType() != null && field.getElementType() == DataType.Struct.getCode());
+    }
+
     /**
      * Extract struct fields from columns and merge with struct_fields config.
      * This is used for both source schema and field_schema config scenarios.
@@ -662,6 +676,31 @@ public class CatalogUtils {
         // 1. Extract struct fields from columns (source metadata)
         TableSchema tableSchema = catalogTable.getTableSchema();
         for (Column column : tableSchema.getColumns()) {
+            if (ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE).equals(column.getDataType())) {
+                CreateCollectionReq.StructFieldSchema struct = MilvusSchemaConverter.convertVectorArrayToStructField(column);
+                for (MilvusFieldSchema field : fieldSchemaMap.values()) {
+                    String sourceName = field.getSourceFieldName() != null
+                            ? field.getSourceFieldName() : field.getEffectiveFieldName();
+                    if (column.getName().equals(sourceName)) {
+                        if (!isStructArrayConfig(field)) {
+                            struct = null; // An explicit scalar/JSON definition takes precedence.
+                            break;
+                        }
+                        struct.setName(field.getEffectiveFieldName());
+                        if (field.getDimension() != null) {
+                            struct.getFields().get(0).setDimension(field.getDimension());
+                        }
+                        if (field.getMaxCapacity() != null) {
+                            struct.setMaxCapacity(field.getMaxCapacity());
+                        }
+                        break;
+                    }
+                }
+                if (struct != null) {
+                    structFieldsList.add(struct);
+                }
+                continue;
+            }
             if (column.getOptions() != null && column.getOptions().containsKey(MilvusConstants.STRUCT_FIELDS)) {
                 String structFieldsJson = (String) column.getOptions().get(MilvusConstants.STRUCT_FIELDS);
                 if (StringUtils.isNotEmpty(structFieldsJson)

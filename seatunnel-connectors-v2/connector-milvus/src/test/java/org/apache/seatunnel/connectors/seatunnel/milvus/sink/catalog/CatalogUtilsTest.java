@@ -32,6 +32,7 @@ import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.VectorType;
@@ -69,6 +70,82 @@ public class CatalogUtilsTest {
         // Create CatalogUtils with null client and empty config (no field_schema)
         ReadonlyConfig config = ReadonlyConfig.fromMap(new HashMap<>());
         catalogUtils = new CatalogUtils(null, config);
+    }
+
+    @Test
+    void createsStructArrayFromGenericVectorArray() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogTable table = buildCatalogTable(Collections.singletonList(
+                PhysicalColumn.builder().name("colbert")
+                        .dataType(ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE)).scale(2).build()),
+                new HashMap<>());
+        new CatalogUtils(client, ReadonlyConfig.fromMap(new HashMap<>()))
+                .createTableInternal(TablePath.of("default", "target"), table);
+        ArgumentCaptor<CreateCollectionReq> captor = ArgumentCaptor.forClass(CreateCollectionReq.class);
+        Mockito.verify(client).createCollection(captor.capture());
+        CreateCollectionReq.CollectionSchema schema = captor.getValue().getCollectionSchema();
+        Assertions.assertEquals(1, schema.getStructFields().size());
+        Assertions.assertFalse(schema.getFieldSchemaList().stream()
+                .anyMatch(field -> "colbert".equals(field.getName())));
+        CreateCollectionReq.StructFieldSchema struct = schema.getStructFields().get(0);
+        Assertions.assertEquals("colbert", struct.getName());
+        Assertions.assertEquals(4096, struct.getMaxCapacity());
+        Assertions.assertEquals("vector", struct.getFields().get(0).getName());
+        Assertions.assertEquals(2, struct.getFields().get(0).getDimension());
+        Assertions.assertEquals(io.milvus.grpc.DataType.ArrayOfVector,
+                io.milvus.v2.utils.SchemaUtils.convertToGrpcStructFieldSchema(struct)
+                        .getFields(0).getDataType());
+        Assertions.assertTrue(table.getTableSchema().getColumns().get(0).getOptions() == null
+                || table.getTableSchema().getColumns().get(0).getOptions().isEmpty());
+        Mockito.verify(client, Mockito.never()).createIndex(Mockito.any());
+    }
+
+    @Test
+    void createsRenamedVectorArrayFromFieldSchema() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogTable table = buildCatalogTable(Collections.singletonList(
+                PhysicalColumn.builder().name("colbert")
+                        .dataType(ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE)).scale(2).build()), new HashMap<>());
+        Map<String, Object> field = new HashMap<>();
+        field.put("source_field_name", "colbert");
+        field.put("field_name", "tokens");
+        field.put("data_type", DataType.Array.getCode());
+        field.put("element_type", DataType.Struct.getCode());
+        field.put("dimension", 4);
+        field.put("max_capacity", 32);
+        new CatalogUtils(client, ReadonlyConfig.fromMap(
+                Collections.singletonMap("field_schema", Collections.singletonList(field))))
+                .createTableInternal(TablePath.of("default", "target"), table);
+        ArgumentCaptor<CreateCollectionReq> captor = ArgumentCaptor.forClass(CreateCollectionReq.class);
+        Mockito.verify(client).createCollection(captor.capture());
+        CreateCollectionReq.CollectionSchema schema = captor.getValue().getCollectionSchema();
+        Assertions.assertTrue(schema.getFieldSchemaList().isEmpty());
+        Assertions.assertEquals(1, schema.getStructFields().size());
+        Assertions.assertEquals("tokens", schema.getStructFields().get(0).getName());
+        Assertions.assertEquals(32, schema.getStructFields().get(0).getMaxCapacity());
+        Assertions.assertEquals(4, schema.getStructFields().get(0).getFields().get(0).getDimension());
+    }
+
+    @Test
+    void doesNotDuplicateExplicitNonStructFieldDefinition() {
+        MilvusClientV2 client = Mockito.mock(MilvusClientV2.class);
+        CatalogTable table = buildCatalogTable(Collections.singletonList(
+                PhysicalColumn.builder().name("colbert")
+                        .dataType(ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE)).scale(2).build()), new HashMap<>());
+        Map<String, Object> field = new HashMap<>();
+        field.put("source_field_name", "colbert");
+        field.put("field_name", "tokens");
+        field.put("data_type", DataType.JSON.getCode());
+        new CatalogUtils(client, ReadonlyConfig.fromMap(
+                Collections.singletonMap("field_schema", Collections.singletonList(field))))
+                .createTableInternal(TablePath.of("default", "target"), table);
+        ArgumentCaptor<CreateCollectionReq> captor = ArgumentCaptor.forClass(CreateCollectionReq.class);
+        Mockito.verify(client).createCollection(captor.capture());
+        CreateCollectionReq.CollectionSchema schema = captor.getValue().getCollectionSchema();
+        Assertions.assertTrue(schema.getStructFields().isEmpty());
+        Assertions.assertEquals(1, schema.getFieldSchemaList().size());
+        Assertions.assertEquals("tokens", schema.getFieldSchemaList().get(0).getName());
+        Assertions.assertEquals(DataType.JSON, schema.getFieldSchemaList().get(0).getDataType());
     }
 
     // ========================

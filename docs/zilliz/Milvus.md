@@ -131,6 +131,72 @@ sink {
   }
 }
 ```
+## Multi-vector migration from Qdrant
+
+Qdrant multi-dense fields (`multivector_config.comparator = max_sim`) are automatically
+represented as SeaTunnel `ARRAY<ARRAY<FLOAT>>` fields, with the subvector dimension
+stored in the column schema and `Float[][]` row values. The Milvus sink maps this
+generic type to StructArray; the Qdrant source emits no Milvus-specific metadata or
+JSON wrappers. The source accepts both the modern `multi_dense`
+encoding and the legacy flattened `data` + `vectors_count` encoding. Named and unnamed
+vectors are supported; an unnamed field is called `vector` in the target.
+
+For a source named `colbert`, the Milvus sink writes each point as follows:
+
+```json
+{"colbert": [{"vector": [0.1, 0.2]}, {"vector": [0.3, 0.4]}]}
+```
+
+Each point remains one entity. Subvector order, dimension and variable list length
+are preserved. Payload follows the existing dynamic-field mapping; it is not
+implicitly wrapped in a new `payload` JSON field.
+
+The Milvus sink creates a StructArray with one `vector` FloatVector child and a capacity of 4096. This capacity is a target constraint, not a limit imposed by the Qdrant source or the generic type. For a pre-created StructArray with one child, the sink uses that child's name; otherwise it uses the default child name `vector`. The connector converts the matrix without prechecking its capacity, dimension or numeric values; the SDK/server handles incompatible data. Before loading the collection for search, create a compatible index on each vector field. For Cosine + MaxSim, use AUTOINDEX with MAX_SIM_COSINE on `colbert[vector]`.
+
+### Search after migration
+
+Keep the original embedding model and query matrix. With a compatible PyMilvus SDK:
+
+```python
+from pymilvus.client.embedding_list import EmbeddingList
+
+query = EmbeddingList()
+query.add_batch(query_vectors)  # one query: [number_of_tokens, dimension]
+results = client.search(
+    collection_name="documents",
+    anns_field="colbert[vector]",  # tokens[vector] if renamed
+    data=[query],
+    limit=10,
+)
+```
+
+This returns whole entities ranked by MaxSim. Compare retrieval quality and score thresholds
+before switching traffic; migration does not translate application query code or Qdrant
+prefetch/reranking pipelines.
+
+A reproducible local integration check is provided in
+[`qdrant_multivector_e2e.py`](../../tools/qdrant_multivector_e2e.py). It creates uniquely named
+collections, invokes a freshly built VTS distribution, checks exact vector contents and
+MaxSim results, and removes only its own test collections.
+
+### Configuring a renamed StructArray
+
+Automatic mapping uses the source name and dimension. When using `field_schema`,
+a StructArray definition can rename the source field and override dimension/capacity:
+
+```hocon
+# Include the primary key and any other fields required by the target schema.
+field_schema = [
+  { field_name = "id", data_type = 5, is_primary_key = true, auto_id = false },
+  { source_field_name = "colbert", field_name = "tokens", data_type = 22,
+    element_type = 201, dimension = 128, max_capacity = 4096 }
+]
+```
+
+The nested FloatVector child remains `vector`. These are schema settings, not
+client-side compatibility checks. Explicit non-StructArray definitions keep their
+configured target type rather than adding a duplicate StructArray.
+
 ## USING TLS
 check this doc about how to use tls in milvus, just specify the related config in the source or sink configs:
 https://milvus.io/docs/tls.md
