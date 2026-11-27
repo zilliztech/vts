@@ -164,7 +164,7 @@ public class MilvusSinkConverter {
             case BFLOAT16_VECTOR:
             case FLOAT16_VECTOR:
                 ByteBuffer binaryVector = (ByteBuffer) value;
-                return byteBufferToJsonArray(binaryVector);
+                return gson.toJsonTree(binaryVector.array());
             case SPARSE_FLOAT_VECTOR:
                 return JsonParser.parseString(JsonUtils.toJsonString(value)).getAsJsonObject();
             case FLOAT:
@@ -619,7 +619,7 @@ public class MilvusSinkConverter {
             case BFloat16Vector:
             case Float16Vector:
                 ByteBuffer binaryVector = (ByteBuffer) value;
-                return byteBufferToJsonArray(binaryVector);
+                return gson.toJsonTree(binaryVector.array());
             case FloatVector:
                 if (value instanceof ByteBuffer) {
                     ByteBuffer floatVectorBuffer = (ByteBuffer) value;
