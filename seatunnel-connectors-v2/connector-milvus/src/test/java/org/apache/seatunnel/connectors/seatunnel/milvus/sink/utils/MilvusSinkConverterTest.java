@@ -30,6 +30,7 @@ import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
 import org.apache.seatunnel.api.table.catalog.TableIdentifier;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.ArrayType;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
 import org.apache.seatunnel.api.table.type.GeometryType;
@@ -57,6 +58,112 @@ import java.util.Map;
 public class MilvusSinkConverterTest {
 
     private final MilvusSinkConverter converter = new MilvusSinkConverter();
+
+    @Test
+    void convertsGenericVectorArrayUsingTargetChildAndFieldNames() {
+        CatalogTable table = vectorArrayTable();
+        DescribeCollectionResp target = vectorArrayTarget(4096, 2);
+        Float[] first = {1.5f, -2.5f};
+        Float[] second = {3.5f, -4.5f};
+        for (int count : new int[] {1, 2, 4096}) {
+            Float[][] vectors = new Float[count][];
+            Arrays.fill(vectors, first);
+            vectors[count - 1] = second;
+            SeaTunnelRow row = new SeaTunnelRow(new Object[] {vectors});
+            for (int retry = 0; retry < 2; retry++) {
+                JsonObject result = converter.buildMilvusData(table, target,
+                        Collections.singletonMap("colbert", "tokens"), row, false);
+                JsonArray structs = result.getAsJsonArray("tokens");
+                Assertions.assertEquals(count, structs.size());
+                JsonArray embedding = structs.get(count - 1).getAsJsonObject().getAsJsonArray("vector");
+                Assertions.assertEquals(3.5f, embedding.get(0).getAsFloat());
+                Assertions.assertEquals(-4.5f, embedding.get(1).getAsFloat());
+            }
+            Assertions.assertArrayEquals(new Float[] {1.5f, -2.5f}, first);
+            Assertions.assertArrayEquals(new Float[] {3.5f, -4.5f}, second);
+        }
+    }
+
+    @Test
+    void leavesVectorArrayCompatibilityToServer() {
+        for (Float[][] vectors : new Float[][][] {
+                {}, {null}, {{1.0f}}, {{null, 2.0f}}, {{Float.NaN, 2.0f}},
+                {{1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}}}) {
+            JsonObject result = converter.buildMilvusData(vectorArrayTable(), vectorArrayTarget(2, 3),
+                    Collections.singletonMap("colbert", "tokens"), new SeaTunnelRow(new Object[] {vectors}), false);
+            Assertions.assertEquals(vectors.length, result.getAsJsonArray("tokens").size());
+        }
+        DescribeCollectionResp wrongTarget = buildDescribeCollectionResp(
+                FieldSchema.builder().name("tokens").dataType(DataType.FloatVector).dimension(2).build());
+        JsonObject result = converter.buildMilvusData(vectorArrayTable(), wrongTarget,
+                Collections.singletonMap("colbert", "tokens"),
+                new SeaTunnelRow(new Object[] {new Float[][] {{1.0f, 2.0f}}}), false);
+        Assertions.assertEquals(com.google.gson.JsonParser.parseString("[[1,2]]"), result.get("tokens"));
+    }
+
+    @Test
+    void usesExistingStructChildName() {
+        DescribeCollectionResp target = vectorArrayTarget(4096, 2);
+        target.getCollectionSchema().getStructFields().get(0).getFields().get(0).setName("custom");
+        JsonObject result = converter.buildMilvusData(vectorArrayTable(), target,
+                Collections.singletonMap("colbert", "tokens"),
+                new SeaTunnelRow(new Object[] {new Float[][] {{1.0f, 2.0f}}}), false);
+        Assertions.assertEquals(2, result.getAsJsonArray("tokens").get(0).getAsJsonObject()
+                .getAsJsonArray("custom").size());
+        Assertions.assertTrue(converter.buildMilvusData(vectorArrayTable(), target,
+                Collections.singletonMap("colbert", "tokens"), new SeaTunnelRow(new Object[] {null}), false)
+                .get("tokens").isJsonNull());
+    }
+
+    @Test
+    void preservesExistingJsonStructArrayConversion() {
+        FieldSchema field = FieldSchema.builder().name("clips")
+                .dataType(DataType.Array).elementType(DataType.Struct).maxCapacity(4096).build();
+        Object result = converter.convertByMilvusType(field,
+                new String[] {"{\"embedding\":[1,2],\"label\":\"a\"}"});
+        JsonObject struct = (JsonObject) ((List<?>) result).get(0);
+        Assertions.assertEquals("a", struct.get("label").getAsString());
+        Assertions.assertEquals(2, struct.getAsJsonArray("embedding").size());
+    }
+
+    @Test
+    void preservesLegacyStructArrayThroughRowConversion() {
+        CatalogTable table = buildCatalogTable(new SeaTunnelRowType(new String[] {"colbert"},
+                new SeaTunnelDataType<?>[] {ArrayType.STRING_ARRAY_TYPE}));
+        String[] structs = {"{\"vector\":[1,2],\"label\":\"a\"}", "{\"vector\":[3,4],\"label\":\"b\"}"};
+        JsonObject result = converter.buildMilvusData(table, vectorArrayTarget(4096, 2),
+                Collections.singletonMap("colbert", "tokens"), new SeaTunnelRow(new Object[] {structs}), false);
+        Assertions.assertEquals(com.google.gson.JsonParser.parseString("[" + String.join(",", structs) + "]"),
+                result.get("tokens"));
+        Assertions.assertTrue(converter.buildMilvusData(table, vectorArrayTarget(4096, 2),
+                Collections.singletonMap("colbert", "tokens"), new SeaTunnelRow(new Object[] {null}), false)
+                .get("tokens").isJsonNull());
+    }
+
+    @Test
+    void preservesJsonStringsElementsAndNulls() {
+        FieldSchema target = FieldSchema.builder().name("metadata").dataType(DataType.JSON).build();
+        for (String json : Arrays.asList("{\"label\":\"a\",\"vector\":[1,2]}", "[[1,2],[3,4]]", "\"text\"", "null")) {
+            com.google.gson.JsonElement expected = com.google.gson.JsonParser.parseString(json);
+            Assertions.assertEquals(expected, converter.convertByMilvusType(target, json));
+            Assertions.assertEquals(expected, converter.convertByMilvusType(target, expected));
+        }
+        Assertions.assertNull(converter.convertByMilvusType(target, null));
+    }
+
+    private CatalogTable vectorArrayTable() {
+        return buildCatalogTable(new SeaTunnelRowType(new String[] {"colbert"},
+                new SeaTunnelDataType<?>[] {ArrayType.of(ArrayType.FLOAT_ARRAY_TYPE)}));
+    }
+
+    private DescribeCollectionResp vectorArrayTarget(int capacity, int dimension) {
+        DescribeCollectionResp result = buildDescribeCollectionResp();
+        result.getCollectionSchema().setStructFields(Collections.singletonList(
+                CreateCollectionReq.StructFieldSchema.builder().name("tokens").maxCapacity(capacity)
+                        .fields(Collections.singletonList(FieldSchema.builder().name("vector")
+                                .dataType(DataType.FloatVector).dimension(dimension).build())).build()));
+        return result;
+    }
 
     @Test
     void autoIdPrimaryKeyConversionRespectsTargetProperty() {

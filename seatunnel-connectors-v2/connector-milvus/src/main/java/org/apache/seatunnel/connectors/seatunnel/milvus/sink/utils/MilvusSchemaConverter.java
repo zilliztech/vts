@@ -12,11 +12,25 @@ import org.apache.seatunnel.api.table.type.SqlType;
 import org.apache.seatunnel.connectors.seatunnel.milvus.common.MilvusConstants;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public class MilvusSchemaConverter {
+    public static CreateCollectionReq.StructFieldSchema convertVectorArrayToStructField(Column column) {
+        return CreateCollectionReq.StructFieldSchema.builder()
+                .name(column.getName())
+                .description(column.getComment() == null ? "" : column.getComment())
+                .maxCapacity(4096)
+                .fields(Collections.singletonList(CreateCollectionReq.FieldSchema.builder()
+                        .name("vector")
+                        .dataType(io.milvus.v2.common.DataType.FloatVector)
+                        .dimension(column.getScale())
+                        .build()))
+                .build();
+    }
+
     /**
      * Convert column from source to Milvus FieldSchema.
      * This creates the base field schema from source data, which can be later

@@ -54,6 +54,21 @@ sink {
 }
 ```
 
+## Reading multi-vectors
+
+Qdrant multi-dense fields are represented as SeaTunnel `ARRAY<ARRAY<FLOAT>>`,
+with `Float[][]` row values and the subvector dimension in the column's `scale`.
+The source accepts modern `multi_dense` and legacy flattened `data` + `vectors_count`
+encodings. Subvector order and variable list lengths are preserved. Legacy values
+must be divisible into the declared number of subvectors to recover their boundaries.
+
+Named fields retain their names. An unnamed vector is exposed as `vector`.
+No target-specific vector schema is embedded in the type.
+
+This support applies to the Qdrant source. The Qdrant sink is unchanged and does
+not support writing multi-dense vectors. Ordinary dense vectors continue to be
+written by their field names, including names changed by FieldMapper.
+
 ## Security
 
 Qdrant connections can be secured using TLS (when `use_tls` is set to true) and API key authentication. Ensure your API keys are kept confidential and managed securely.
