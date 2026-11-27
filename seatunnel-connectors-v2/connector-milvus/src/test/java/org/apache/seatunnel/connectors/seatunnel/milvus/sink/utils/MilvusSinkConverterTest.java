@@ -60,6 +60,34 @@ public class MilvusSinkConverterTest {
     private final MilvusSinkConverter converter = new MilvusSinkConverter();
 
     @Test
+    void specialVectorsPreserveBackingBytesRegardlessOfBufferPosition() {
+        DataType[] targets = {DataType.BinaryVector, DataType.Int8Vector,
+                DataType.Float16Vector, DataType.BFloat16Vector};
+        SeaTunnelDataType<?>[] sources = {
+                org.apache.seatunnel.api.table.type.VectorType.VECTOR_BINARY_TYPE,
+                org.apache.seatunnel.api.table.type.VectorType.VECTOR_INT8_TYPE,
+                org.apache.seatunnel.api.table.type.VectorType.VECTOR_FLOAT16_TYPE,
+                org.apache.seatunnel.api.table.type.VectorType.VECTOR_BFLOAT16_TYPE};
+        byte[] bytes = {1, -2, 0, 127, -128, 3, 4, 5};
+        for (int t = 0; t < targets.length; t++) {
+            FieldSchema field = FieldSchema.builder().name("special").dataType(targets[t]).build();
+            for (int position : new int[] {0, bytes.length}) {
+                ByteBuffer buffer = ByteBuffer.allocate(bytes.length);
+                buffer.put(bytes).position(position);
+                for (int retry = 0; retry < 2; retry++) {
+                    Object actual = converter.convertByMilvusType(field, buffer);
+                    Assertions.assertEquals(new com.google.gson.Gson().toJsonTree(bytes), actual);
+                    Assertions.assertEquals(actual, converter.convertBySeaTunnelType(sources[t], false, buffer));
+                    Assertions.assertEquals(position, buffer.position());
+                    Assertions.assertEquals(bytes.length, buffer.limit());
+                    Assertions.assertArrayEquals(bytes, buffer.array());
+                }
+            }
+        }
+    }
+
+
+    @Test
     void convertsGenericVectorArrayUsingTargetChildAndFieldNames() {
         CatalogTable table = vectorArrayTable();
         DescribeCollectionResp target = vectorArrayTarget(4096, 2);
